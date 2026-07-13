@@ -1,17 +1,33 @@
 MODULE: frontend/src/components
-FILES: ThemeCard.tsx, ThemeCardSkeleton.tsx, QuickStats.tsx
-RESPONSIBILITY: 可复用 UI 组件，用于题材看板展示
+FILES: ThemeCard.tsx, ThemeCardSkeleton.tsx, QuickStats.tsx, FilterBar.tsx, SortSelect.tsx, ThemeTableRow.tsx, ThemeTableSkeleton.tsx, Pagination.tsx
+RESPONSIBILITY: 可复用 UI 组件，用于题材看板和题材库展示
 DEPENDENCIES:
 - uses: lucide-react: 图标库
 - imports: @/lib/utils: cn() 样式合并工具
-- imports: @/types/theme: ThemeBrief 类型
+- imports: @/lib/theme-colors: getHeatColor, getRiseFallColor 颜色工具
+- imports: @/types/theme: ThemeBrief, ThemeListParams 类型
 KEY_FILES:
 - ThemeCard.tsx: 题材卡片组件，显示热度、涨跌幅、股票数，60行
 - ThemeCardSkeleton.tsx: 加载骨架屏，匹配卡片尺寸，25行
 - QuickStats.tsx: 快速统计栏，显示总数和更新时间，35行
+- FilterBar.tsx: 筛选栏组件，搜索框+分类下拉+标签输入，130行
+- SortSelect.tsx: 排序选择组件，字段下拉+方向切换，70行
+- ThemeTableRow.tsx: 题材表格行组件，显示名称/分类/热度/股票数/涨跌幅，90行
+- ThemeTableSkeleton.tsx: 表格行骨架屏，加载占位符，25行
+- Pagination.tsx: 分页控件组件，页码导航+省略号，130行
 INTERFACES:
 - ThemeCard({ theme, onClick }): 题材卡片，热度颜色编码（≥80红/≥60橙/≥40黄/<40绿）
 - ThemeCardSkeleton(): 骨架屏占位符
 - QuickStats({ totalThemes, totalStocks, lastUpdate }): 统计栏
+- FilterBar({ searchInput, onSearchChange, categories, selectedCategory, onCategoryChange, selectedTags, onTagsChange, activeFilterCount, onClearFilters }): 筛选栏
+- SortSelect({ sortBy, sortOrder, onSortChange }): 排序选择，支持 heat_index/rise_fall_pct/stock_count/name
+- ThemeTableRow({ theme, onClick }): 表格行，复用 ThemeCard 颜色逻辑
+- ThemeTableSkeleton(): 表格行骨架屏
+- Pagination({ page, totalPages, onPageChange }): 分页控件，含首页/末页/前后翻页
+- getVisiblePages(current, total): 生成可见页码列表（导出用于测试）
 TRAPS:
-- [LOW] ThemeCard 热度阈值硬编码（80/60/40），如需调整需改 getHeatColor 函数
+- [LOW] ThemeCard/ThemeTableRow 热度阈值硬编码（80/60/40），已提取到 @/lib/theme-colors 共用
+- [LOW] 新增类似组件时应提取共用工具函数到 @/lib/，避免重复代码（如 theme-colors.ts）
+
+DECISIONS:
+- 颜色工具函数（getHeatColor, getRiseFallColor）提取到 @/lib/theme-colors.ts，ThemeCard 和 ThemeTableRow 共用

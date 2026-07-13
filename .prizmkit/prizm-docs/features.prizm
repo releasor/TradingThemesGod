@@ -1,15 +1,23 @@
 MODULE: frontend/src/features
-FILES: dashboard/ThemeDashboard.tsx
+FILES: dashboard/ThemeDashboard.tsx, themes/ThemeLibrary.tsx
 RESPONSIBILITY: 页面级功能组件，每个子目录对应一个完整页面
 DEPENDENCIES:
 - uses: @tanstack/react-query: 数据获取和缓存
-- uses: react-router-dom: 页面导航
-- imports: @/api/theme: fetchThemeRanking API 客户端
+- uses: react-router-dom: 页面导航和 URL 参数同步
+- imports: @/api/theme: fetchThemeRanking, fetchThemes, fetchCategories API 客户端
+- imports: @/hooks/useThemeFilters: URL 同步筛选状态 Hook
 - imports: @/stores/dashboard: useDashboardStore 状态管理
-- imports: @/components: ThemeCard, ThemeCardSkeleton, QuickStats
+- imports: @/components: ThemeCard, ThemeCardSkeleton, QuickStats, FilterBar, SortSelect, ThemeTableRow, ThemeTableSkeleton, Pagination
 KEY_FILES:
 - dashboard/ThemeDashboard.tsx: 题材看板主页面，包含加载/错误/空状态，120行
+- themes/ThemeLibrary.tsx: 题材库主页面，支持搜索/筛选/排序/分页，200行
 INTERFACES:
 - ThemeDashboard(): 看板页面组件，路由 '/'
+- ThemeLibrary(): 题材库页面组件，路由 '/themes'
 TRAPS:
 - [LOW] ThemeDashboard 使用 TanStack Query 的 queryKey: ['theme-ranking', limit]，修改 limit 需同步更新
+- [LOW] ThemeLibrary 使用 useThemeFilters Hook 同步 URL 参数，搜索防抖 300ms
+
+DECISIONS:
+- fetchThemes 根据 q 参数切换端点：有 q 用 /themes/search（仅支持 q/page/page_size），无 q 用 /themes（支持完整排序/筛选）
+- 后端 /themes/search 端点不支持 sort_by/sort_order/category/tags 参数，这是 API 限制非前端缺陷

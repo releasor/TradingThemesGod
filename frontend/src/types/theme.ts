@@ -22,3 +22,28 @@ export interface ThemeRankingResponse {
   items: ThemeBrief[]
   limit: number
 }
+
+/** 题材列表查询参数 */
+export interface ThemeListParams {
+  page: number
+  page_size: number
+  sort_by: 'heat_index' | 'rise_fall_pct' | 'stock_count' | 'name'
+  sort_order: 'asc' | 'desc'
+  category?: string
+  tags?: string
+  q?: string
+}
+
+/** 题材列表响应（带分页） */
+export interface ThemeListResponse {
+  items: ThemeBrief[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+/** 题材分类列表响应 */
+export interface ThemeCategoriesResponse {
+  categories: string[]
+}
