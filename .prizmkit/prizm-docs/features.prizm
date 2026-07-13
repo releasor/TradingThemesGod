@@ -1,0 +1,15 @@
+MODULE: frontend/src/features
+FILES: dashboard/ThemeDashboard.tsx
+RESPONSIBILITY: 页面级功能组件，每个子目录对应一个完整页面
+DEPENDENCIES:
+- uses: @tanstack/react-query: 数据获取和缓存
+- uses: react-router-dom: 页面导航
+- imports: @/api/theme: fetchThemeRanking API 客户端
+- imports: @/stores/dashboard: useDashboardStore 状态管理
+- imports: @/components: ThemeCard, ThemeCardSkeleton, QuickStats
+KEY_FILES:
+- dashboard/ThemeDashboard.tsx: 题材看板主页面，包含加载/错误/空状态，120行
+INTERFACES:
+- ThemeDashboard(): 看板页面组件，路由 '/'
+TRAPS:
+- [LOW] ThemeDashboard 使用 TanStack Query 的 queryKey: ['theme-ranking', limit]，修改 limit 需同步更新

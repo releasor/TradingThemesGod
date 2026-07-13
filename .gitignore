@@ -54,6 +54,11 @@ pnpm-debug.log*
 # Build output
 frontend/dist/
 frontend/build/
+frontend/vite-output.txt
+
+# Playwright
+.playwright-cli/
+frontend/.playwright-cli/
 
 # OS
 .DS_Store

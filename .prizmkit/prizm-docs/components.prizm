@@ -1,0 +1,17 @@
+MODULE: frontend/src/components
+FILES: ThemeCard.tsx, ThemeCardSkeleton.tsx, QuickStats.tsx
+RESPONSIBILITY: 可复用 UI 组件，用于题材看板展示
+DEPENDENCIES:
+- uses: lucide-react: 图标库
+- imports: @/lib/utils: cn() 样式合并工具
+- imports: @/types/theme: ThemeBrief 类型
+KEY_FILES:
+- ThemeCard.tsx: 题材卡片组件，显示热度、涨跌幅、股票数，60行
+- ThemeCardSkeleton.tsx: 加载骨架屏，匹配卡片尺寸，25行
+- QuickStats.tsx: 快速统计栏，显示总数和更新时间，35行
+INTERFACES:
+- ThemeCard({ theme, onClick }): 题材卡片，热度颜色编码（≥80红/≥60橙/≥40黄/<40绿）
+- ThemeCardSkeleton(): 骨架屏占位符
+- QuickStats({ totalThemes, totalStocks, lastUpdate }): 统计栏
+TRAPS:
+- [LOW] ThemeCard 热度阈值硬编码（80/60/40），如需调整需改 getHeatColor 函数
