@@ -4,7 +4,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchThemeRanking } from '@/api/theme'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -15,6 +15,7 @@ import { ThemeRiseFallBar } from '@/components/charts/ThemeRiseFallBar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LoadingBar } from '@/components/LoadingBar'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorDisplay } from '@/components/ErrorDisplay'
 import { AutoRefreshButton } from '@/components/AutoRefreshButton'
 import { KeyboardShortcutsButton } from '@/components/KeyboardShortcutsPanel'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
@@ -60,7 +61,7 @@ export function ThemeDashboard() {
   ])
 
   const themes = data?.items ?? []
-  const totalStocks = themes.reduce((sum, t) => sum + t.stock_count, 0)
+  const totalStocks = useMemo(() => themes.reduce((sum, t) => sum + t.stock_count, 0), [themes])
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,19 +128,9 @@ export function ThemeDashboard() {
 
           {/* 错误状态 */}
           {isError && (
-            <EmptyState
-              type="error"
-              title="加载失败"
-              description={error?.message ?? '未知错误'}
-              action={
-                <button
-                  onClick={() => refetch()}
-                  className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  重试
-                </button>
-              }
+            <ErrorDisplay
+              errorType={error?.message?.includes('Network') ? 'network' : 'server'}
+              onRetry={() => refetch()}
             />
           )}
 
@@ -155,7 +146,7 @@ export function ThemeDashboard() {
                 <ThemeCard
                   key={theme.id}
                   theme={theme}
-                  onClick={() => handleThemeClick(theme.id)}
+                  onClick={handleThemeClick}
                 />
               ))}
             </div>

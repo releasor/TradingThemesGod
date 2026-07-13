@@ -11,6 +11,7 @@ from app.schemas.stock import (
     StockDetailResponse,
     StockListResponse,
     EventBrief,
+    EventListItem,
     EventListResponse,
 )
 
@@ -136,7 +137,7 @@ class TestStockDetailResponse:
     def test_with_events(self):
         """测试包含事件的响应"""
         now = datetime.now(timezone.utc)
-        event = EventBrief(id=1, title="测试事件", published_at=now)
+        event = EventListItem(id=1, title="测试事件", published_at=now)
         response = StockDetailResponse(
             id=1,
             code="600000",

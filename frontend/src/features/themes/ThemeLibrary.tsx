@@ -35,6 +35,24 @@ export function ThemeLibrary() {
     [navigate],
   )
 
+  // 稳定化传给 FilterBar 的回调，避免 memo 失效
+  const handleSearchChange = useCallback(
+    (value: string) => setSearchInput(value),
+    [setSearchInput],
+  )
+  const handleCategoryChange = useCallback(
+    (value: string | undefined) => updateFilter('category', value),
+    [updateFilter],
+  )
+  const handleTagsChange = useCallback(
+    (value: string | undefined) => updateFilter('tags', value),
+    [updateFilter],
+  )
+  const handleClearFilters = useCallback(
+    () => clearFilters(),
+    [clearFilters],
+  )
+
   // 获取题材列表
   const {
     data,
@@ -95,14 +113,14 @@ export function ThemeLibrary() {
         {/* 筛选栏 */}
         <FilterBar
           searchInput={searchInput}
-          onSearchChange={setSearchInput}
+          onSearchChange={handleSearchChange}
           categories={categories}
           selectedCategory={filters.category}
-          onCategoryChange={(v) => updateFilter('category', v)}
+          onCategoryChange={handleCategoryChange}
           selectedTags={filters.tags}
-          onTagsChange={(v) => updateFilter('tags', v)}
+          onTagsChange={handleTagsChange}
           activeFilterCount={activeFilterCount}
-          onClearFilters={clearFilters}
+          onClearFilters={handleClearFilters}
         />
 
         {/* 结果统计 + 排序 */}
@@ -185,7 +203,7 @@ export function ThemeLibrary() {
                 <ThemeTableRow
                   key={theme.id}
                   theme={theme}
-                  onClick={() => handleThemeClick(theme.id)}
+                  onClick={handleThemeClick}
                 />
               ))}
             </>

@@ -3,7 +3,7 @@
  * 展示 Top 10 题材的涨跌幅水平柱状图。
  */
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import * as echarts from 'echarts/core'
 import { BarChart } from 'echarts/charts'
@@ -30,7 +30,7 @@ interface ThemeRiseFallBarProps {
 }
 
 /** 题材涨跌幅柱状图组件 */
-export function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
+export const ThemeRiseFallBar = memo(function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
   const { colors } = useChartTheme()
 
   // 取 Top 10 并按涨跌幅排序
@@ -43,94 +43,95 @@ export function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
     return <EmptyChart className={cn('h-[300px]', className)} />
   }
 
-  // 反转以便从上到下显示（最高在上）
-  const reversed = useMemo(() => top10.slice().reverse(), [top10])
-
-  const option = useMemo(() => ({
-    backgroundColor: colors.backgroundColor,
-    tooltip: {
-      trigger: 'axis' as const,
-      axisPointer: {
-        type: 'shadow' as const,
-      },
-      backgroundColor: colors.tooltipBg,
-      textStyle: {
-        color: colors.tooltipTextColor,
-      },
-      borderColor: colors.tooltipBorderColor,
-      formatter: (params: Array<{ name: string; value: number }>) => {
-        const param = params[0]
-        if (!param) return ''
-        const value = param.value
-        const sign = value > 0 ? '+' : ''
-        return `<strong>${param.name}</strong><br/>涨跌幅: ${sign}${value.toFixed(2)}%`
-      },
-    },
-    grid: {
-      left: '3%',
-      right: '8%',
-      bottom: '3%',
-      top: '3%',
-      containLabel: true,
-    },
-    xAxis: {
-      type: 'value' as const,
-      axisLabel: {
-        color: colors.secondaryTextColor,
-        formatter: '{value}%',
-      },
-      splitLine: {
-        lineStyle: {
-          color: colors.gridBorderColor,
+  const option = useMemo(() => {
+    // 反转以便从上到下显示（最高在上）
+    const reversed = top10.slice().reverse()
+    return {
+      backgroundColor: colors.backgroundColor,
+      tooltip: {
+        trigger: 'axis' as const,
+        axisPointer: {
+          type: 'shadow' as const,
+        },
+        backgroundColor: colors.tooltipBg,
+        textStyle: {
+          color: colors.tooltipTextColor,
+        },
+        borderColor: colors.tooltipBorderColor,
+        formatter: (params: Array<{ name: string; value: number }>) => {
+          const param = params[0]
+          if (!param) return ''
+          const value = param.value
+          const sign = value > 0 ? '+' : ''
+          return `<strong>${param.name}</strong><br/>涨跌幅: ${sign}${value.toFixed(2)}%`
         },
       },
-    },
-    yAxis: {
-      type: 'category' as const,
-      data: reversed.map((t) => t.name),
-      axisLabel: {
-        color: colors.textColor,
-        width: 100,
-        overflow: 'truncate' as const,
+      grid: {
+        left: '3%',
+        right: '8%',
+        bottom: '3%',
+        top: '3%',
+        containLabel: true,
       },
-      axisLine: {
-        lineStyle: {
-          color: colors.gridBorderColor,
+      xAxis: {
+        type: 'value' as const,
+        axisLabel: {
+          color: colors.secondaryTextColor,
+          formatter: '{value}%',
         },
-      },
-    },
-    series: [
-      {
-        type: 'bar' as const,
-        data: reversed.map((t) => {
-          const pct = Number(t.rise_fall_pct)
-          return {
-            value: pct,
-            itemStyle: {
-              color: pct > 0
-                ? RISE_FALL_COLORS.rise
-                : pct < 0
-                  ? RISE_FALL_COLORS.fall
-                  : RISE_FALL_COLORS.neutral,
-              borderRadius: [0, 4, 4, 0],
-            },
-          }
-        }),
-        barWidth: '60%',
-        label: {
-          show: true,
-          position: 'right' as const,
-          formatter: (params: { value: number }) => {
-            const value = params.value
-            const sign = value > 0 ? '+' : ''
-            return `${sign}${value.toFixed(2)}%`
+        splitLine: {
+          lineStyle: {
+            color: colors.gridBorderColor,
           },
-          color: colors.textColor,
-          fontSize: 12,
         },
       },
-    ],
-  }), [reversed, colors])
+      yAxis: {
+        type: 'category' as const,
+        data: reversed.map((t) => t.name),
+        axisLabel: {
+          color: colors.textColor,
+          width: 100,
+          overflow: 'truncate' as const,
+        },
+        axisLine: {
+          lineStyle: {
+            color: colors.gridBorderColor,
+          },
+        },
+      },
+      series: [
+        {
+          type: 'bar' as const,
+          data: reversed.map((t) => {
+            const pct = Number(t.rise_fall_pct)
+            return {
+              value: pct,
+              itemStyle: {
+                color: pct > 0
+                  ? RISE_FALL_COLORS.rise
+                  : pct < 0
+                    ? RISE_FALL_COLORS.fall
+                    : RISE_FALL_COLORS.neutral,
+                borderRadius: [0, 4, 4, 0],
+              },
+            }
+          }),
+          barWidth: '60%',
+          label: {
+            show: true,
+            position: 'right' as const,
+            formatter: (params: { value: number }) => {
+              const value = params.value
+              const sign = value > 0 ? '+' : ''
+              return `${sign}${value.toFixed(2)}%`
+            },
+            color: colors.textColor,
+            fontSize: 12,
+          },
+        },
+      ],
+    }
+  }, [top10, colors])
 
   return (
     <div className={cn('w-full', className)}>
@@ -143,4 +144,4 @@ export function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
       />
     </div>
   )
-}
+})

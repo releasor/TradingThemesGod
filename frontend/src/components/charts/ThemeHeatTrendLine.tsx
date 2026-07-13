@@ -3,7 +3,7 @@
  * 展示题材热度指数随时间变化的趋势。
  */
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
@@ -36,7 +36,7 @@ interface ThemeHeatTrendLineProps {
 }
 
 /** 题材热度趋势折线图组件 */
-export function ThemeHeatTrendLine({ data, className }: ThemeHeatTrendLineProps) {
+export const ThemeHeatTrendLine = memo(function ThemeHeatTrendLine({ data, className }: ThemeHeatTrendLineProps) {
   const { colors, isDark } = useChartTheme()
 
   if (data.length === 0) {
@@ -138,4 +138,4 @@ export function ThemeHeatTrendLine({ data, className }: ThemeHeatTrendLineProps)
       />
     </div>
   )
-}
+})

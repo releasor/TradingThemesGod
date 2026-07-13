@@ -13,6 +13,7 @@ from app.schemas.stock import (
     StockDetailResponse,
     StockListResponse,
     EventBrief,
+    EventListItem,
     EventListResponse,
 )
 
@@ -58,7 +59,19 @@ def sample_event_brief():
 
 
 @pytest.fixture
-def sample_stock_detail_response(sample_event_brief):
+def sample_event_list_item():
+    """示例事件列表项数据（不含 content）"""
+    return EventListItem(
+        id=1,
+        title="浦发银行发布年报",
+        source="东方财富",
+        event_type="公告",
+        published_at=datetime(2025, 1, 15, tzinfo=timezone.utc),
+    )
+
+
+@pytest.fixture
+def sample_stock_detail_response(sample_event_list_item):
     """示例股票详情响应"""
     now = datetime.now(timezone.utc)
     return StockDetailResponse(
@@ -72,7 +85,7 @@ def sample_stock_detail_response(sample_event_brief):
         exchange="SH",
         created_at=now,
         updated_at=now,
-        recent_events=[sample_event_brief],
+        recent_events=[sample_event_list_item],
     )
 
 

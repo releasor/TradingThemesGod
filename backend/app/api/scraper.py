@@ -3,7 +3,7 @@
 提供爬虫运行触发、状态查询和历史记录查询。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,8 +78,8 @@ async def get_scraper_status(
 
 @router.get("/runs", response_model=ScraperRunListResponse)
 async def list_scraper_runs(
-    source: str | None = None,
-    limit: int = 20,
+    source: str | None = Query(default=None, description="按数据源筛选"),
+    limit: int = Query(default=20, ge=1, le=100, description="返回数量限制"),
     db: AsyncSession = Depends(get_db),
 ):
     """列出爬虫运行记录
@@ -96,5 +96,5 @@ async def list_scraper_runs(
 
     return ScraperRunListResponse(
         runs=[ScraperRunResponse.model_validate(r) for r in runs],
-        total=len(runs),
+        count=len(runs),
     )

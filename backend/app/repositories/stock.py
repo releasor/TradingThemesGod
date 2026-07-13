@@ -3,9 +3,8 @@
 提供 Stock 和 Event 的数据库查询操作。
 """
 
-from sqlalchemy import desc, asc, func, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.models.stock import Stock
 from app.models.event import Event
@@ -69,7 +68,7 @@ class StockRepository(BaseRepository):
         )
 
     async def get_by_code(self, code: str) -> Stock | None:
-        """获取股票详情（含最近事件）
+        """获取股票详情
 
         Args:
             code: 股票代码
@@ -77,13 +76,22 @@ class StockRepository(BaseRepository):
         Returns:
             股票对象或 None
         """
-        query = (
-            select(Stock)
-            .where(Stock.code == code)
-            .options(selectinload(Stock.events))
-        )
+        query = select(Stock).where(Stock.code == code)
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def exists_by_code(self, code: str) -> bool:
+        """检查股票是否存在（轻量级，不加载关联数据）
+
+        Args:
+            code: 股票代码
+
+        Returns:
+            是否存在
+        """
+        query = select(Stock.id).where(Stock.code == code).limit(1)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none() is not None
 
     async def get_events_by_code(
         self,
@@ -124,6 +132,25 @@ class EventRepository(BaseRepository):
 
     def __init__(self, session: AsyncSession):
         super().__init__(session)
+
+    async def get_recent_by_stock_id(self, stock_id: int, limit: int = 5) -> list[Event]:
+        """获取指定股票的最近事件（按 published_at 降序）
+
+        Args:
+            stock_id: 股票ID
+            limit: 返回数量
+
+        Returns:
+            事件列表
+        """
+        query = (
+            select(Event)
+            .where(Event.stock_id == stock_id)
+            .order_by(desc(Event.published_at))
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
     async def list_paginated(
         self,

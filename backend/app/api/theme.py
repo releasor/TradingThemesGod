@@ -3,7 +3,10 @@
 提供题材查询、搜索、排名和分类接口。
 """
 
+import csv
+import io
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -123,3 +126,53 @@ async def get_theme_detail(
     """
     service = ThemeService(db)
     return await service.get_theme_detail(theme_id=theme_id)
+
+
+@router.get("/export/csv")
+async def export_themes_csv(
+    category: str | None = Query(default=None, description="按分类筛选"),
+    db: AsyncSession = Depends(get_db),
+):
+    """导出题材数据为 CSV 格式
+
+    返回 CSV 文件下载响应。
+    """
+    service = ThemeService(db)
+
+    # 获取所有题材（不分页）
+    result = await service.list_themes(
+        page=1,
+        page_size=10000,  # 获取所有数据
+        category=category,
+    )
+
+    # 创建 CSV 内容
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # 写入表头
+    writer.writerow([
+        '题材名称', '题材代码', '分类', '热度指数', '涨跌幅(%)', '关联股票数', '数据来源'
+    ])
+
+    # 写入数据
+    for theme in result.items:
+        writer.writerow([
+            theme.name,
+            theme.code,
+            theme.category or '',
+            float(theme.heat_index),
+            float(theme.rise_fall_pct),
+            theme.stock_count,
+            theme.source or '',
+        ])
+
+    # 返回文件下载响应
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=themes_export.csv"
+        }
+    )

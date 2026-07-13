@@ -4,7 +4,7 @@
  * 使用 TanStack Query 获取关联股票数据。
  */
 
-import { useState, memo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Building, AlertCircle } from 'lucide-react'
 import { StockList } from '@/components/StockList'
@@ -38,7 +38,10 @@ export const ChainPointCard = memo(function ChainPointCard({ chainPoint, themeId
   })
 
   const stocks = data?.items ?? []
-  const companies = parseRepresentativeCompanies(chainPoint.representative_companies)
+  const companies = useMemo(
+    () => parseRepresentativeCompanies(chainPoint.representative_companies),
+    [chainPoint.representative_companies],
+  )
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/20">

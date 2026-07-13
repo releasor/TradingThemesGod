@@ -19,6 +19,11 @@ THEME_SORT_FIELDS = {
 }
 
 
+def _escape_like(value: str) -> str:
+    """转义 LIKE 查询中的特殊字符（% 和 _），防止注入"""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class ThemeRepository(BaseRepository):
     """题材仓储"""
 
@@ -107,7 +112,7 @@ class ThemeRepository(BaseRepository):
             (题材列表, 总数)
         """
         # 构建搜索条件
-        search_pattern = f"%{query}%"
+        search_pattern = f"%{_escape_like(query)}%"
         search_condition = or_(
             Theme.name.ilike(search_pattern),
             Theme.description.ilike(search_pattern),

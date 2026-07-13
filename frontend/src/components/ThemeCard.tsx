@@ -35,6 +35,7 @@ export const ThemeCard = memo(function ThemeCard({ theme, onClick }: ThemeCardPr
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'cursor-pointer'
       )}
+      aria-label={`查看题材详情: ${theme.name}`}
     >
       {/* 主题名称 */}
       <h3 className="font-semibold text-card-foreground truncate text-sm">

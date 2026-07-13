@@ -13,6 +13,15 @@ export interface EventBrief {
   published_at: string | null
 }
 
+/** 事件列表项（不含 content，减少列表响应体积） */
+export interface EventListItem {
+  id: number
+  title: string
+  source: string | null
+  event_type: string | null
+  published_at: string | null
+}
+
 /** 股票简要信息（列表用） */
 export interface StockBrief {
   id: number
@@ -37,7 +46,7 @@ export interface StockDetailResponse {
   exchange: string | null
   created_at: string
   updated_at: string
-  recent_events: EventBrief[]
+  recent_events: EventListItem[]
 }
 
 /** 股票列表响应 */

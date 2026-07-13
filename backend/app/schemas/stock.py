@@ -36,6 +36,18 @@ class EventBrief(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventListItem(BaseModel):
+    """事件列表项（不含content，减少列表响应体积）"""
+
+    id: int = Field(description="事件ID")
+    title: str = Field(description="事件标题")
+    source: str | None = Field(default=None, description="信息来源")
+    event_type: str | None = Field(default=None, description="事件类型")
+    published_at: datetime | None = Field(default=None, description="发布时间")
+
+    model_config = {"from_attributes": True}
+
+
 class StockListResponse(BaseModel):
     """股票列表响应"""
 
@@ -59,7 +71,7 @@ class StockDetailResponse(BaseModel):
     exchange: str | None = Field(default=None, description="交易所(SH/SZ/BJ)")
     created_at: datetime = Field(description="创建时间")
     updated_at: datetime = Field(description="更新时间")
-    recent_events: list[EventBrief] = Field(description="最近事件（最多5条）")
+    recent_events: list[EventListItem] = Field(description="最近事件（最多5条）")
 
     model_config = {"from_attributes": True}
 
@@ -67,7 +79,7 @@ class StockDetailResponse(BaseModel):
 class EventListResponse(BaseModel):
     """事件列表响应"""
 
-    items: list[EventBrief] = Field(description="事件列表")
+    items: list[EventListItem] = Field(description="事件列表")
     total: int = Field(description="总数")
     page: int = Field(description="当前页码")
     page_size: int = Field(description="每页数量")

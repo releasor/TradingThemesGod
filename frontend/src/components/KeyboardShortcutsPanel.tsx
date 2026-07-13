@@ -55,7 +55,7 @@ export function KeyboardShortcutsPanel({ isOpen, onClose }: KeyboardShortcutsPan
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
       {/* 背景遮罩 */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -68,13 +68,14 @@ export function KeyboardShortcutsPanel({ isOpen, onClose }: KeyboardShortcutsPan
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Keyboard className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold text-foreground">
+            <h2 id="shortcuts-title" className="text-lg font-semibold text-foreground">
               键盘快捷键
             </h2>
           </div>
           <button
             onClick={onClose}
             className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="关闭快捷键面板"
           >
             <X className="h-5 w-5" />
           </button>
@@ -134,6 +135,7 @@ export function KeyboardShortcutsButton() {
         onClick={() => setIsOpen(true)}
         className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
         title="键盘快捷键 (?)"
+        aria-label="键盘快捷键帮助"
       >
         <Keyboard className="h-5 w-5" />
       </button>

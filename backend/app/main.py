@@ -19,6 +19,7 @@ from app.api.scraper import router as scraper_router
 from app.api.theme import router as theme_router
 from app.api.stock import router as stock_router
 from app.api.errors import router as errors_router
+from app.api.stats import router as stats_router
 
 # 配置结构化日志
 setup_logging()
@@ -108,10 +109,19 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # 跳过日志记录的路径（健康检查和文档）
+    _SKIP_LOG_PATHS = frozenset({
+        "/api/v1/health", "/docs", "/redoc", "/openapi.json",
+    })
+
     # 请求日志中间件
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         """记录每个请求的方法、路径、状态码和耗时"""
+        # 跳过健康检查和文档路径
+        if request.url.path in _SKIP_LOG_PATHS:
+            return await call_next(request)
+
         start_time = time.monotonic()
 
         # 处理请求
@@ -138,6 +148,7 @@ def create_app() -> FastAPI:
     app.include_router(theme_router, prefix="/api/v1")
     app.include_router(stock_router, prefix="/api/v1")
     app.include_router(errors_router, prefix="/api/v1")
+    app.include_router(stats_router, prefix="/api/v1")
 
     # 全局异常处理器
     @app.exception_handler(Exception)

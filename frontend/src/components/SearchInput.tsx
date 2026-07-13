@@ -110,11 +110,16 @@ export const SearchInput = memo(function SearchInput({
           placeholder={placeholder}
           autoFocus={autoFocus}
           className="ml-2 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          role="searchbox"
+          aria-label={placeholder}
+          aria-autocomplete="list"
+          aria-expanded={showDropdown}
         />
         {value && (
           <button
             onClick={handleClear}
             className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="清除搜索"
           >
             <X className="h-4 w-4" />
           </button>
@@ -123,7 +128,7 @@ export const SearchInput = memo(function SearchInput({
 
       {/* 下拉框 */}
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-card p-2 shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-card p-2 shadow-lg" role="listbox" aria-label="搜索历史">
           {/* 搜索历史 */}
           {history.length > 0 && (
             <div>
@@ -134,6 +139,7 @@ export const SearchInput = memo(function SearchInput({
                 <button
                   onClick={clearHistory}
                   className="flex items-center gap-1 rounded px-1 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="清除搜索历史"
                 >
                   <Trash2 className="h-3 w-3" />
                   清除
@@ -148,6 +154,7 @@ export const SearchInput = memo(function SearchInput({
                     <button
                       onClick={() => handleSelectHistory(item)}
                       className="flex flex-1 items-center gap-2 text-sm"
+                      role="option"
                     >
                       <Clock className="h-3 w-3 text-muted-foreground" />
                       <span>{item}</span>
@@ -158,6 +165,7 @@ export const SearchInput = memo(function SearchInput({
                         removeSearch(item)
                       }}
                       className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      aria-label={`删除搜索记录: ${item}`}
                     >
                       <X className="h-3 w-3" />
                     </button>

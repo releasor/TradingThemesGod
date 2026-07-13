@@ -42,6 +42,12 @@ export function useAutoRefresh({ interval, enabled = false, onRefresh }: AutoRef
   const [isAutoRefresh, setIsAutoRefresh] = useState(enabled)
   const [refreshInterval, setRefreshInterval] = useState(interval)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const callbackRef = useRef(onRefresh)
+
+  // 始终持有最新的回调引用，避免 startTimer 依赖 onRefresh 导致反复重建
+  useEffect(() => {
+    callbackRef.current = onRefresh
+  }, [onRefresh])
 
   // 清除定时器
   const clearTimer = useCallback(() => {
@@ -51,13 +57,13 @@ export function useAutoRefresh({ interval, enabled = false, onRefresh }: AutoRef
     }
   }, [])
 
-  // 启动定时器
+  // 启动定时器（不依赖 onRefresh，通过 callbackRef 间接调用）
   const startTimer = useCallback(() => {
     clearTimer()
     timerRef.current = setInterval(() => {
-      onRefresh()
+      callbackRef.current()
     }, refreshInterval)
-  }, [clearTimer, onRefresh, refreshInterval])
+  }, [clearTimer, refreshInterval])
 
   // 切换自动刷新
   const toggleAutoRefresh = useCallback(() => {
@@ -69,7 +75,7 @@ export function useAutoRefresh({ interval, enabled = false, onRefresh }: AutoRef
     setIsAutoRefresh(value)
   }, [])
 
-  // 管理定时器
+  // 管理定时器：仅在 isAutoRefresh 变化时启动/停止
   useEffect(() => {
     if (isAutoRefresh) {
       startTimer()

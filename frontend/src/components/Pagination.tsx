@@ -72,7 +72,7 @@ export function Pagination({
   }
 
   return (
-    <nav className="flex items-center justify-center gap-4" aria-label="分页">
+    <nav className="flex items-center justify-center gap-4" aria-label="分页导航">
       {/* 每页显示数量选择器 */}
       {showPageSizeSelector && onPageSizeChange && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -81,6 +81,7 @@ export function Pagination({
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             className="rounded border border-input bg-background px-2 py-1 text-sm"
+            aria-label="每页显示数量"
           >
             {pageSizeOptions.map((size) => (
               <option key={size} value={size}>
@@ -103,6 +104,7 @@ export function Pagination({
           'disabled:pointer-events-none disabled:opacity-50',
         )}
         title="首页"
+        aria-label="首页"
       >
         <ChevronsLeft className="h-4 w-4" />
       </button>
@@ -117,6 +119,7 @@ export function Pagination({
           'disabled:pointer-events-none disabled:opacity-50',
         )}
         title="上一页"
+        aria-label="上一页"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -124,13 +127,14 @@ export function Pagination({
       {/* 页码 */}
       {visiblePages.map((p, i) =>
         p === '...' ? (
-          <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground">
+          <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground" aria-hidden="true">
             …
           </span>
         ) : (
           <button
             key={p}
             onClick={() => onPageChange(p)}
+            aria-current={p === page ? 'page' : undefined}
             className={cn(
               'inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm',
               'transition-colors',
@@ -154,6 +158,7 @@ export function Pagination({
           'disabled:pointer-events-none disabled:opacity-50',
         )}
         title="下一页"
+        aria-label="下一页"
       >
         <ChevronRight className="h-4 w-4" />
       </button>
@@ -168,6 +173,7 @@ export function Pagination({
           'disabled:pointer-events-none disabled:opacity-50',
         )}
         title="末页"
+        aria-label="末页"
       >
         <ChevronsRight className="h-4 w-4" />
       </button>
@@ -175,7 +181,7 @@ export function Pagination({
 
       {/* 跳转到指定页 */}
       {showJumpToPage && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="group" aria-label="跳转到指定页">
           <span>跳转</span>
           <input
             type="number"
@@ -186,6 +192,7 @@ export function Pagination({
             onKeyDown={(e) => e.key === 'Enter' && handleJump()}
             className="w-16 rounded border border-input bg-background px-2 py-1 text-center text-sm"
             placeholder="页码"
+            aria-label="跳转到页码"
           />
           <button
             onClick={handleJump}

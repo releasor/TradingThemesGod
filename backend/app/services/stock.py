@@ -11,7 +11,7 @@ from app.schemas.stock import (
     StockBrief,
     StockDetailResponse,
     StockListResponse,
-    EventBrief,
+    EventListItem,
     EventListResponse,
 )
 from app.schemas.common import calculate_total_pages
@@ -80,12 +80,10 @@ class StockService:
         if stock is None:
             raise HTTPException(status_code=404, detail="股票不存在")
 
-        # 取最近5条事件，按 published_at 降序
-        recent_events = sorted(
-            stock.events,
-            key=lambda e: e.published_at or e.created_at,
-            reverse=True,
-        )[:5]
+        # 直接查询最近5条事件，避免 selectinload 加载全部事件
+        recent_events = await self.event_repo.get_recent_by_stock_id(
+            stock_id=stock.id, limit=5
+        )
 
         return StockDetailResponse(
             id=stock.id,
@@ -98,7 +96,7 @@ class StockService:
             exchange=stock.exchange,
             created_at=stock.created_at,
             updated_at=stock.updated_at,
-            recent_events=[EventBrief.model_validate(e) for e in recent_events],
+            recent_events=[EventListItem.model_validate(e) for e in recent_events],
         )
 
     async def get_stock_events(
@@ -120,20 +118,18 @@ class StockService:
         Raises:
             HTTPException: 股票不存在
         """
+        # 先验证股票存在，避免在无事件时冗余查询
+        if not await self.stock_repo.exists_by_code(code):
+            raise HTTPException(status_code=404, detail="股票不存在")
+
         events, total = await self.stock_repo.get_events_by_code(
             code=code,
             page=page,
             page_size=page_size,
         )
 
-        # 如果股票不存在（返回空列表且总数为0），检查股票是否存在
-        if total == 0:
-            stock = await self.stock_repo.get_by_code(code)
-            if stock is None:
-                raise HTTPException(status_code=404, detail="股票不存在")
-
         return EventListResponse(
-            items=[EventBrief.model_validate(e) for e in events],
+            items=[EventListItem.model_validate(e) for e in events],
             total=total,
             page=page,
             page_size=page_size,
@@ -169,7 +165,7 @@ class StockService:
         )
 
         return EventListResponse(
-            items=[EventBrief.model_validate(e) for e in events],
+            items=[EventListItem.model_validate(e) for e in events],
             total=total,
             page=page,
             page_size=page_size,

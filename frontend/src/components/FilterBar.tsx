@@ -47,11 +47,12 @@ export const FilterBar = memo(function FilterBar({
   const tagInputRef = useRef<HTMLInputElement>(null)
 
   const toggleTag = useCallback((tag: string) => {
-    const next = tags.includes(tag)
-      ? tags.filter((t) => t !== tag)
-      : [...tags, tag]
+    const current = parseTags(selectedTags)
+    const next = current.includes(tag)
+      ? current.filter((t) => t !== tag)
+      : [...current, tag]
     onTagsChange(next.length > 0 ? serializeTags(next) : undefined)
-  }, [tags, onTagsChange])
+  }, [selectedTags, onTagsChange])
 
   const addTagFromInput = () => {
     const trimmed = tagInput.trim()
@@ -87,6 +88,7 @@ export const FilterBar = memo(function FilterBar({
             'rounded-md border border-input bg-background px-3 py-1.5 text-sm',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           )}
+          aria-label="按分类筛选"
         >
           <option value="">全部分类</option>
           {categories.map((cat) => (
@@ -113,6 +115,7 @@ export const FilterBar = memo(function FilterBar({
                 'placeholder:text-muted-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               )}
+              aria-label="添加标签筛选"
             />
           </div>
           {tagInput.trim() && (
@@ -136,6 +139,7 @@ export const FilterBar = memo(function FilterBar({
                   'inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary',
                   'hover:bg-primary/20 transition-colors',
                 )}
+                aria-label={`移除标签: ${tag}`}
               >
                 {tag}
                 <X className="h-3 w-3" />
@@ -149,6 +153,7 @@ export const FilterBar = memo(function FilterBar({
           <button
             onClick={onClearFilters}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="清除全部筛选条件"
           >
             清除全部筛选 ({activeFilterCount})
           </button>

@@ -31,4 +31,4 @@ class ScraperRunListResponse(BaseModel):
     """爬虫运行列表响应"""
 
     runs: list[ScraperRunResponse] = Field(description="运行记录列表")
-    total: int = Field(description="总数")
+    count: int = Field(description="返回记录数")

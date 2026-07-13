@@ -39,6 +39,7 @@ export const ThemeTableRow = memo(function ThemeTableRow({ theme, onClick }: The
         isPressed && 'scale-[0.99] shadow-sm',
         'cursor-pointer group',
       )}
+      aria-label={`查看题材详情: ${theme.name}`}
     >
       <div className="flex items-center justify-between gap-4">
         {/* 左侧：名称和分类 */}

@@ -3,7 +3,7 @@
  * 展示题材关联股票在上游/中游/下游的分布情况。
  */
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import * as echarts from 'echarts/core'
 import { PieChart } from 'echarts/charts'
@@ -40,7 +40,7 @@ const LEVEL_NAMES: Record<string, string> = {
 }
 
 /** 产业链股票分布饼图组件 */
-export function IndustryChainPie({ chains, className }: IndustryChainPieProps) {
+export const IndustryChainPie = memo(function IndustryChainPie({ chains, className }: IndustryChainPieProps) {
   const { colors, isDark } = useChartTheme()
 
   // 计算各层级的环节数量
@@ -54,65 +54,68 @@ export function IndustryChainPie({ chains, className }: IndustryChainPieProps) {
     [chains],
   )
 
-  if (data.length === 0) {
-    return <EmptyChart className={cn('h-[300px]', className)} />
-  }
-
-  const option = {
-    backgroundColor: colors.backgroundColor,
-    tooltip: {
-      trigger: 'item' as const,
-      backgroundColor: colors.tooltipBg,
-      textStyle: {
-        color: colors.tooltipTextColor,
-      },
-      borderColor: colors.tooltipBorderColor,
-      formatter: (params: { name: string; value: number; percent: number }) => {
-        return `<strong>${params.name}</strong><br/>环节数: ${params.value}<br/>占比: ${params.percent.toFixed(1)}%`
-      },
-    },
-    legend: {
-      bottom: '5%',
-      left: 'center' as const,
-      textStyle: {
-        color: colors.textColor,
-      },
-      itemGap: 20,
-    },
-    series: [
-      {
-        type: 'pie' as const,
-        radius: ['40%', '70%'],
-        center: ['50%', '45%'],
-        avoidLabelOverlap: true,
-        itemStyle: {
-          borderRadius: 6,
-          borderColor: isDark ? '#1f2937' : '#ffffff',
-          borderWidth: 2,
+  const option = useMemo(() => {
+    if (data.length === 0) return null
+    return {
+      backgroundColor: colors.backgroundColor,
+      tooltip: {
+        trigger: 'item' as const,
+        backgroundColor: colors.tooltipBg,
+        textStyle: {
+          color: colors.tooltipTextColor,
         },
-        label: {
-          show: true,
-          formatter: (params: { name: string; value: number; percent: number }) => {
-            return `${params.name}\n${params.value} (${params.percent.toFixed(0)}%)`
-          },
+        borderColor: colors.tooltipBorderColor,
+        formatter: (params: { name: string; value: number; percent: number }) => {
+          return `<strong>${params.name}</strong><br/>环节数: ${params.value}<br/>占比: ${params.percent.toFixed(1)}%`
+        },
+      },
+      legend: {
+        bottom: '5%',
+        left: 'center' as const,
+        textStyle: {
           color: colors.textColor,
-          fontSize: 12,
         },
-        emphasis: {
+        itemGap: 20,
+      },
+      series: [
+        {
+          type: 'pie' as const,
+          radius: ['40%', '70%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: true,
+          itemStyle: {
+            borderRadius: 6,
+            borderColor: isDark ? '#1f2937' : '#ffffff',
+            borderWidth: 2,
+          },
           label: {
             show: true,
-            fontSize: 14,
-            fontWeight: 'bold' as const,
+            formatter: (params: { name: string; value: number; percent: number }) => {
+              return `${params.name}\n${params.value} (${params.percent.toFixed(0)}%)`
+            },
+            color: colors.textColor,
+            fontSize: 12,
           },
+          emphasis: {
+            label: {
+              show: true,
+              fontSize: 14,
+              fontWeight: 'bold' as const,
+            },
+          },
+          data: data.map((d) => ({
+            ...d,
+            itemStyle: {
+              color: CHAIN_LEVEL_COLORS[d.level as keyof typeof CHAIN_LEVEL_COLORS],
+            },
+          })),
         },
-        data: data.map((d) => ({
-          ...d,
-          itemStyle: {
-            color: CHAIN_LEVEL_COLORS[d.level as keyof typeof CHAIN_LEVEL_COLORS],
-          },
-        })),
-      },
-    ],
+      ],
+    }
+  }, [data, colors, isDark])
+
+  if (!option) {
+    return <EmptyChart className={cn('h-[300px]', className)} />
   }
 
   return (
@@ -126,4 +129,4 @@ export function IndustryChainPie({ chains, className }: IndustryChainPieProps) {
       />
     </div>
   )
-}
+})

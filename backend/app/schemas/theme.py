@@ -5,7 +5,8 @@
 
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from typing import Literal
+from pydantic import BaseModel, Field, field_validator
 
 
 class ThemeSearchParams(BaseModel):
@@ -13,10 +14,25 @@ class ThemeSearchParams(BaseModel):
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=20, ge=1, le=100, description="每页数量")
-    sort_by: str = Field(default="heat_index", description="排序字段: heat_index/rise_fall_pct")
-    sort_order: str = Field(default="desc", description="排序方向: asc/desc")
-    category: str | None = Field(default=None, description="按分类筛选")
-    tags: str | None = Field(default=None, description="按标签筛选（逗号分隔）")
+    sort_by: Literal["heat_index", "rise_fall_pct", "stock_count", "name"] = Field(
+        default="heat_index", description="排序字段"
+    )
+    sort_order: Literal["asc", "desc"] = Field(default="desc", description="排序方向")
+    category: str | None = Field(default=None, max_length=50, description="按分类筛选")
+    tags: str | None = Field(default=None, max_length=200, description="按标签筛选（逗号分隔）")
+
+    @field_validator('tags')
+    @classmethod
+    def validate_tags(cls, v: str | None) -> str | None:
+        if v is not None:
+            # 验证标签格式
+            tags = [t.strip() for t in v.split(',') if t.strip()]
+            if len(tags) > 10:
+                raise ValueError('最多支持10个标签筛选')
+            for tag in tags:
+                if len(tag) > 20:
+                    raise ValueError('单个标签长度不能超过20个字符')
+        return v
 
 
 class ThemeBrief(BaseModel):
