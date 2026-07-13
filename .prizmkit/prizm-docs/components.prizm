@@ -1,5 +1,5 @@
 MODULE: frontend/src/components
-FILES: ThemeCard.tsx, ThemeCardSkeleton.tsx, QuickStats.tsx, FilterBar.tsx, SortSelect.tsx, ThemeTableRow.tsx, ThemeTableSkeleton.tsx, Pagination.tsx, StockPopover.tsx, StockList.tsx, StockListSkeleton.tsx, ChainPointCard.tsx, IndustryChainSection.tsx
+FILES: ThemeCard.tsx, ThemeCardSkeleton.tsx, QuickStats.tsx, FilterBar.tsx, SortSelect.tsx, ThemeTableRow.tsx, ThemeTableSkeleton.tsx, Pagination.tsx, StockPopover.tsx, StockList.tsx, StockListSkeleton.tsx, ChainPointCard.tsx, IndustryChainSection.tsx, charts/EmptyChart.tsx, charts/ThemeRiseFallBar.tsx, charts/ThemeHeatTrendLine.tsx, charts/IndustryChainPie.tsx
 RESPONSIBILITY: 可复用 UI 组件，用于题材看板、题材库和题材详情展示
 DEPENDENCIES:
 - uses: lucide-react: 图标库

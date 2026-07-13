@@ -22,6 +22,8 @@ import { fetchThemeDetail } from '@/api/theme'
 import { getHeatColor, getRiseFallColor } from '@/lib/theme-colors'
 import { IndustryChainSection } from '@/components/IndustryChainSection'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ThemeHeatTrendLine } from '@/components/charts/ThemeHeatTrendLine'
+import { IndustryChainPie } from '@/components/charts/IndustryChainPie'
 
 /** 格式化涨跌幅显示 */
 function formatRiseFall(pct: number): string {
@@ -242,6 +244,21 @@ export function ThemeDetail() {
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* 图表区域 */}
+        <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* 热度趋势折线图 */}
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium text-muted-foreground">热度趋势</h3>
+            <ThemeHeatTrendLine data={[]} />
+          </div>
+
+          {/* 产业链分布饼图 */}
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium text-muted-foreground">产业链分布</h3>
+            <IndustryChainPie chains={theme.industry_chains} />
           </div>
         </section>
 

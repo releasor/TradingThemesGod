@@ -11,6 +11,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { ThemeCard } from '@/components/ThemeCard'
 import { ThemeCardSkeleton } from '@/components/ThemeCardSkeleton'
 import { QuickStats } from '@/components/QuickStats'
+import { ThemeRiseFallBar } from '@/components/charts/ThemeRiseFallBar'
 
 export function ThemeDashboard() {
   const navigate = useNavigate()
@@ -50,6 +51,20 @@ export function ThemeDashboard() {
           totalStocks={totalStocks}
           lastUpdate={null}
         />
+
+        {/* 涨跌幅图表 */}
+        <section className="mt-6">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">
+            涨跌幅 Top 10
+          </h2>
+          <div className="rounded-lg border border-border bg-card p-4">
+            {isLoading ? (
+              <div className="h-[300px] animate-pulse rounded bg-muted" />
+            ) : (
+              <ThemeRiseFallBar themes={themes} />
+            )}
+          </div>
+        </section>
 
         {/* 热门题材区域 */}
         <section className="mt-6">

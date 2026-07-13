@@ -1,0 +1,29 @@
+MODULE: frontend/src/components/charts
+FILES: EmptyChart.tsx, ThemeRiseFallBar.tsx, ThemeHeatTrendLine.tsx, IndustryChainPie.tsx
+RESPONSIBILITY: ECharts 数据可视化组件，提供题材涨跌幅、热度趋势和产业链分布图表
+DEPENDENCIES:
+- uses: echarts: 图表引擎
+- uses: echarts-for-react: React 封装
+- imports: @/hooks/useChartTheme: 暗色模式检测
+- imports: @/lib/chart-colors: 图表颜色配置
+- imports: @/types/theme: ThemeBrief, IndustryChainBrief 类型
+KEY_FILES:
+- EmptyChart.tsx: 图表空状态组件，显示 '暂无数据' 提示，30行
+- ThemeRiseFallBar.tsx: 涨跌幅柱状图组件，展示 Top 10 题材涨跌幅，100行
+- ThemeHeatTrendLine.tsx: 热度趋势折线图组件，展示热度指数变化，100行
+- IndustryChainPie.tsx: 产业链饼图组件，展示上中下游分布，90行
+INTERFACES:
+- EmptyChart({ message?, className? }): 空状态占位符
+- ThemeRiseFallBar({ themes, className? }): 水平柱状图，红涨绿跌配色
+- ThemeHeatTrendLine({ data, className? }): 折线图，含面积填充
+- IndustryChainPie({ chains, className? }): 环形饼图，三色配色
+- HeatTrendDataPoint: { date: string, value: number }
+TRAPS:
+- [LOW] echarts 组件使用 echarts/core 按需引入，避免全量打包
+- [LOW] 暗色模式通过 MutationObserver 监听 document.documentElement class 变化
+- [LOW] 涨跌幅颜色遵循中国股市惯例：红涨绿跌
+
+DECISIONS:
+- 使用 echarts-for-react 而非直接使用 echarts API，简化 React 集成
+- 图表颜色方案提取到 @/lib/chart-colors.ts，支持暗色模式切换
+- 空状态组件 EmptyChart 被所有图表组件共用，保持一致性
