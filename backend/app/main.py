@@ -3,7 +3,7 @@
 创建和配置 FastAPI 应用实例。
 """
 
-import logging
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,25 +12,28 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from app.core.config import get_settings
+from app.core.logging import setup_logging, get_logger
 from app.api.health import router as health_router
 from app.api.scraper import router as scraper_router
 from app.api.theme import router as theme_router
 from app.api.stock import router as stock_router
 
+# 配置结构化日志
+setup_logging()
+logger = get_logger(__name__)
+
 # 速率限制器
 limiter = Limiter(key_func=get_remote_address)
-
-logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
-    print("Starting TradingThemesGod API...")
+    logger.info("Starting TradingThemesGod API...")
     yield
     # 关闭时执行
-    print("Shutting down TradingThemesGod API...")
+    logger.info("Shutting down TradingThemesGod API...")
 
 
 def create_app() -> FastAPI:
@@ -59,6 +62,30 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # 请求日志中间件
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        """记录每个请求的方法、路径、状态码和耗时"""
+        start_time = time.monotonic()
+
+        # 处理请求
+        response = await call_next(request)
+
+        # 计算耗时
+        duration_ms = (time.monotonic() - start_time) * 1000
+
+        # 记录请求日志
+        logger.info(
+            "request_completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round(duration_ms, 2),
+            client=request.client.host if request.client else None,
+        )
+
+        return response
+
     # 注册路由
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(scraper_router, prefix="/api/v1")
@@ -70,13 +97,13 @@ def create_app() -> FastAPI:
     async def global_exception_handler(request: Request, exc: Exception):
         """捕获所有未处理的异常，返回统一错误响应"""
         logger.error(
-            f"Unhandled exception: {type(exc).__name__}: {exc}",
+            "unhandled_exception",
+            exc_type=type(exc).__name__,
+            exc_message=str(exc),
+            method=request.method,
+            path=request.url.path,
+            client=request.client.host if request.client else None,
             exc_info=True,
-            extra={
-                "method": request.method,
-                "url": str(request.url),
-                "client": request.client.host if request.client else None,
-            },
         )
         return JSONResponse(
             status_code=500,
