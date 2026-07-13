@@ -1,0 +1,26 @@
+MODULE: scraper/sina
+FILES: app/scrapers/sina.py
+RESPONSIBILITY: 新浪财经事件爬虫，从新浪财经获取股票新闻和事件数据
+KEY_FILES:
+- app/scrapers/sina.py: SinaFinanceScraper 实现，约 250 行
+DEPENDENCIES:
+- uses: httpx: 通过 AntiScrapingMiddleware 发送 HTTP 请求
+- uses: sqlalchemy: 数据库操作
+- imports: app.scrapers.base.BaseScraper: 基类
+- imports: app.scrapers.anti_scraping.AntiScrapingMiddleware: 反爬虫中间件
+- imports: app.models.event.Event: 事件模型
+- imports: app.models.stock.Stock: 股票模型
+- imports: app.core.database.AsyncSessionLocal: 数据库会话
+INTERFACES:
+- SinaFinanceScraper: 继承 BaseScraper 的新浪财经事件爬虫类
+- parse(html): 解析事件 HTML，返回事件数据列表
+- _extract_news_items(html): 从 HTML 提取新闻条目
+- _classify_event(title): 根据标题分类事件类型（announcement/news/research/policy/industry）
+- _parse_date(date_str): 解析多种日期格式
+- save(data): 幂等保存事件数据到 Event 表
+- run(url, params): 执行完整爬虫生命周期，需要 stock_code 参数
+TRAPS:
+- [LOW] 使用正则表达式解析 HTML，依赖页面结构稳定性 | FIX: 正则模式匹配链接和日期，失败时回退到宽松解析
+- [LOW] 事件类型分类基于关键词匹配 | FIX: EVENT_TYPE_MAP 定义关键词到类型的映射
+- [LOW] 日期解析支持多种格式 | FIX: _parse_date 尝试 %Y-%m-%d, %Y/%m/%d, %Y年%m月%d日
+- [LOW] 新闻条目限制最多 200 条 | FIX: 验证门要求至少 100 条事件，200 条限制足够

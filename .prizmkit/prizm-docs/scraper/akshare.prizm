@@ -1,0 +1,25 @@
+MODULE: scraper/akshare
+FILES: app/scrapers/akshare.py
+RESPONSIBILITY: AKShare 股票数据爬虫，使用 AKShare Python 库获取股票基本信息
+KEY_FILES:
+- app/scrapers/akshare.py: AKShareScraper 实现，约 220 行
+DEPENDENCIES:
+- uses: akshare: 获取 A 股股票列表数据
+- uses: asyncio: 使用 asyncio.to_thread 避免阻塞事件循环
+- uses: sqlalchemy: 数据库操作
+- imports: app.scrapers.base.BaseScraper: 基类
+- imports: app.scrapers.anti_scraping.AntiScrapingMiddleware: 反爬虫中间件
+- imports: app.models.stock.Stock: 股票模型
+- imports: app.core.database.AsyncSessionLocal: 数据库会话
+INTERFACES:
+- AKShareScraper: 继承 BaseScraper 的 AKShare 股票数据爬虫类
+- fetch_stock_info(): 异步获取股票基本信息，使用 asyncio.to_thread 包装同步调用
+- _detect_exchange(code): 根据股票代码检测交易所（SH/SZ/BJ）
+- parse(html): 返回缓存的股票数据（实现抽象接口）
+- save(data): 幂等保存股票数据到 Stock 表，AKShare 为权威来源
+- run(url, params): 执行完整爬虫生命周期
+TRAPS:
+- [LOW] AKShare 是同步库，需要使用 asyncio.to_thread 避免阻塞事件循环 | FIX: fetch_stock_info() 使用 await asyncio.to_thread(ak.stock_info_a_code_name)
+- [LOW] Stock.code 有 UNIQUE 约束，幂等保存需要按 code 查询 | FIX: 使用 select(Stock).where(Stock.code == code) 查询现有记录
+- [LOW] AKShare 为权威来源，会覆盖其他来源的数据 | FIX: save() 方法中更新时只覆盖非空字段
+- [LOW] 交易所检测基于代码前缀 | FIX: _detect_exchange 使用标准 A 股代码前缀规则

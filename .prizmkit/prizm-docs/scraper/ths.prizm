@@ -1,0 +1,23 @@
+MODULE: scraper/ths
+FILES: app/scrapers/ths.py
+RESPONSIBILITY: 同花顺产业链爬虫，从同花顺网站获取产业链结构数据（上游/中游/下游）
+KEY_FILES:
+- app/scrapers/ths.py: TongHuaShunScraper 实现，约 230 行
+DEPENDENCIES:
+- uses: httpx: 通过 AntiScrapingMiddleware 发送 HTTP 请求
+- uses: sqlalchemy: 数据库操作
+- imports: app.scrapers.base.BaseScraper: 基类
+- imports: app.scrapers.anti_scraping.AntiScrapingMiddleware: 反爬虫中间件
+- imports: app.models.industry_chain.IndustryChain: 产业链模型
+- imports: app.models.theme.Theme: 题材模型
+- imports: app.core.database.AsyncSessionLocal: 数据库会话
+INTERFACES:
+- TongHuaShunScraper: 继承 BaseScraper 的同花顺产业链爬虫类
+- parse(html): 解析产业链 HTML，返回产业链数据列表
+- _extract_chain_blocks(html): 从 HTML 提取上游/中游/下游区块
+- save(data): 幂等保存产业链数据到 IndustryChain 表
+- run(url, params): 执行完整爬虫生命周期，需要 theme_code 参数
+TRAPS:
+- [LOW] 使用正则表达式解析 HTML，依赖页面结构稳定性 | FIX: 正则模式匹配上游/中游/下游关键词，失败时回退到宽松解析
+- [LOW] IndustryChain.level 有 CHECK 约束，只能是 'upstream', 'midstream', 'downstream' | FIX: CHAIN_LEVEL_MAP 映射中文到英文
+- [LOW] 需要先查询 Theme 表获取 theme_id | FIX: run() 方法中先查询 Theme，再设置 theme_id

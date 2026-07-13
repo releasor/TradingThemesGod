@@ -8,6 +8,9 @@ from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.scrapers.registry import ScraperRegistry, scraper_registry
 from app.scrapers.scheduler import ScraperScheduler, scraper_scheduler
 from app.scrapers.eastmoney import EastMoneyScraper
+from app.scrapers.ths import TongHuaShunScraper
+from app.scrapers.sina import SinaFinanceScraper
+from app.scrapers.akshare import AKShareScraper
 
 __all__ = [
     "BaseScraper",
@@ -17,4 +20,7 @@ __all__ = [
     "ScraperScheduler",
     "scraper_scheduler",
     "EastMoneyScraper",
+    "TongHuaShunScraper",
+    "SinaFinanceScraper",
+    "AKShareScraper",
 ]

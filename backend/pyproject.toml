@@ -24,6 +24,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "httpx>=0.28.0",
     "structlog>=24.0.0",
+    "akshare>=1.18.64",
 ]
 
 [project.optional-dependencies]
