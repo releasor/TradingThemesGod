@@ -1,0 +1,8 @@
+MODULE: frontend
+FILES: src/main.tsx, src/App.tsx, src/styles/globals.css, src/lib/utils.ts, vite.config.ts, tailwind.config.ts
+RESPONSIBILITY: React 前端应用，提供用户界面和数据可视化
+DEPENDENCIES: react, vite, typescript, tailwindcss, zustand, @tanstack/react-query, echarts
+SUBDIRS:
+- components: components.prizm
+- features: features.prizm
+- stores: stores.prizm

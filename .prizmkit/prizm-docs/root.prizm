@@ -1,0 +1,14 @@
+PRIZM_VERSION: 1.0
+PROJECT: TradingThemesGod
+LANG: Python + TypeScript
+
+MODULE_GROUPS:
+- 题材系统 [themes, 题材, 产业链]: themes.prizm
+- 股票系统 [stocks, 股票, 事件]: stocks.prizm
+- 爬虫系统 [scraper, 爬虫, 数据采集]: scraper.prizm
+- 前端界面 [frontend, React, UI]: frontend.prizm
+
+RULES:
+- frontend: .prizmkit/rules/frontend-rules.md
+- backend: .prizmkit/rules/backend-rules.md
+- database: .prizmkit/rules/database-rules.md
