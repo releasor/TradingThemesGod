@@ -7,6 +7,7 @@ MODULE_GROUPS:
 - 股票系统 [stocks, 股票, 事件]: stocks.prizm
 - 爬虫系统 [scraper, 爬虫, 数据采集]: scraper.prizm
 - 前端界面 [frontend, React, UI]: frontend.prizm
+- 部署配置 [docker, 部署, 容器]: docker.prizm
 
 RULES:
 - frontend: .prizmkit/rules/frontend-rules.md

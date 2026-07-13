@@ -1,0 +1,6 @@
+MODULE: docker
+FILES: docker-compose.yml, Makefile, .env.example, backend/Dockerfile, backend/entrypoint.sh, backend/.dockerignore, frontend/Dockerfile, frontend/nginx.conf
+RESPONSIBILITY: Docker 部署配置，提供容器化部署和服务编排
+DEPENDENCIES: docker, docker-compose, nginx, postgres
+SUBDIRS:
+- docker: docker.prizm

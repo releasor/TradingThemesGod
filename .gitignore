@@ -1,5 +1,6 @@
 # PrizmKit
 .prizmkit/*
+!.prizmkit/prizm-docs/
 CLAUDE.private.md
 
 # Python

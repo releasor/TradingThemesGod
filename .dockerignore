@@ -1,0 +1,9 @@
+# 忽略非前端文件
+backend/
+node_modules/
+dist/
+.git/
+.prizmkit/
+.claude/
+*.md
+!README.md
