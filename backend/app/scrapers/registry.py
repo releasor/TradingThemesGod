@@ -56,3 +56,11 @@ class ScraperRegistry:
 
 # 全局注册表实例
 scraper_registry = ScraperRegistry()
+
+
+def register_default_scrapers() -> None:
+    """注册默认爬虫"""
+    from app.scrapers.eastmoney import EastMoneyScraper
+
+    scraper_registry.register("eastmoney", EastMoneyScraper)
+    logger.info("已注册默认爬虫: eastmoney")

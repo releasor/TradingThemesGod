@@ -1,0 +1,27 @@
+MODULE: scraper/eastmoney
+FILES: app/scrapers/eastmoney.py
+RESPONSIBILITY: 东方财富题材爬虫，从东方财富 API 获取题材概念列表和关联股票数据
+KEY_FILES:
+- app/scrapers/eastmoney.py: EastMoneyScraper 实现，约 414 行
+DEPENDENCIES:
+- uses: httpx: 通过 AntiScrapingMiddleware 发送 HTTP 请求
+- uses: sqlalchemy: 数据库操作
+- imports: app.scrapers.base.BaseScraper: 基类
+- imports: app.scrapers.anti_scraping.AntiScrapingMiddleware: 反爬虫中间件
+- imports: app.models.theme.Theme: 题材模型
+- imports: app.models.theme_stock.ThemeStock: 题材股票关联模型
+- imports: app.models.stock.Stock: 股票模型
+- imports: app.core.database.AsyncSessionLocal: 数据库会话
+INTERFACES:
+- EastMoneyScraper: 继承 BaseScraper 的东方财富爬虫类
+- fetch_json(url, params): 获取 JSON API 数据
+- parse_theme_list(data): 解析题材列表数据
+- parse_theme_stocks(data, theme_code): 解析题材关联股票数据
+- _extract_category(name): 从题材名称提取分类
+- _save_themes(themes): 幂等保存题材数据
+- _save_theme_stocks(theme_code, stocks): 保存题材关联股票
+- run(url, params): 执行完整爬虫生命周期
+TRAPS:
+- [LOW] 东方财富使用 JSON API 而非 HTML，BaseScraper.fetch() 返回 HTML 字符串不适用 | FIX: 重写 fetch_json() 方法直接返回 JSON
+- [LOW] _extract_category 关键词匹配需要大小写不敏感 | FIX: 使用 keyword.lower() 进行比较
+- [LOW] ThemeStock 使用复合主键 (theme_id, stock_id)，需要先查询 Stock 表获取 stock_id | FIX: 先查询或创建 Stock，再创建 ThemeStock 关联

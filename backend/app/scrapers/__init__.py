@@ -7,6 +7,7 @@ from app.scrapers.base import BaseScraper
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.scrapers.registry import ScraperRegistry, scraper_registry
 from app.scrapers.scheduler import ScraperScheduler, scraper_scheduler
+from app.scrapers.eastmoney import EastMoneyScraper
 
 __all__ = [
     "BaseScraper",
@@ -15,4 +16,5 @@ __all__ = [
     "scraper_registry",
     "ScraperScheduler",
     "scraper_scheduler",
+    "EastMoneyScraper",
 ]
