@@ -107,26 +107,20 @@ class AntiScrapingMiddleware:
     async def _get_client(self) -> httpx.AsyncClient:
         """获取或创建 httpx 客户端"""
         if self._client is None or self._client.is_closed:
-            transport_kwargs: dict[str, Any] = {}
+            # 构建客户端参数
+            client_kwargs: dict[str, Any] = {
+                "timeout": 30.0,
+                "follow_redirects": True,
+                "limits": httpx.Limits(
+                    max_connections=100,
+                    max_keepalive_connections=20,
+                ),
+            }
+            # 如果配置了代理，添加代理参数
             if self.proxy_url:
-                self._client = httpx.AsyncClient(
-                    proxy=self.proxy_url,
-                    timeout=30.0,
-                    follow_redirects=True,
-                    limits=httpx.Limits(
-                        max_connections=100,
-                        max_keepalive_connections=20,
-                    ),
-                )
-            else:
-                self._client = httpx.AsyncClient(
-                    timeout=30.0,
-                    follow_redirects=True,
-                    limits=httpx.Limits(
-                        max_connections=100,
-                        max_keepalive_connections=20,
-                    ),
-                )
+                client_kwargs["proxy"] = self.proxy_url
+
+            self._client = httpx.AsyncClient(**client_kwargs)
         return self._client
 
     async def _wait_for_interval(self) -> None:

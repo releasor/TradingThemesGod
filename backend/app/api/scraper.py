@@ -3,7 +3,9 @@
 提供爬虫运行触发、状态查询和历史记录查询。
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -15,26 +17,32 @@ from app.schemas.scraper import (
 )
 from app.scrapers.scheduler import scraper_scheduler
 
+# 速率限制器
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter(prefix="/scraper", tags=["scraper"])
 
 
 @router.post("/run/{source}", response_model=ScraperRunResponse)
+@limiter.limit("5/minute")  # 每分钟最多 5 次请求
 async def run_scraper(
+    request: Request,
     source: str,
-    request: ScraperRunRequest = ScraperRunRequest(),
+    body: ScraperRunRequest = ScraperRunRequest(),
     db: AsyncSession = Depends(get_db),
 ):
     """触发爬虫运行
 
     Args:
+        request: FastAPI 请求对象（用于速率限制）
         source: 数据源名称（如 eastmoney）
-        request: 运行请求参数
+        body: 运行请求参数
 
     Returns:
         运行记录信息
     """
     try:
-        run_id = await scraper_scheduler.run(source, params=request.params)
+        run_id = await scraper_scheduler.run(source, params=body.params)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

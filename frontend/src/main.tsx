@@ -8,7 +8,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 分钟
-      retry: 1,
+      retry: 1, // 查询失败重试 1 次
+    },
+    mutations: {
+      retry: false, // mutation 不自动重试，避免重复操作（如触发爬虫）
     },
   },
 })

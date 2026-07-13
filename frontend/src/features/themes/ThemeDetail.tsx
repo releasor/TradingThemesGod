@@ -22,13 +22,40 @@ import { fetchThemeDetail } from '@/api/theme'
 import { getHeatColor, getRiseFallColor } from '@/lib/theme-colors'
 import { IndustryChainSection } from '@/components/IndustryChainSection'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ThemeHeatTrendLine } from '@/components/charts/ThemeHeatTrendLine'
+import { ThemeHeatTrendLine, type HeatTrendDataPoint } from '@/components/charts/ThemeHeatTrendLine'
 import { IndustryChainPie } from '@/components/charts/IndustryChainPie'
 
 /** 格式化涨跌幅显示 */
 function formatRiseFall(pct: number): string {
   const sign = pct > 0 ? '+' : ''
   return `${sign}${pct.toFixed(2)}%`
+}
+
+/**
+ * 生成模拟热度趋势数据
+ *
+ * 基于当前热度指数生成最近 7 天的趋势数据。
+ * TODO: 接入后端热度趋势 API 替换此函数
+ */
+function generateMockHeatTrend(currentHeat: number): HeatTrendDataPoint[] {
+  const points: HeatTrendDataPoint[] = []
+  const now = new Date()
+
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(now)
+    date.setDate(date.getDate() - i)
+
+    // 生成波动范围 ±15% 的模拟数据
+    const variation = (Math.random() - 0.5) * 0.3 * currentHeat
+    const value = Math.max(0, currentHeat + variation)
+
+    points.push({
+      date: date.toISOString().split('T')[0],
+      value: Math.round(value * 10) / 10,
+    })
+  }
+
+  return points
 }
 
 export function ThemeDetail() {
@@ -252,7 +279,7 @@ export function ThemeDetail() {
           {/* 热度趋势折线图 */}
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-medium text-muted-foreground">热度趋势</h3>
-            <ThemeHeatTrendLine data={[]} />
+            <ThemeHeatTrendLine data={generateMockHeatTrend(Number(theme.heat_index))} />
           </div>
 
           {/* 产业链分布饼图 */}
