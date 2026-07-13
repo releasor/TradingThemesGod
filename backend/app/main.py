@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.api.health import router as health_router
 from app.api.scraper import router as scraper_router
 from app.api.theme import router as theme_router
+from app.api.stock import router as stock_router
 
 
 @asynccontextmanager
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(scraper_router, prefix="/api/v1")
     app.include_router(theme_router, prefix="/api/v1")
+    app.include_router(stock_router, prefix="/api/v1")
 
     return app
 

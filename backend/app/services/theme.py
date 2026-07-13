@@ -16,6 +16,7 @@ from app.schemas.theme import (
     ThemeRankingResponse,
     IndustryChainBrief,
 )
+from app.schemas.stock import StockBrief, StockListResponse
 
 
 class ThemeService:
@@ -158,4 +159,45 @@ class ThemeService:
         return ThemeRankingResponse(
             items=[ThemeBrief.model_validate(t) for t in themes],
             limit=limit,
+        )
+
+    async def get_theme_stocks(
+        self,
+        theme_id: int,
+        chain_level: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> StockListResponse:
+        """获取题材关联的股票列表
+
+        Args:
+            theme_id: 题材ID
+            chain_level: 产业链层级筛选
+            page: 页码
+            page_size: 每页数量
+
+        Returns:
+            分页股票列表
+
+        Raises:
+            HTTPException: 题材不存在
+        """
+        # 先验证题材存在
+        theme = await self.repo.get_by_id(theme_id)
+        if theme is None:
+            raise HTTPException(status_code=404, detail="题材不存在")
+
+        stocks, total = await self.repo.get_stocks_by_theme(
+            theme_id=theme_id,
+            chain_level=chain_level,
+            page=page,
+            page_size=page_size,
+        )
+
+        return StockListResponse(
+            items=[StockBrief.model_validate(s) for s in stocks],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=ceil(total / page_size) if total > 0 else 0,
         )

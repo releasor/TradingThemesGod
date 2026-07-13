@@ -14,6 +14,7 @@ from app.schemas.theme import (
     ThemeListResponse,
     ThemeRankingResponse,
 )
+from app.schemas.stock import StockListResponse
 
 router = APIRouter(prefix="/themes", tags=["themes"])
 
@@ -82,6 +83,27 @@ async def search_themes(
     service = ThemeService(db)
     return await service.search_themes(
         query=q,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/{theme_id}/stocks", response_model=StockListResponse)
+async def get_theme_stocks(
+    theme_id: int,
+    chain_level: str | None = Query(default=None, description="产业链层级: upstream/midstream/downstream"),
+    page: int = Query(default=1, ge=1, description="页码"),
+    page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取题材关联的股票列表
+
+    返回指定题材下的股票，支持按产业链层级筛选。
+    """
+    service = ThemeService(db)
+    return await service.get_theme_stocks(
+        theme_id=theme_id,
+        chain_level=chain_level,
         page=page,
         page_size=page_size,
     )

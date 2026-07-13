@@ -1,0 +1,170 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0 -- E:\Prizm\TradingThemesGod\backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: E:\Prizm\TradingThemesGod\backend
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 133 items
+
+tests/unit/test_anti_scraping.py::test_user_agent_rotator PASSED         [  0%]
+tests/unit/test_anti_scraping.py::test_user_agent_rotator_custom_list PASSED [  1%]
+tests/unit/test_anti_scraping.py::test_middleware_sets_user_agent PASSED [  2%]
+tests/unit/test_anti_scraping.py::test_middleware_retry_on_429 PASSED    [  3%]
+tests/unit/test_anti_scraping.py::test_middleware_retry_on_503 PASSED    [  3%]
+tests/unit/test_anti_scraping.py::test_middleware_proxy_configuration PASSED [  4%]
+tests/unit/test_base_scraper.py::test_base_scraper_lifecycle PASSED      [  5%]
+tests/unit/test_base_scraper.py::test_base_scraper_fetch PASSED          [  6%]
+tests/unit/test_base_scraper.py::test_base_scraper_close PASSED          [  6%]
+tests/unit/test_base_scraper.py::test_base_scraper_run_with_params PASSED [  7%]
+tests/unit/test_eastmoney_scraper.py::TestParseThemeList::test_parse_theme_list_success PASSED [  8%]
+tests/unit/test_eastmoney_scraper.py::TestParseThemeList::test_parse_theme_list_empty PASSED [  9%]
+tests/unit/test_eastmoney_scraper.py::TestParseThemeList::test_parse_theme_list_missing_data PASSED [  9%]
+tests/unit/test_eastmoney_scraper.py::TestParseThemeList::test_parse_theme_list_invalid_item PASSED [ 10%]
+tests/unit/test_eastmoney_scraper.py::TestParseThemeStocks::test_parse_theme_stocks_success PASSED [ 11%]
+tests/unit/test_eastmoney_scraper.py::TestParseThemeStocks::test_parse_theme_stocks_empty PASSED [ 12%]
+tests/unit/test_eastmoney_scraper.py::TestParseThemeStocks::test_parse_theme_stocks_missing_data PASSED [ 12%]
+tests/unit/test_eastmoney_scraper.py::TestExtractCategory::test_extract_category_new_energy PASSED [ 13%]
+tests/unit/test_eastmoney_scraper.py::TestExtractCategory::test_extract_category_tech PASSED [ 14%]
+tests/unit/test_eastmoney_scraper.py::TestExtractCategory::test_extract_category_medical PASSED [ 15%]
+tests/unit/test_eastmoney_scraper.py::TestExtractCategory::test_extract_category_other PASSED [ 15%]
+tests/unit/test_eastmoney_scraper.py::TestEastMoneyScraperRun::test_run_success PASSED [ 16%]
+tests/unit/test_eastmoney_scraper.py::TestEastMoneyScraperRun::test_run_network_error PASSED [ 17%]
+tests/unit/test_eastmoney_scraper.py::TestEastMoneyScraperRun::test_run_empty_response PASSED [ 18%]
+tests/unit/test_models.py::TestThemeModel::test_theme_creation PASSED    [ 18%]
+tests/unit/test_models.py::TestThemeModel::test_theme_default_values PASSED [ 19%]
+tests/unit/test_models.py::TestThemeModel::test_theme_soft_delete PASSED [ 20%]
+tests/unit/test_models.py::TestThemeModel::test_theme_restore PASSED     [ 21%]
+tests/unit/test_models.py::TestThemeModel::test_theme_indexes PASSED     [ 21%]
+tests/unit/test_models.py::TestThemeModel::test_theme_columns PASSED     [ 22%]
+tests/unit/test_models.py::TestThemeModel::test_theme_repr PASSED        [ 23%]
+tests/unit/test_models.py::TestStockModel::test_stock_creation PASSED    [ 24%]
+tests/unit/test_models.py::TestStockModel::test_stock_indexes PASSED     [ 24%]
+tests/unit/test_models.py::TestStockModel::test_stock_columns PASSED     [ 25%]
+tests/unit/test_models.py::TestEventModel::test_event_creation PASSED    [ 26%]
+tests/unit/test_models.py::TestEventModel::test_event_indexes PASSED     [ 27%]
+tests/unit/test_models.py::TestIndustryChainModel::test_industry_chain_creation PASSED [ 27%]
+tests/unit/test_models.py::TestIndustryChainModel::test_industry_chain_indexes PASSED [ 28%]
+tests/unit/test_models.py::TestIndustryChainModel::test_industry_chain_check_constraint PASSED [ 29%]
+tests/unit/test_models.py::TestThemeStockModel::test_theme_stock_creation PASSED [ 30%]
+tests/unit/test_models.py::TestThemeStockModel::test_theme_stock_composite_primary_key PASSED [ 30%]
+tests/unit/test_models.py::TestThemeStockModel::test_theme_stock_indexes PASSED [ 31%]
+tests/unit/test_models.py::TestModelRelationships::test_theme_has_stocks_relationship PASSED [ 32%]
+tests/unit/test_models.py::TestModelRelationships::test_theme_has_industry_chains_relationship PASSED [ 33%]
+tests/unit/test_models.py::TestModelRelationships::test_stock_has_themes_relationship PASSED [ 33%]
+tests/unit/test_models.py::TestModelRelationships::test_stock_has_events_relationship PASSED [ 34%]
+tests/unit/test_models.py::TestModelRelationships::test_event_has_stock_relationship PASSED [ 35%]
+tests/unit/test_models.py::TestModelRelationships::test_industry_chain_has_theme_relationship PASSED [ 36%]
+tests/unit/test_models.py::TestTimestampMixin::test_all_models_have_timestamps PASSED [ 36%]
+tests/unit/test_scraper_akshare.py::test_detect_exchange_sh PASSED       [ 37%]
+tests/unit/test_scraper_akshare.py::test_detect_exchange_sz PASSED       [ 38%]
+tests/unit/test_scraper_akshare.py::test_detect_exchange_bj PASSED       [ 39%]
+tests/unit/test_scraper_akshare.py::test_detect_exchange_unknown PASSED  [ 39%]
+tests/unit/test_scraper_akshare.py::test_parse_returns_cached_data PASSED [ 40%]
+tests/unit/test_scraper_akshare.py::test_parse_returns_empty_when_no_cache PASSED [ 41%]
+tests/unit/test_scraper_akshare.py::test_source_name PASSED              [ 42%]
+tests/unit/test_scraper_akshare.py::test_save_with_new_stock PASSED      [ 42%]
+tests/unit/test_scraper_akshare.py::test_save_with_existing_stock PASSED [ 43%]
+tests/unit/test_scraper_akshare.py::test_save_with_empty_data PASSED     [ 44%]
+tests/unit/test_scraper_akshare.py::test_save_handles_exception PASSED   [ 45%]
+tests/unit/test_scraper_scheduler.py::test_scheduler_run_unregistered_source PASSED [ 45%]
+tests/unit/test_scraper_scheduler.py::test_scheduler_list_sources PASSED [ 46%]
+tests/unit/test_scraper_scheduler.py::test_scraper_registry_register PASSED [ 47%]
+tests/unit/test_scraper_scheduler.py::test_scraper_registry_invalid_class PASSED [ 48%]
+tests/unit/test_scraper_sina.py::test_parse_returns_list PASSED          [ 48%]
+tests/unit/test_scraper_sina.py::test_parse_extracts_events PASSED       [ 49%]
+tests/unit/test_scraper_sina.py::test_parse_handles_empty_html PASSED    [ 50%]
+tests/unit/test_scraper_sina.py::test_parse_handles_none_html PASSED     [ 51%]
+tests/unit/test_scraper_sina.py::test_classify_event_news PASSED         [ 51%]
+tests/unit/test_scraper_sina.py::test_classify_event_policy PASSED       [ 52%]
+tests/unit/test_scraper_sina.py::test_classify_event_industry PASSED     [ 53%]
+tests/unit/test_scraper_sina.py::test_classify_event_default PASSED      [ 54%]
+tests/unit/test_scraper_sina.py::test_parse_date_valid PASSED            [ 54%]
+tests/unit/test_scraper_sina.py::test_parse_date_invalid PASSED          [ 55%]
+tests/unit/test_scraper_sina.py::test_parse_date_empty PASSED            [ 56%]
+tests/unit/test_scraper_sina.py::test_source_name PASSED                 [ 57%]
+tests/unit/test_scraper_sina.py::test_save_with_valid_data PASSED        [ 57%]
+tests/unit/test_scraper_sina.py::test_save_with_empty_data PASSED        [ 58%]
+tests/unit/test_scraper_sina.py::test_extract_news_items PASSED          [ 59%]
+tests/unit/test_scraper_ths.py::test_parse_returns_list PASSED           [ 60%]
+tests/unit/test_scraper_ths.py::test_parse_extracts_chains PASSED        [ 60%]
+tests/unit/test_scraper_ths.py::test_parse_handles_empty_html PASSED     [ 61%]
+tests/unit/test_scraper_ths.py::test_parse_handles_none_html PASSED      [ 62%]
+tests/unit/test_scraper_ths.py::test_chain_level_mapping PASSED          [ 63%]
+tests/unit/test_scraper_ths.py::test_extract_chain_blocks PASSED         [ 63%]
+tests/unit/test_scraper_ths.py::test_source_name PASSED                  [ 64%]
+tests/unit/test_scraper_ths.py::test_save_with_valid_data PASSED         [ 65%]
+tests/unit/test_scraper_ths.py::test_save_with_empty_data PASSED         [ 66%]
+tests/unit/test_stock_api.py::TestListStocks::test_list_stocks_returns_paginated_response PASSED [ 66%]
+tests/unit/test_stock_api.py::TestListStocks::test_list_stocks_with_industry_filter PASSED [ 67%]
+tests/unit/test_stock_api.py::TestListStocks::test_list_stocks_with_exchange_filter PASSED [ 68%]
+tests/unit/test_stock_api.py::TestListStocks::test_list_stocks_default_params PASSED [ 69%]
+tests/unit/test_stock_api.py::TestGetStockDetail::test_get_stock_detail_returns_detail PASSED [ 69%]
+tests/unit/test_stock_api.py::TestGetStockDetail::test_get_stock_detail_404_for_invalid_code PASSED [ 70%]
+tests/unit/test_stock_api.py::TestGetStockEvents::test_get_stock_events_returns_sorted_events PASSED [ 71%]
+tests/unit/test_stock_api.py::TestGetStockEvents::test_get_stock_events_404_for_invalid_code PASSED [ 72%]
+tests/unit/test_stock_api.py::TestGetStockEvents::test_get_stock_events_pagination PASSED [ 72%]
+tests/unit/test_stock_api.py::TestListEvents::test_list_events_returns_paginated_response PASSED [ 73%]
+tests/unit/test_stock_api.py::TestListEvents::test_list_events_with_event_type_filter PASSED [ 74%]
+tests/unit/test_stock_api.py::TestListEvents::test_list_events_default_sort_by_published_at_desc PASSED [ 75%]
+tests/unit/test_stock_api.py::TestThemeStocks::test_get_theme_stocks_returns_stock_list PASSED [ 75%]
+tests/unit/test_stock_api.py::TestThemeStocks::test_get_theme_stocks_with_chain_level_filter PASSED [ 76%]
+tests/unit/test_stock_api.py::TestThemeStocks::test_get_theme_stocks_404_for_invalid_theme PASSED [ 77%]
+tests/unit/test_stock_schemas.py::TestStockBrief::test_from_dict PASSED  [ 78%]
+tests/unit/test_stock_schemas.py::TestStockBrief::test_optional_fields_none PASSED [ 78%]
+tests/unit/test_stock_schemas.py::TestEventBrief::test_from_dict PASSED  [ 79%]
+tests/unit/test_stock_schemas.py::TestEventBrief::test_optional_fields_none PASSED [ 80%]
+tests/unit/test_stock_schemas.py::TestStockListResponse::test_response_structure PASSED [ 81%]
+tests/unit/test_stock_schemas.py::TestStockListResponse::test_with_items PASSED [ 81%]
+tests/unit/test_stock_schemas.py::TestStockDetailResponse::test_response_structure PASSED [ 82%]
+tests/unit/test_stock_schemas.py::TestStockDetailResponse::test_with_events PASSED [ 83%]
+tests/unit/test_stock_schemas.py::TestEventListResponse::test_response_structure PASSED [ 84%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_init PASSED [ 84%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_list_paginated_basic PASSED [ 85%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_list_paginated_with_category PASSED [ 86%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_list_paginated_empty_result PASSED [ 87%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_get_by_id_found PASSED [ 87%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_get_by_id_not_found PASSED [ 88%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_search_basic PASSED [ 89%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_search_no_results PASSED [ 90%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_get_categories PASSED [ 90%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_get_ranking PASSED [ 91%]
+tests/unit/test_theme_repository.py::TestThemeRepository::test_get_industry_chains_by_theme PASSED [ 92%]
+tests/unit/test_theme_service.py::TestThemeService::test_init PASSED     [ 93%]
+tests/unit/test_theme_service.py::TestThemeService::test_list_themes_basic PASSED [ 93%]
+tests/unit/test_theme_service.py::TestThemeService::test_list_themes_empty PASSED [ 94%]
+tests/unit/test_theme_service.py::TestThemeService::test_get_theme_detail_found PASSED [ 95%]
+tests/unit/test_theme_service.py::TestThemeService::test_get_theme_detail_not_found PASSED [ 96%]
+tests/unit/test_theme_service.py::TestThemeService::test_search_themes_basic PASSED [ 96%]
+tests/unit/test_theme_service.py::TestThemeService::test_get_categories PASSED [ 97%]
+tests/unit/test_theme_service.py::TestThemeService::test_get_ranking PASSED [ 98%]
+tests/unit/test_theme_service.py::TestThemeService::test_get_theme_detail_groups_chains_by_level PASSED [ 99%]
+tests/unit/test_theme_service.py::TestThemeService::test_get_theme_detail_empty_chains PASSED [100%]
+
+============================== warnings summary ===============================
+tests/unit/test_eastmoney_scraper.py::TestEastMoneyScraperRun::test_run_success
+  E:\Prizm\TradingThemesGod\backend\app\scrapers\eastmoney.py:253: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(theme)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_scraper_akshare.py::test_save_with_new_stock
+  E:\Prizm\TradingThemesGod\backend\app\scrapers\akshare.py:165: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(stock)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_scraper_sina.py::test_save_with_valid_data
+  E:\Prizm\TradingThemesGod\backend\app\scrapers\sina.py:237: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(event)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_scraper_ths.py::test_save_with_valid_data
+  E:\Prizm\TradingThemesGod\backend\app\scrapers\ths.py:198: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(chain)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 133 passed, 4 warnings in 0.66s =======================

@@ -10,6 +10,8 @@ from sqlalchemy.orm import selectinload
 
 from app.models.theme import Theme
 from app.models.industry_chain import IndustryChain
+from app.models.stock import Stock
+from app.models.theme_stock import ThemeStock
 
 
 class ThemeRepository:
@@ -184,3 +186,46 @@ class ThemeRepository:
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def get_stocks_by_theme(
+        self,
+        theme_id: int,
+        chain_level: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Stock], int]:
+        """获取题材关联的股票列表（分页）
+
+        Args:
+            theme_id: 题材ID
+            chain_level: 产业链层级筛选
+            page: 页码
+            page_size: 每页数量
+
+        Returns:
+            (股票列表, 总数)
+        """
+        base_query = (
+            select(Stock)
+            .join(ThemeStock, ThemeStock.stock_id == Stock.id)
+            .where(ThemeStock.theme_id == theme_id)
+        )
+
+        if chain_level:
+            base_query = base_query.where(ThemeStock.chain_level == chain_level)
+
+        # 计算总数
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total = (await self.session.execute(count_query)).scalar() or 0
+
+        # 按 sort_order 排序
+        base_query = base_query.order_by(asc(ThemeStock.sort_order))
+
+        # 应用分页
+        offset = (page - 1) * page_size
+        base_query = base_query.offset(offset).limit(page_size)
+
+        result = await self.session.execute(base_query)
+        stocks = list(result.scalars().all())
+
+        return stocks, total

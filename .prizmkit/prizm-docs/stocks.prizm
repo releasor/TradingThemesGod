@@ -1,0 +1,12 @@
+MODULE: stocks
+FILES: app/api/stock.py, app/schemas/stock.py, app/services/stock.py, app/repositories/stock.py
+RESPONSIBILITY: 股票和事件查询 API 端点，提供分页列表、详情、事件查询接口
+DEPENDENCIES:
+- uses: fastapi: API 路由框架
+- uses: sqlalchemy: 异步数据库查询
+- uses: pydantic: 请求/响应数据验证
+SUBDIRS:
+- api: api/stock.py
+- schemas: schemas/stock.py
+- services: services/stock.py
+- repositories: repositories/stock.py

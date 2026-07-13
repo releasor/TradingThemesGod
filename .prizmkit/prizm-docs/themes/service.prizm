@@ -2,7 +2,7 @@ MODULE: themes/service
 FILES: app/services/theme.py
 RESPONSIBILITY: 题材业务逻辑编排
 KEY_FILES:
-- app/services/theme.py: ThemeService 类，约 160 行
+- app/services/theme.py: ThemeService 类，约 203 行
 DEPENDENCIES:
 - imports: app.repositories.theme: ThemeRepository 数据访问
 - imports: app.schemas.theme: 响应模型
@@ -13,5 +13,6 @@ INTERFACES:
 - search_themes(query, page, page_size) -> ThemeListResponse: 搜索
 - get_categories() -> ThemeCategoriesResponse: 分类列表
 - get_ranking(limit) -> ThemeRankingResponse: 排名
+- get_theme_stocks(theme_id, chain_level, page, page_size) -> StockListResponse: 题材关联股票查询
 TRAPS:
 - [LOW] get_theme_detail 按 level 分组产业链 — 仅支持 upstream/midstream/downstream，其他 level 值会被忽略
