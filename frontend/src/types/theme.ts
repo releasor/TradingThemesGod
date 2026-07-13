@@ -47,3 +47,34 @@ export interface ThemeListResponse {
 export interface ThemeCategoriesResponse {
   categories: string[]
 }
+
+/** 产业链环节简要信息 */
+export interface IndustryChainBrief {
+  id: number
+  level: 'upstream' | 'midstream' | 'downstream'
+  name: string
+  description: string | null
+  representative_companies: string[] | Record<string, unknown> | null
+  sort_order: number
+}
+
+/** 题材详情响应 */
+export interface ThemeDetailResponse {
+  id: number
+  name: string
+  code: string
+  description: string | null
+  heat_index: number
+  rise_fall_pct: number
+  stock_count: number
+  category: string | null
+  tags: string[] | Record<string, unknown> | null
+  source: string | null
+  created_at: string
+  updated_at: string
+  industry_chains: {
+    upstream: IndustryChainBrief[]
+    midstream: IndustryChainBrief[]
+    downstream: IndustryChainBrief[]
+  }
+}

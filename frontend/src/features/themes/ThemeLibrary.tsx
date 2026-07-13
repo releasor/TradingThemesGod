@@ -177,7 +177,7 @@ export function ThemeLibrary() {
                 <ThemeTableRow
                   key={theme.id}
                   theme={theme}
-                  onClick={() => navigate(`/theme/${theme.id}`)}
+                  onClick={() => navigate(`/themes/${theme.id}`)}
                 />
               ))}
             </>

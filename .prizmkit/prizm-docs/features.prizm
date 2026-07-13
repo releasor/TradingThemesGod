@@ -1,5 +1,5 @@
 MODULE: frontend/src/features
-FILES: dashboard/ThemeDashboard.tsx, themes/ThemeLibrary.tsx
+FILES: dashboard/ThemeDashboard.tsx, themes/ThemeLibrary.tsx, themes/ThemeDetail.tsx
 RESPONSIBILITY: 页面级功能组件，每个子目录对应一个完整页面
 DEPENDENCIES:
 - uses: @tanstack/react-query: 数据获取和缓存
@@ -11,12 +11,15 @@ DEPENDENCIES:
 KEY_FILES:
 - dashboard/ThemeDashboard.tsx: 题材看板主页面，包含加载/错误/空状态，120行
 - themes/ThemeLibrary.tsx: 题材库主页面，支持搜索/筛选/排序/分页，200行
+- themes/ThemeDetail.tsx: 题材详情页面，展示产业链结构和股票，260行
 INTERFACES:
 - ThemeDashboard(): 看板页面组件，路由 '/'
 - ThemeLibrary(): 题材库页面组件，路由 '/themes'
+- ThemeDetail(): 题材详情页面组件，路由 '/themes/:id'
 TRAPS:
 - [LOW] ThemeDashboard 使用 TanStack Query 的 queryKey: ['theme-ranking', limit]，修改 limit 需同步更新
 - [LOW] ThemeLibrary 使用 useThemeFilters Hook 同步 URL 参数，搜索防抖 300ms
+- [LOW] ThemeDetail 使用 useParams 获取 id 参数，需要处理 NaN 情况（使用 enabled: !isNaN(themeId)）
 
 DECISIONS:
 - fetchThemes 根据 q 参数切换端点：有 q 用 /themes/search（仅支持 q/page/page_size），无 q 用 /themes（支持完整排序/筛选）

@@ -9,7 +9,9 @@ import type {
   ThemeListParams,
   ThemeListResponse,
   ThemeCategoriesResponse,
+  ThemeDetailResponse,
 } from '@/types/theme'
+import type { StockListResponse } from '@/types/stock'
 
 const apiClient = axios.create({
   baseURL: '/api/v1',
@@ -54,5 +56,28 @@ export async function fetchThemes(params: ThemeListParams): Promise<ThemeListRes
 /** 获取所有题材分类 */
 export async function fetchCategories(): Promise<ThemeCategoriesResponse> {
   const { data } = await apiClient.get<ThemeCategoriesResponse>('/themes/categories')
+  return data
+}
+
+/** 获取题材详情（含产业链数据） */
+export async function fetchThemeDetail(id: number): Promise<ThemeDetailResponse> {
+  const { data } = await apiClient.get<ThemeDetailResponse>(`/themes/${id}`)
+  return data
+}
+
+/** 获取题材关联的股票列表 */
+export async function fetchThemeStocks(
+  themeId: number,
+  chainLevel?: string,
+  page = 1,
+  pageSize = 100
+): Promise<StockListResponse> {
+  const { data } = await apiClient.get<StockListResponse>(`/themes/${themeId}/stocks`, {
+    params: {
+      chain_level: chainLevel || undefined,
+      page,
+      page_size: pageSize,
+    },
+  })
   return data
 }

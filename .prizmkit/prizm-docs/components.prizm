@@ -1,6 +1,6 @@
 MODULE: frontend/src/components
-FILES: ThemeCard.tsx, ThemeCardSkeleton.tsx, QuickStats.tsx, FilterBar.tsx, SortSelect.tsx, ThemeTableRow.tsx, ThemeTableSkeleton.tsx, Pagination.tsx
-RESPONSIBILITY: 可复用 UI 组件，用于题材看板和题材库展示
+FILES: ThemeCard.tsx, ThemeCardSkeleton.tsx, QuickStats.tsx, FilterBar.tsx, SortSelect.tsx, ThemeTableRow.tsx, ThemeTableSkeleton.tsx, Pagination.tsx, StockPopover.tsx, StockList.tsx, StockListSkeleton.tsx, ChainPointCard.tsx, IndustryChainSection.tsx
+RESPONSIBILITY: 可复用 UI 组件，用于题材看板、题材库和题材详情展示
 DEPENDENCIES:
 - uses: lucide-react: 图标库
 - imports: @/lib/utils: cn() 样式合并工具
@@ -25,9 +25,15 @@ INTERFACES:
 - ThemeTableSkeleton(): 表格行骨架屏
 - Pagination({ page, totalPages, onPageChange }): 分页控件，含首页/末页/前后翻页
 - getVisiblePages(current, total): 生成可见页码列表（导出用于测试）
+- StockPopover({ stock, children }): 股票弹出框，使用 TanStack Query 在打开时获取详情
+- StockList({ stocks }): 股票列表，每个股票可点击打开 StockPopover
+- StockListSkeleton(): 股票列表骨架屏
+- ChainPointCard({ chainPoint, themeId }): 链路点卡片，可展开显示关联股票
+- IndustryChainSection({ chains, themeId }): 产业链三列布局（上游/中游/下游）
 TRAPS:
 - [LOW] ThemeCard/ThemeTableRow 热度阈值硬编码（80/60/40），已提取到 @/lib/theme-colors 共用
 - [LOW] 新增类似组件时应提取共用工具函数到 @/lib/，避免重复代码（如 theme-colors.ts）
+- [LOW] StockPopover 使用 Radix UI Portal 渲染，测试时需使用 screen.getByRole('dialog') 或 document.querySelector 查找弹出框内容
 
 DECISIONS:
 - 颜色工具函数（getHeatColor, getRiseFallColor）提取到 @/lib/theme-colors.ts，ThemeCard 和 ThemeTableRow 共用
