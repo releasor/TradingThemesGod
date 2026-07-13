@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.models.base import Base
+from app.models import Theme, Stock, Event, IndustryChain, ThemeStock  # noqa: F401
 from app.core.config import get_settings
 
 # Alembic Config 对象
