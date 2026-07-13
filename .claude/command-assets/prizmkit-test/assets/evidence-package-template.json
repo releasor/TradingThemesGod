@@ -1,0 +1,97 @@
+{
+  "protocol_version": "1.0",
+  "records": {
+    "change_classification": "change-classification.json",
+    "scope": "scope.json",
+    "target_inventory": "target-inventory.json",
+    "environment": "environment.json",
+    "behavior_risk_matrix": "behavior-risk-matrix.json",
+    "test_plan": "test-plan.json",
+    "infrastructure_changes": "infrastructure-changes.json",
+    "differential_proof": "differential-proof.json",
+    "executions": "executions.json",
+    "verdict": "verdict.json",
+    "validation": "validation.json",
+    "source_patch": "source-change.patch",
+    "derived_report": "test-report.md"
+  },
+  "directories": {
+    "requests": "requests/",
+    "receipts": "receipts/",
+    "raw_outputs": "raw/",
+    "generated_test_snapshots": "generated-tests/",
+    "contract_snapshots": "contracts/"
+  },
+  "stage_statuses": [
+    {
+      "name": "CHANGE_CLASSIFY",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "SCOPE_DISCOVER",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "CONTRACT_MODEL",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "TEST_PLAN",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "INFRA_READY",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "TEST_BUILD",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "EXECUTE_PROVE",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "EVIDENCE_PACKAGE",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    },
+    {
+      "name": "EVIDENCE_VALIDATE",
+      "status": "pending",
+      "input_sha256": "<sha256>",
+      "outputs": []
+    }
+  ],
+  "resume": {
+    "last_valid_stage": null,
+    "current_target_hashes": {
+      "source": "<sha256>",
+      "tests": "<sha256>",
+      "contracts": "<sha256>",
+      "lockfiles": "<sha256>",
+      "environment": "<sha256>",
+      "plan": "<sha256>"
+    },
+    "preserve_prior_executions": true,
+    "invalidate_downstream_on_input_change": true,
+    "semantic_review_required": true
+  },
+  "required_notice": "Evidence contains complete project-controlled command, environment, and output values. The project owns access control, retention, and upload policy. Production credentials, production services, and destructive real-data operations are prohibited.",
+  "compatibility": "legacy-test-report-interface-not-supported"
+}

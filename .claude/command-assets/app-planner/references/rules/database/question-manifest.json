@@ -1,0 +1,39 @@
+{
+  "schema_version": "app-planner-question-manifest-v1",
+  "layer": "database",
+  "total_questions": 15,
+  "_doc": "Machine-readable structure for database question-bank.md. Question TEXT/options/Recommended/Notes are authoritative in question-bank.md; this file carries ONLY structure: group membership, quick-mode, question->placeholder mapping, and conditional logic. Keep Qids and group ids in sync with question-bank.md. The AI reads this as its asking checklist (Phase A) and self-check expected-set (Phase D).",
+  "_conditions": "required_if / auto_derived_when use simple expressions over recorded answers. options_vary_by names a prior answer that changes the OPTION LIST only (question is still asked; never affects required). A single answer may fill more than one placeholder (a TL;DR value + a rules-block), both listed in maps_to.",
+  "groups": [
+    { "id": "G1", "topic": "Database Selection", "quick_mode": true },
+    { "id": "G2", "topic": "Data Modeling", "quick_mode": true },
+    { "id": "G3", "topic": "Migration", "quick_mode": true },
+    { "id": "G4", "topic": "Index & Performance", "quick_mode": false },
+    { "id": "G5", "topic": "Security & Compliance", "quick_mode": false },
+    { "id": "G6", "topic": "High Availability & Ops", "quick_mode": false },
+    { "id": "G7", "topic": "AI Constraints", "quick_mode": true }
+  ],
+  "questions": [
+    { "id": "Q1", "group": "G1", "topic": "Primary Database", "maps_to": ["database", "tech_rules"], "required": true },
+    { "id": "Q2", "group": "G1", "topic": "Cache Layer", "maps_to": ["cache", "cache_rules"], "required": true },
+    { "id": "Q3", "group": "G2", "topic": "Primary Key Strategy", "maps_to": ["pk_strategy", "schema_rules"], "required": true },
+    { "id": "Q4", "group": "G2", "topic": "Soft Delete", "maps_to": ["soft_delete", "schema_rules"], "required": true },
+    { "id": "Q5", "group": "G2", "topic": "Normalization Level", "maps_to": ["normalization", "schema_rules"], "required": true },
+    { "id": "Q6", "group": "G3", "topic": "Migration Tool", "maps_to": ["migration_tool", "migration_rules"], "required": true },
+    { "id": "Q7", "group": "G4", "topic": "Query Complexity", "maps_to": ["workload_type", "performance_rules"], "required": true },
+    { "id": "Q8", "group": "G4", "topic": "Estimated Data Volume", "maps_to": ["data_scale", "performance_rules"], "required": true },
+    { "id": "Q9", "group": "G5", "topic": "Data Sensitivity Level", "maps_to": ["data_sensitivity", "security_rules"], "required": true },
+    { "id": "Q10", "group": "G5", "topic": "Audit Requirements", "maps_to": ["audit", "audit_rules"], "required": true, "multi_select": true },
+    { "id": "Q11", "group": "G6", "topic": "Deployment Method", "maps_to": ["deployment", "ops_rules"], "required": true },
+    { "id": "Q12", "group": "G6", "topic": "Backup Strategy", "maps_to": ["backup", "ops_rules"], "required": true },
+    { "id": "Q13", "group": "G6", "topic": "High Availability Requirements", "maps_to": ["ha", "ops_rules"], "required": true },
+    { "id": "Q14", "group": "G7", "topic": "AI Permission to Modify Database Structure", "maps_to": ["ai_ddl_rule", "ai_ddl_permission"], "required": true },
+    { "id": "Q15", "group": "G7", "topic": "AI Safety Constraints", "maps_to": ["ai_safety_rule", "ai_safety_constraint"], "required": true }
+  ],
+  "template_placeholders": {
+    "from_questions": ["database", "tech_rules", "cache", "cache_rules", "pk_strategy", "schema_rules", "soft_delete", "normalization", "migration_tool", "migration_rules", "workload_type", "performance_rules", "data_scale", "data_sensitivity", "security_rules", "audit", "audit_rules", "deployment", "ops_rules", "backup", "ha", "ai_ddl_rule", "ai_ddl_permission", "ai_safety_rule", "ai_safety_constraint"],
+    "from_fixed_rules": ["FIXED_RULES_AI_BASE", "FIXED_RULES_BACKUP", "FIXED_RULES_CONNECTION", "FIXED_RULES_INDEX", "FIXED_RULES_MIGRATION", "FIXED_RULES_PERFORMANCE", "FIXED_RULES_QUERY", "FIXED_RULES_SCHEMA", "FIXED_RULES_SECURITY", "FIXED_RULES_TRANSACTION", "FIXED_RULES_TYPES"],
+    "auto_generated": ["deny_list_summary", "recommended_libs"],
+    "metadata": ["project_name", "generated_at"]
+  }
+}

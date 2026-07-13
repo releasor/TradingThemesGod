@@ -1,0 +1,47 @@
+{
+  "schema_version": "app-planner-question-manifest-v1",
+  "layer": "mobile",
+  "total_questions": 20,
+  "_doc": "Machine-readable structure for mobile question-bank.md. Question TEXT/options/Recommended/Notes are authoritative in question-bank.md; this file carries ONLY structure: group membership, quick-mode, question->placeholder mapping, and conditional logic. Keep Qids and group ids in sync with question-bank.md. The AI reads this as its asking checklist (Phase A) and self-check expected-set (Phase D).",
+  "_conditions": "required_if / auto_derived_when use simple expressions over recorded answers, e.g. 'Q12 in [A, B]'. options_vary_by names a prior answer that changes the OPTION LIST only (question is still asked; never affects required). dual_native_repeat_when notes Q1=E (both native) repeats the question per platform.",
+  "groups": [
+    { "id": "G1", "topic": "Platform & Language", "quick_mode": true },
+    { "id": "G2", "topic": "Architecture", "quick_mode": true },
+    { "id": "G3", "topic": "UI Framework", "quick_mode": true },
+    { "id": "G4", "topic": "Navigation & State", "quick_mode": true },
+    { "id": "G5", "topic": "Networking & Data", "quick_mode": false },
+    { "id": "G6", "topic": "Platform Features", "quick_mode": false },
+    { "id": "G7", "topic": "Testing", "quick_mode": true },
+    { "id": "G8", "topic": "App Distribution", "quick_mode": false },
+    { "id": "G9", "topic": "Performance & Accessibility", "quick_mode": false },
+    { "id": "G10", "topic": "AI Constraints", "quick_mode": false }
+  ],
+  "questions": [
+    { "id": "Q1", "group": "G1", "topic": "Target Platform", "maps_to": ["platform", "tech_stack_rules"], "required": true },
+    { "id": "Q2", "group": "G1", "topic": "Minimum OS Version", "maps_to": ["min_os_version", "tech_stack_rules"], "required": true },
+    { "id": "Q3", "group": "G2", "topic": "Architecture Pattern", "maps_to": ["architecture", "arch_rules"], "required": true },
+    { "id": "Q4", "group": "G3", "topic": "UI Framework", "maps_to": ["ui_framework", "ui_rules"], "required": true, "options_vary_by": "Q1", "dual_native_repeat_when": "Q1 == E" },
+    { "id": "Q5", "group": "G4", "topic": "Navigation Strategy", "maps_to": ["navigation", "navigation_rules"], "required": true },
+    { "id": "Q6", "group": "G4", "topic": "State Management", "maps_to": ["state_management", "state_rules"], "required": true, "options_vary_by": "Q1", "dual_native_repeat_when": "Q1 == E" },
+    { "id": "Q7", "group": "G5", "topic": "Networking Library", "maps_to": ["networking", "networking_rules"], "required": true, "options_vary_by": "Q1", "dual_native_repeat_when": "Q1 == E" },
+    { "id": "Q8", "group": "G5", "topic": "Local Persistence", "maps_to": ["persistence", "persistence_rules"], "required": true, "options_vary_by": "Q1", "dual_native_repeat_when": "Q1 == E" },
+    { "id": "Q9", "group": "G6", "topic": "Push Notifications", "maps_to": ["push_notifications", "platform_features_rules"], "required": true },
+    { "id": "Q10", "group": "G6", "topic": "Background Tasks", "maps_to": ["background_tasks", "platform_features_rules"], "required": true },
+    { "id": "Q11", "group": "G6", "topic": "Permissions Strategy", "maps_to": ["permissions_strategy"], "required": true },
+    { "id": "Q12", "group": "G7", "topic": "Test Coverage Requirements", "maps_to": ["test_coverage", "test_rules"], "required": true },
+    { "id": "Q13", "group": "G7", "topic": "Unit Test Framework", "maps_to": ["unit_test_framework"], "required": true, "required_if": "Q12 in [A, B]", "options_vary_by": "Q1", "dual_native_repeat_when": "Q1 == E" },
+    { "id": "Q14", "group": "G7", "topic": "UI/E2E Test Framework", "maps_to": ["e2e_framework"], "required": true, "required_if": "Q12 in [A, C]", "options_vary_by": "Q1", "dual_native_repeat_when": "Q1 == E" },
+    { "id": "Q15", "group": "G8", "topic": "Distribution Method", "maps_to": ["distribution", "distribution_rules"], "required": true },
+    { "id": "Q16", "group": "G9", "topic": "Performance Targets", "maps_to": ["performance_target", "performance_rules"], "required": true },
+    { "id": "Q17", "group": "G9", "topic": "Accessibility Targets", "maps_to": ["a11y_target", "a11y_rules"], "required": true },
+    { "id": "Q18", "group": "G10", "topic": "AI Permission to Add Dependencies", "maps_to": ["ai_dependency_rule"], "required": true },
+    { "id": "Q19", "group": "G10", "topic": "AI Impact Analysis Before Modifying Shared Code", "maps_to": ["ai_breaking_change_rule"], "required": true },
+    { "id": "Q20", "group": "G10", "topic": "AI Platform-Specific Code Generation", "maps_to": ["ai_platform_rule"], "required": true }
+  ],
+  "template_placeholders": {
+    "from_questions": ["platform", "tech_stack_rules", "min_os_version", "architecture", "arch_rules", "ui_framework", "ui_rules", "navigation", "navigation_rules", "state_management", "state_rules", "networking", "networking_rules", "persistence", "persistence_rules", "push_notifications", "platform_features_rules", "background_tasks", "permissions_strategy", "test_coverage", "test_rules", "unit_test_framework", "e2e_framework", "distribution", "distribution_rules", "performance_target", "performance_rules", "a11y_target", "a11y_rules", "ai_dependency_rule", "ai_breaking_change_rule", "ai_platform_rule"],
+    "from_fixed_rules": ["FIXED_RULES_A11Y", "FIXED_RULES_AI_BASE", "FIXED_RULES_DISTRIBUTION", "FIXED_RULES_NAVIGATION", "FIXED_RULES_NETWORKING", "FIXED_RULES_PERFORMANCE", "FIXED_RULES_PERSISTENCE", "FIXED_RULES_PLATFORM_FEATURES", "FIXED_RULES_SECURITY", "FIXED_RULES_STATE", "FIXED_RULES_STRUCTURE", "FIXED_RULES_TEST", "FIXED_RULES_UI"],
+    "auto_generated": ["deny_list_summary", "recommended_libs"],
+    "metadata": ["project_name", "generated_at"]
+  }
+}
