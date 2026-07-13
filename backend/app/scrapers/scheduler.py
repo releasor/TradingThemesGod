@@ -86,7 +86,7 @@ class ScraperScheduler:
         error_message = None
 
         try:
-            url = (params or {}).pop("url", "")
+            url = (params or {}).get("url", "")
             if not url:
                 raise ValueError("缺少目标 URL")
 

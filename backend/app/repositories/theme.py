@@ -13,6 +13,11 @@ from app.models.industry_chain import IndustryChain
 from app.models.stock import Stock
 from app.models.theme_stock import ThemeStock
 
+# 允许排序的字段白名单
+THEME_SORT_FIELDS = {
+    "heat_index", "rise_fall_pct", "stock_count", "name",
+}
+
 
 class ThemeRepository:
     """题材仓储"""
@@ -60,7 +65,9 @@ class ThemeRepository:
         total = (await self.session.execute(count_query)).scalar() or 0
 
         # 应用排序
-        sort_column = getattr(Theme, sort_by, Theme.heat_index)
+        sort_column = getattr(Theme, sort_by, None)
+        if sort_column is None or sort_by not in THEME_SORT_FIELDS:
+            sort_column = Theme.heat_index
         if sort_order == "desc":
             base_query = base_query.order_by(desc(sort_column))
         else:

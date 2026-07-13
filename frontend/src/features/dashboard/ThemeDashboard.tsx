@@ -12,6 +12,7 @@ import { ThemeCard } from '@/components/ThemeCard'
 import { ThemeCardSkeleton } from '@/components/ThemeCardSkeleton'
 import { QuickStats } from '@/components/QuickStats'
 import { ThemeRiseFallBar } from '@/components/charts/ThemeRiseFallBar'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 export function ThemeDashboard() {
   const navigate = useNavigate()
@@ -33,14 +34,17 @@ export function ThemeDashboard() {
           <h1 className="text-2xl font-bold text-foreground">
             TradingThemesGod <span className="text-muted-foreground font-normal">题材看板</span>
           </h1>
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-            刷新
-          </button>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+              刷新
+            </button>
+          </div>
         </div>
       </header>
 

@@ -14,9 +14,11 @@ interface ThemeTableRowProps {
 }
 
 export function ThemeTableRow({ theme, onClick }: ThemeTableRowProps) {
-  const heatColor = getHeatColor(Number(theme.heat_index))
-  const riseFallColor = getRiseFallColor(Number(theme.rise_fall_pct))
-  const isRising = Number(theme.rise_fall_pct) > 0
+  const heatValue = Number(theme.heat_index)
+  const riseFallValue = Number(theme.rise_fall_pct)
+  const heatColor = getHeatColor(heatValue)
+  const riseFallColor = getRiseFallColor(riseFallValue)
+  const isRising = riseFallValue > 0
 
   return (
     <button
@@ -50,7 +52,7 @@ export function ThemeTableRow({ theme, onClick }: ThemeTableRowProps) {
               heatColor,
             )}
           >
-            热度 {Number(theme.heat_index).toFixed(1)}
+            热度 {heatValue.toFixed(1)}
           </span>
 
           {/* 股票数 */}
@@ -66,8 +68,8 @@ export function ThemeTableRow({ theme, onClick }: ThemeTableRowProps) {
             ) : (
               <TrendingDown className="h-3 w-3" />
             )}
-            {Number(theme.rise_fall_pct) > 0 ? '+' : ''}
-            {Number(theme.rise_fall_pct).toFixed(2)}%
+            {riseFallValue > 0 ? '+' : ''}
+            {riseFallValue.toFixed(2)}%
           </span>
         </div>
       </div>

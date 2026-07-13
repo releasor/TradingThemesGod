@@ -11,26 +11,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchStockDetail } from '@/api/stock'
 import { getRiseFallColor } from '@/lib/theme-colors'
+import { formatRiseFall, formatMarketCap } from '@/lib/utils'
 import type { StockBrief } from '@/types/stock'
 
 interface StockPopoverProps {
   stock: StockBrief
   children: React.ReactNode
-}
-
-/** 格式化市值显示 */
-function formatMarketCap(value: number | null): string {
-  if (value === null) return '-'
-  if (value >= 1_0000_0000) return `${(value / 1_0000_0000).toFixed(2)}亿`
-  if (value >= 1_0000) return `${(value / 1_0000).toFixed(2)}万`
-  return value.toFixed(2)
-}
-
-/** 格式化涨跌幅显示 */
-function formatRiseFall(pct: number | null): string {
-  if (pct === null) return '-'
-  const sign = pct > 0 ? '+' : ''
-  return `${sign}${pct.toFixed(2)}%`
 }
 
 export function StockPopover({ stock, children }: StockPopoverProps) {

@@ -5,6 +5,7 @@
 
 import time
 from contextlib import asynccontextmanager
+from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -96,6 +97,8 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """捕获所有未处理的异常，返回统一错误响应"""
+        request_id = str(uuid4())
+
         logger.error(
             "unhandled_exception",
             exc_type=type(exc).__name__,
@@ -103,6 +106,7 @@ def create_app() -> FastAPI:
             method=request.method,
             path=request.url.path,
             client=request.client.host if request.client else None,
+            request_id=request_id,
             exc_info=True,
         )
         return JSONResponse(
@@ -111,6 +115,7 @@ def create_app() -> FastAPI:
                 "code": 500,
                 "message": "服务器内部错误，请稍后重试",
                 "detail": None,
+                "request_id": request_id,
             },
         )
 

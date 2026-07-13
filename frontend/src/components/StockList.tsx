@@ -7,17 +7,11 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { StockPopover } from '@/components/StockPopover'
 import { getRiseFallColor } from '@/lib/theme-colors'
+import { formatRiseFall } from '@/lib/utils'
 import type { StockBrief } from '@/types/stock'
 
 interface StockListProps {
   stocks: StockBrief[]
-}
-
-/** 格式化涨跌幅显示 */
-function formatRiseFall(pct: number | null): string {
-  if (pct === null) return '-'
-  const sign = pct > 0 ? '+' : ''
-  return `${sign}${pct.toFixed(2)}%`
 }
 
 export function StockList({ stocks }: StockListProps) {

@@ -24,12 +24,7 @@ import { IndustryChainSection } from '@/components/IndustryChainSection'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ThemeHeatTrendLine, type HeatTrendDataPoint } from '@/components/charts/ThemeHeatTrendLine'
 import { IndustryChainPie } from '@/components/charts/IndustryChainPie'
-
-/** 格式化涨跌幅显示 */
-function formatRiseFall(pct: number): string {
-  const sign = pct > 0 ? '+' : ''
-  return `${sign}${pct.toFixed(2)}%`
-}
+import { formatRiseFall } from '@/lib/utils'
 
 /**
  * 生成模拟热度趋势数据

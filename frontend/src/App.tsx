@@ -1,6 +1,8 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, createContext, useContext, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ToastContainer, useToast, type Toast, type ToastType } from '@/components/Toast'
+import { onApiError } from '@/api/client'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // 路由级懒加载 - 实现代码分割
@@ -19,6 +21,27 @@ const ThemeDetail = lazy(() =>
     default: m.ThemeDetail,
   }))
 )
+
+// Toast 上下文
+interface ToastContextValue {
+  toasts: Toast[]
+  addToast: (type: ToastType, message: string, duration?: number) => string
+  removeToast: (id: string) => void
+  success: (message: string, duration?: number) => string
+  error: (message: string, duration?: number) => string
+  warning: (message: string, duration?: number) => string
+  info: (message: string, duration?: number) => string
+}
+
+const ToastContext = createContext<ToastContextValue | null>(null)
+
+export function useToastContext() {
+  const context = useContext(ToastContext)
+  if (!context) {
+    throw new Error('useToastContext must be used within ToastProvider')
+  }
+  return context
+}
 
 /** 页面加载占位符 */
 function PageSkeleton() {
@@ -40,19 +63,43 @@ function PageSkeleton() {
 }
 
 function App() {
+  const toast = useToast()
+
+  // 监听 API 错误并显示 Toast 通知
+  useEffect(() => {
+    const unsubscribe = onApiError((event) => {
+      // 根据状态码选择 Toast 类型
+      if (event.status >= 500) {
+        toast.error(event.message)
+      } else if (event.status === 404) {
+        toast.warning(event.message)
+      } else if (event.status === 0) {
+        // 网络错误
+        toast.error(event.message)
+      } else {
+        toast.warning(event.message)
+      }
+    })
+
+    return unsubscribe
+  }, [toast])
+
   return (
     <ErrorBoundary>
-      <Router>
-        <div className="min-h-screen bg-background">
-          <Suspense fallback={<PageSkeleton />}>
-            <Routes>
-              <Route path="/" element={<ThemeDashboard />} />
-              <Route path="/themes" element={<ThemeLibrary />} />
-              <Route path="/themes/:id" element={<ThemeDetail />} />
-            </Routes>
-          </Suspense>
-        </div>
-      </Router>
+      <ToastContext.Provider value={toast}>
+        <Router>
+          <div className="min-h-screen bg-background">
+            <Suspense fallback={<PageSkeleton />}>
+              <Routes>
+                <Route path="/" element={<ThemeDashboard />} />
+                <Route path="/themes" element={<ThemeLibrary />} />
+                <Route path="/themes/:id" element={<ThemeDetail />} />
+              </Routes>
+            </Suspense>
+          </div>
+        </Router>
+        <ToastContainer toasts={toast.toasts} onClose={toast.removeToast} />
+      </ToastContext.Provider>
     </ErrorBoundary>
   )
 }
