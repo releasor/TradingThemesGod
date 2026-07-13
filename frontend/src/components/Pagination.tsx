@@ -1,8 +1,10 @@
 /** 分页控件组件
  *
  * 提供页码导航，支持首页/末页和前后翻页。
+ * 支持每页显示数量选择和跳转到指定页。
  */
 
+import { useState } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -10,6 +12,11 @@ interface PaginationProps {
   page: number
   totalPages: number
   onPageChange: (page: number) => void
+  pageSize?: number
+  pageSizeOptions?: number[]
+  onPageSizeChange?: (size: number) => void
+  showPageSizeSelector?: boolean
+  showJumpToPage?: boolean
 }
 
 /** 生成可见页码列表 */
@@ -40,13 +47,52 @@ export function getVisiblePages(current: number, total: number): (number | '...'
   return pages
 }
 
-export function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
+export function Pagination({
+  page,
+  totalPages,
+  onPageChange,
+  pageSize = 20,
+  pageSizeOptions = [10, 20, 50, 100],
+  onPageSizeChange,
+  showPageSizeSelector = false,
+  showJumpToPage = false,
+}: PaginationProps) {
+  const [jumpValue, setJumpValue] = useState('')
+
   if (totalPages <= 1) return null
 
   const visiblePages = getVisiblePages(page, totalPages)
 
+  const handleJump = () => {
+    const pageNum = parseInt(jumpValue, 10)
+    if (pageNum >= 1 && pageNum <= totalPages) {
+      onPageChange(pageNum)
+      setJumpValue('')
+    }
+  }
+
   return (
-    <nav className="flex items-center justify-center gap-1" aria-label="分页">
+    <nav className="flex items-center justify-center gap-4" aria-label="分页">
+      {/* 每页显示数量选择器 */}
+      {showPageSizeSelector && onPageSizeChange && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>每页</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="rounded border border-input bg-background px-2 py-1 text-sm"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <span>条</span>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1">
       {/* 首页 */}
       <button
         onClick={() => onPageChange(1)}
@@ -125,6 +171,30 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
       >
         <ChevronsRight className="h-4 w-4" />
       </button>
+      </div>
+
+      {/* 跳转到指定页 */}
+      {showJumpToPage && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>跳转</span>
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={jumpValue}
+            onChange={(e) => setJumpValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleJump()}
+            className="w-16 rounded border border-input bg-background px-2 py-1 text-center text-sm"
+            placeholder="页码"
+          />
+          <button
+            onClick={handleJump}
+            className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
+          >
+            确定
+          </button>
+        </div>
+      )}
     </nav>
   )
 }

@@ -3,6 +3,7 @@
  * 展示题材关联股票在上游/中游/下游的分布情况。
  */
 
+import { useMemo } from 'react'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import * as echarts from 'echarts/core'
 import { PieChart } from 'echarts/charts'
@@ -43,11 +44,15 @@ export function IndustryChainPie({ chains, className }: IndustryChainPieProps) {
   const { colors, isDark } = useChartTheme()
 
   // 计算各层级的环节数量
-  const data = [
-    { name: LEVEL_NAMES.upstream, value: chains.upstream.length, level: 'upstream' },
-    { name: LEVEL_NAMES.midstream, value: chains.midstream.length, level: 'midstream' },
-    { name: LEVEL_NAMES.downstream, value: chains.downstream.length, level: 'downstream' },
-  ].filter((d) => d.value > 0)
+  const data = useMemo(
+    () =>
+      [
+        { name: LEVEL_NAMES.upstream, value: chains.upstream.length, level: 'upstream' },
+        { name: LEVEL_NAMES.midstream, value: chains.midstream.length, level: 'midstream' },
+        { name: LEVEL_NAMES.downstream, value: chains.downstream.length, level: 'downstream' },
+      ].filter((d) => d.value > 0),
+    [chains],
+  )
 
   if (data.length === 0) {
     return <EmptyChart className={cn('h-[300px]', className)} />

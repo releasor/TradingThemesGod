@@ -18,6 +18,7 @@ from app.api.health import router as health_router
 from app.api.scraper import router as scraper_router
 from app.api.theme import router as theme_router
 from app.api.stock import router as stock_router
+from app.api.errors import router as errors_router
 
 # 配置结构化日志
 setup_logging()
@@ -43,10 +44,54 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="TradingThemesGod API",
-        description="股票题材与产业链分析平台 API",
+        description="""## 股票题材与产业链分析平台 API
+
+### 功能特性
+
+- 📊 **题材管理** - 获取、搜索、筛选题材数据
+- 📈 **题材排名** - 按热度指数获取热门题材排行
+- 🏭 **产业链数据** - 获取题材的上中下游产业链结构
+- 📰 **事件追踪** - 获取股票相关新闻和事件
+- 🕷️ **数据采集** - 触发和管理爬虫任务
+
+### 数据源
+
+- 东方财富 - 题材概念和热度数据
+- 同花顺 - 产业链数据
+- 新浪财经 - 财经新闻和事件
+- AKShare - 股票基础信息
+
+### 技术栈
+
+- **后端**: Python FastAPI + SQLAlchemy
+- **数据库**: PostgreSQL
+- **爬虫**: httpx + BeautifulSoup
+""",
         version="0.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
+        openapi_tags=[
+            {
+                "name": "themes",
+                "description": "题材相关接口 - 获取、搜索、筛选题材数据",
+            },
+            {
+                "name": "stocks",
+                "description": "股票相关接口 - 获取股票详情和事件",
+            },
+            {
+                "name": "scraper",
+                "description": "爬虫管理接口 - 触发和管理数据采集任务",
+            },
+            {
+                "name": "health",
+                "description": "健康检查接口 - 服务状态和数据库连接检查",
+            },
+            {
+                "name": "errors",
+                "description": "错误上报接口 - 接收前端错误日志",
+            },
+        ],
         lifespan=lifespan,
     )
 
@@ -92,6 +137,7 @@ def create_app() -> FastAPI:
     app.include_router(scraper_router, prefix="/api/v1")
     app.include_router(theme_router, prefix="/api/v1")
     app.include_router(stock_router, prefix="/api/v1")
+    app.include_router(errors_router, prefix="/api/v1")
 
     # 全局异常处理器
     @app.exception_handler(Exception)

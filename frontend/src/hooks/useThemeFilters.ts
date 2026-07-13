@@ -4,7 +4,7 @@
  * 搜索输入使用 300ms 防抖。
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { ThemeListParams } from '@/types/theme'
 
@@ -99,11 +99,10 @@ export function useThemeFilters() {
   }, [setSearchParams])
 
   // 活跃筛选计数
-  const activeFilterCount = [
-    filters.q,
-    filters.category,
-    filters.tags,
-  ].filter(Boolean).length
+  const activeFilterCount = useMemo(
+    () => [filters.q, filters.category, filters.tags].filter(Boolean).length,
+    [filters.q, filters.category, filters.tags],
+  )
 
   return {
     filters,

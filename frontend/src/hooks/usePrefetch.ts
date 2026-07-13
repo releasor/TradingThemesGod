@@ -5,7 +5,8 @@
 
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { fetchThemeDetail, fetchStockDetail } from '@/api/theme'
+import { fetchThemeDetail } from '@/api/theme'
+import { fetchStockDetail } from '@/api/stock'
 
 /**
  * 题材详情预取 Hook

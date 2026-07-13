@@ -3,7 +3,6 @@
 提供股票和事件相关的业务逻辑。
 """
 
-from math import ceil
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +14,7 @@ from app.schemas.stock import (
     EventBrief,
     EventListResponse,
 )
+from app.schemas.common import calculate_total_pages
 
 
 class StockService:
@@ -61,7 +61,7 @@ class StockService:
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=ceil(total / page_size) if total > 0 else 0,
+            total_pages=calculate_total_pages(total, page_size),
         )
 
     async def get_stock_detail(self, code: str) -> StockDetailResponse:
@@ -137,7 +137,7 @@ class StockService:
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=ceil(total / page_size) if total > 0 else 0,
+            total_pages=calculate_total_pages(total, page_size),
         )
 
     async def list_events(
@@ -173,5 +173,5 @@ class StockService:
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=ceil(total / page_size) if total > 0 else 0,
+            total_pages=calculate_total_pages(total, page_size),
         )

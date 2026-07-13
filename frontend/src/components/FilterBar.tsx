@@ -3,9 +3,10 @@
  * 包含搜索输入、分类下拉和标签筛选。
  */
 
-import { useState, useRef } from 'react'
-import { Search, X, Tag, Plus } from 'lucide-react'
+import { useState, useRef, useCallback, memo } from 'react'
+import { X, Tag, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SearchInput } from '@/components/SearchInput'
 
 interface FilterBarProps {
   searchInput: string
@@ -30,7 +31,7 @@ function serializeTags(tags: string[]): string {
   return tags.join(',')
 }
 
-export function FilterBar({
+export const FilterBar = memo(function FilterBar({
   searchInput,
   onSearchChange,
   categories,
@@ -45,12 +46,12 @@ export function FilterBar({
   const [tagInput, setTagInput] = useState('')
   const tagInputRef = useRef<HTMLInputElement>(null)
 
-  const toggleTag = (tag: string) => {
+  const toggleTag = useCallback((tag: string) => {
     const next = tags.includes(tag)
       ? tags.filter((t) => t !== tag)
       : [...tags, tag]
     onTagsChange(next.length > 0 ? serializeTags(next) : undefined)
-  }
+  }, [tags, onTagsChange])
 
   const addTagFromInput = () => {
     const trimmed = tagInput.trim()
@@ -70,28 +71,11 @@ export function FilterBar({
   return (
     <div className="space-y-3">
       {/* 搜索框 */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="搜索题材名称或描述..."
-          value={searchInput}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className={cn(
-            'w-full rounded-md border border-input bg-background py-2 pl-10 pr-10 text-sm',
-            'placeholder:text-muted-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          )}
-        />
-        {searchInput && (
-          <button
-            onClick={() => onSearchChange('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      <SearchInput
+        value={searchInput}
+        onChange={onSearchChange}
+        placeholder="搜索题材名称或描述..."
+      />
 
       {/* 分类下拉 + 标签筛选 */}
       <div className="flex flex-wrap items-center gap-3">
@@ -172,4 +156,4 @@ export function FilterBar({
       </div>
     </div>
   )
-}
+})

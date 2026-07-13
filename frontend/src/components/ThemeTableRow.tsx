@@ -1,8 +1,10 @@
 /** 题材表格行组件
  *
  * 显示单个题材的名称、分类、热度、股票数和涨跌幅。
+ * 使用 React.memo 优化列表渲染性能。
  */
 
+import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
 import { getHeatColor, getRiseFallColor } from '@/lib/theme-colors'
@@ -13,7 +15,7 @@ interface ThemeTableRowProps {
   onClick?: () => void
 }
 
-export function ThemeTableRow({ theme, onClick }: ThemeTableRowProps) {
+export const ThemeTableRow = memo(function ThemeTableRow({ theme, onClick }: ThemeTableRowProps) {
   const heatValue = Number(theme.heat_index)
   const riseFallValue = Number(theme.rise_fall_pct)
   const heatColor = getHeatColor(heatValue)
@@ -75,4 +77,4 @@ export function ThemeTableRow({ theme, onClick }: ThemeTableRowProps) {
       </div>
     </button>
   )
-}
+})

@@ -3,7 +3,6 @@
 提供题材相关的业务逻辑。
 """
 
-from math import ceil
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +16,7 @@ from app.schemas.theme import (
     IndustryChainBrief,
 )
 from app.schemas.stock import StockBrief, StockListResponse
+from app.schemas.common import calculate_total_pages
 
 
 class ThemeService:
@@ -62,7 +62,7 @@ class ThemeService:
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=ceil(total / page_size) if total > 0 else 0,
+            total_pages=calculate_total_pages(total, page_size),
         )
 
     async def get_theme_detail(self, theme_id: int) -> ThemeDetailResponse:
@@ -134,7 +134,7 @@ class ThemeService:
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=ceil(total / page_size) if total > 0 else 0,
+            total_pages=calculate_total_pages(total, page_size),
         )
 
     async def get_categories(self) -> ThemeCategoriesResponse:
@@ -199,5 +199,5 @@ class ThemeService:
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=ceil(total / page_size) if total > 0 else 0,
+            total_pages=calculate_total_pages(total, page_size),
         )

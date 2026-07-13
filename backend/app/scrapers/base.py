@@ -3,13 +3,13 @@
 提供爬虫生命周期管理：fetch → parse → save。
 """
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BaseScraper(ABC):

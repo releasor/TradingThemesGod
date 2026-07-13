@@ -3,6 +3,7 @@
  * 展示 Top 10 题材的涨跌幅水平柱状图。
  */
 
+import { useMemo } from 'react'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import * as echarts from 'echarts/core'
 import { BarChart } from 'echarts/charts'
@@ -33,18 +34,19 @@ export function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
   const { colors } = useChartTheme()
 
   // 取 Top 10 并按涨跌幅排序
-  const top10 = [...themes]
-    .sort((a, b) => b.rise_fall_pct - a.rise_fall_pct)
-    .slice(0, 10)
+  const top10 = useMemo(
+    () => [...themes].sort((a, b) => b.rise_fall_pct - a.rise_fall_pct).slice(0, 10),
+    [themes],
+  )
 
   if (top10.length === 0) {
     return <EmptyChart className={cn('h-[300px]', className)} />
   }
 
   // 反转以便从上到下显示（最高在上）
-  const reversed = top10.slice().reverse()
+  const reversed = useMemo(() => top10.slice().reverse(), [top10])
 
-  const option = {
+  const option = useMemo(() => ({
     backgroundColor: colors.backgroundColor,
     tooltip: {
       trigger: 'axis' as const,
@@ -128,7 +130,7 @@ export function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
         },
       },
     ],
-  }
+  }), [reversed, colors])
 
   return (
     <div className={cn('w-full', className)}>

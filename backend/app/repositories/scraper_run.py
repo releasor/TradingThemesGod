@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.scraper_run import ScraperRun
+from app.repositories.base import BaseRepository
 
 
-class ScraperRunRepository:
+class ScraperRunRepository(BaseRepository):
     """爬虫运行记录仓储"""
 
     def __init__(self, session: AsyncSession):
-        self.session = session
+        super().__init__(session)
 
     async def create(self, source: str) -> ScraperRun:
         """创建运行记录"""

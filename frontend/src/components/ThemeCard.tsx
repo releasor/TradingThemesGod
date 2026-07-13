@@ -2,8 +2,10 @@
  *
  * 显示单个题材的热度、涨跌幅和关联股票数。
  * 热度指数颜色编码：红色=高热度，绿色=低热度。
+ * 使用 React.memo 优化列表渲染性能。
  */
 
+import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
 import { getHeatColor, getRiseFallColor } from '@/lib/theme-colors'
@@ -15,7 +17,7 @@ interface ThemeCardProps {
   onClick?: () => void
 }
 
-export function ThemeCard({ theme, onClick }: ThemeCardProps) {
+export const ThemeCard = memo(function ThemeCard({ theme, onClick }: ThemeCardProps) {
   const heatValue = Number(theme.heat_index)
   const riseFallValue = Number(theme.rise_fall_pct)
   const heatColor = getHeatColor(heatValue)
@@ -69,4 +71,4 @@ export function ThemeCard({ theme, onClick }: ThemeCardProps) {
       </div>
     </button>
   )
-}
+})

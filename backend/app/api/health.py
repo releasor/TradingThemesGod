@@ -30,7 +30,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "size": pool.size(),  # 连接池大小
         "checked_in": pool.checkedin(),  # 空闲连接数
         "checked_out": pool.checkedout(),  # 活跃连接数
-        "overflow": pool.overflow(), �# 溢出连接数
+        "overflow": pool.overflow(),  # 溢出连接数
     }
 
     # 根据数据库状态决定整体健康状态

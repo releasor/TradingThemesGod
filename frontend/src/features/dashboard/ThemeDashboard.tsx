@@ -4,8 +4,8 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
 import { fetchThemeRanking } from '@/api/theme'
 import { useDashboardStore } from '@/stores/dashboard'
 import { ThemeCard } from '@/components/ThemeCard'
@@ -15,12 +15,35 @@ import { ThemeRiseFallBar } from '@/components/charts/ThemeRiseFallBar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LoadingBar } from '@/components/LoadingBar'
 import { EmptyState } from '@/components/EmptyState'
+import { AutoRefreshButton } from '@/components/AutoRefreshButton'
 import { KeyboardShortcutsButton } from '@/components/KeyboardShortcutsPanel'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 
 export function ThemeDashboard() {
   const navigate = useNavigate()
   const limit = useDashboardStore((s) => s.limit)
+
+  const handleThemeClick = useCallback(
+    (themeId: number) => navigate(`/themes/${themeId}`),
+    [navigate],
+  )
+
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['theme-ranking', limit],
+    queryFn: () => fetchThemeRanking(limit),
+  })
+
+  // 自动刷新
+  const {
+    isAutoRefresh,
+    toggleAutoRefresh,
+    refreshInterval,
+    setRefreshInterval,
+  } = useAutoRefresh({
+    interval: 30000, // 默认 30 秒
+    onRefresh: () => refetch(),
+  })
 
   // 键盘快捷键
   useKeyboardShortcuts([
@@ -35,11 +58,6 @@ export function ThemeDashboard() {
       description: '打开题材库',
     },
   ])
-
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['theme-ranking', limit],
-    queryFn: () => fetchThemeRanking(limit),
-  })
 
   const themes = data?.items ?? []
   const totalStocks = themes.reduce((sum, t) => sum + t.stock_count, 0)
@@ -58,14 +76,14 @@ export function ThemeDashboard() {
           <div className="flex items-center gap-3">
             <KeyboardShortcutsButton />
             <ThemeToggle />
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-              刷新
-            </button>
+            <AutoRefreshButton
+              isRefreshing={isFetching}
+              isAutoRefresh={isAutoRefresh}
+              onToggleAutoRefresh={toggleAutoRefresh}
+              refreshInterval={refreshInterval}
+              onSetRefreshInterval={setRefreshInterval}
+              onRefresh={() => refetch()}
+            />
           </div>
         </div>
       </header>
@@ -137,7 +155,7 @@ export function ThemeDashboard() {
                 <ThemeCard
                   key={theme.id}
                   theme={theme}
-                  onClick={() => navigate(`/themes/${theme.id}`)}
+                  onClick={() => handleThemeClick(theme.id)}
                 />
               ))}
             </div>

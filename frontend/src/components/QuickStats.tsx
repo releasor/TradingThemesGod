@@ -3,6 +3,7 @@
  * 显示题材总数、股票总数和最后更新时间。
  */
 
+import { memo } from 'react'
 import { Flame, BarChart3, Clock } from 'lucide-react'
 
 interface QuickStatsProps {
@@ -11,7 +12,7 @@ interface QuickStatsProps {
   lastUpdate: string | null
 }
 
-export function QuickStats({ totalThemes, totalStocks, lastUpdate }: QuickStatsProps) {
+export const QuickStats = memo(function QuickStats({ totalThemes, totalStocks, lastUpdate }: QuickStatsProps) {
   return (
     <div className="flex flex-wrap items-center gap-6 rounded-lg border border-border bg-card px-6 py-3">
       <div className="flex items-center gap-2 text-sm">
@@ -33,4 +34,4 @@ export function QuickStats({ totalThemes, totalStocks, lastUpdate }: QuickStatsP
       </div>
     </div>
   )
-}
+})

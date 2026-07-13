@@ -4,6 +4,7 @@
  * 每个股票可点击打开 StockPopover。
  */
 
+import { memo } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { StockPopover } from '@/components/StockPopover'
 import { getRiseFallColor } from '@/lib/theme-colors'
@@ -14,7 +15,7 @@ interface StockListProps {
   stocks: StockBrief[]
 }
 
-export function StockList({ stocks }: StockListProps) {
+export const StockList = memo(function StockList({ stocks }: StockListProps) {
   if (stocks.length === 0) {
     return (
       <div className="py-2 text-center text-xs text-muted-foreground">
@@ -55,4 +56,4 @@ export function StockList({ stocks }: StockListProps) {
       ))}
     </div>
   )
-}
+})

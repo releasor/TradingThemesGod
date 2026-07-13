@@ -49,6 +49,7 @@ class Theme(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_theme_name", "name"),
         Index("idx_theme_heat_index", "heat_index"),
+        Index("idx_theme_category", "category"),
         {"comment": "题材表"},
     )
 

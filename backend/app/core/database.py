@@ -4,6 +4,7 @@
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -15,6 +16,12 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
+    pool_timeout=30,  # 连接池超时时间（秒）
+    pool_recycle=3600,  # 连接回收时间（秒）
+    connect_args={
+        "connect_timeout": 10,  # 连接超时时间（秒）
+        "command_timeout": 30,  # 命令超时时间（秒）
+    },
 )
 
 # 创建异步会话工厂

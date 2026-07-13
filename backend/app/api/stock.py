@@ -3,7 +3,9 @@
 提供股票查询、详情、事件列表等接口。
 """
 
-from fastapi import APIRouter, Depends, Query
+import re
+from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -14,6 +16,8 @@ from app.schemas.stock import (
     EventListResponse,
 )
 
+STOCK_CODE_PATTERN = re.compile(r"^\d{6}$")
+
 router = APIRouter(tags=["stocks"])
 
 
@@ -21,8 +25,10 @@ router = APIRouter(tags=["stocks"])
 async def list_stocks(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
-    sort_by: str = Query(default="code", description="排序字段: code/name/industry/market_cap/current_price/rise_fall_pct"),
-    order: str = Query(default="asc", description="排序方向: asc/desc"),
+    sort_by: Literal["code", "name", "industry", "market_cap", "current_price", "rise_fall_pct"] = Query(
+        default="code", description="排序字段"
+    ),
+    order: Literal["asc", "desc"] = Query(default="asc", description="排序方向"),
     industry: str | None = Query(default=None, description="按行业筛选"),
     exchange: str | None = Query(default=None, description="按交易所筛选(SH/SZ/BJ)"),
     db: AsyncSession = Depends(get_db),
@@ -47,8 +53,10 @@ async def list_events(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
     event_type: str | None = Query(default=None, description="按事件类型筛选"),
-    sort_by: str = Query(default="published_at", description="排序字段: title/event_type/published_at"),
-    order: str = Query(default="desc", description="排序方向: asc/desc"),
+    sort_by: Literal["title", "event_type", "published_at"] = Query(
+        default="published_at", description="排序字段"
+    ),
+    order: Literal["asc", "desc"] = Query(default="desc", description="排序方向"),
     db: AsyncSession = Depends(get_db),
 ):
     """获取事件列表
@@ -74,6 +82,8 @@ async def get_stock_detail(
 
     返回股票详细信息，包括最近5条事件。
     """
+    if not STOCK_CODE_PATTERN.match(code):
+        raise HTTPException(status_code=400, detail="股票代码格式错误，应为6位数字")
     service = StockService(db)
     return await service.get_stock_detail(code=code)
 
@@ -89,6 +99,8 @@ async def get_stock_events(
 
     返回指定股票的事件，按发布时间降序排列。
     """
+    if not STOCK_CODE_PATTERN.match(code):
+        raise HTTPException(status_code=400, detail="股票代码格式错误，应为6位数字")
     service = StockService(db)
     return await service.get_stock_events(
         code=code,

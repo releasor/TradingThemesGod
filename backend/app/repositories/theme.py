@@ -3,7 +3,6 @@
 提供 Theme 的数据库查询操作。
 """
 
-from math import ceil
 from sqlalchemy import func, select, or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,6 +11,7 @@ from app.models.theme import Theme
 from app.models.industry_chain import IndustryChain
 from app.models.stock import Stock
 from app.models.theme_stock import ThemeStock
+from app.repositories.base import BaseRepository
 
 # 允许排序的字段白名单
 THEME_SORT_FIELDS = {
@@ -19,11 +19,11 @@ THEME_SORT_FIELDS = {
 }
 
 
-class ThemeRepository:
+class ThemeRepository(BaseRepository):
     """题材仓储"""
 
     def __init__(self, session: AsyncSession):
-        self.session = session
+        super().__init__(session)
 
     async def list_paginated(
         self,
@@ -60,28 +60,18 @@ class ThemeRepository:
             for tag in tag_list:
                 base_query = base_query.where(Theme.tags.contains([tag]))
 
-        # 计算总数
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total = (await self.session.execute(count_query)).scalar() or 0
-
-        # 应用排序
+        # 确定排序列
         sort_column = getattr(Theme, sort_by, None)
         if sort_column is None or sort_by not in THEME_SORT_FIELDS:
             sort_column = Theme.heat_index
-        if sort_order == "desc":
-            base_query = base_query.order_by(desc(sort_column))
-        else:
-            base_query = base_query.order_by(asc(sort_column))
 
-        # 应用分页
-        offset = (page - 1) * page_size
-        base_query = base_query.offset(offset).limit(page_size)
-
-        # 执行查询
-        result = await self.session.execute(base_query)
-        themes = list(result.scalars().all())
-
-        return themes, total
+        return await self._paginate(
+            query=base_query,
+            page=page,
+            page_size=page_size,
+            sort_column=sort_column,
+            sort_order=sort_order,
+        )
 
     async def get_by_id(self, theme_id: int) -> Theme | None:
         """获取题材详情（含产业链数据）
@@ -129,20 +119,13 @@ class ThemeRepository:
             search_condition,
         )
 
-        # 计算总数
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total = (await self.session.execute(count_query)).scalar() or 0
-
-        # 应用排序和分页
-        base_query = base_query.order_by(desc(Theme.heat_index))
-        offset = (page - 1) * page_size
-        base_query = base_query.offset(offset).limit(page_size)
-
-        # 执行查询
-        result = await self.session.execute(base_query)
-        themes = list(result.scalars().all())
-
-        return themes, total
+        return await self._paginate(
+            query=base_query,
+            page=page,
+            page_size=page_size,
+            sort_column=Theme.heat_index,
+            sort_order="desc",
+        )
 
     async def get_categories(self) -> list[str]:
         """获取所有唯一分类
@@ -221,18 +204,10 @@ class ThemeRepository:
         if chain_level:
             base_query = base_query.where(ThemeStock.chain_level == chain_level)
 
-        # 计算总数
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total = (await self.session.execute(count_query)).scalar() or 0
-
-        # 按 sort_order 排序
-        base_query = base_query.order_by(asc(ThemeStock.sort_order))
-
-        # 应用分页
-        offset = (page - 1) * page_size
-        base_query = base_query.offset(offset).limit(page_size)
-
-        result = await self.session.execute(base_query)
-        stocks = list(result.scalars().all())
-
-        return stocks, total
+        return await self._paginate(
+            query=base_query,
+            page=page,
+            page_size=page_size,
+            sort_column=ThemeStock.sort_order,
+            sort_order="asc",
+        )

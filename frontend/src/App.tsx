@@ -2,6 +2,7 @@ import { lazy, Suspense, createContext, useContext, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ScrollToTop } from '@/components/ScrollToTop'
+import { NotFound } from '@/components/NotFound'
 import { DevPerformancePanel } from '@/components/DevPerformancePanel'
 import { ToastContainer, useToast, type Toast, type ToastType } from '@/components/Toast'
 import { onApiError } from '@/api/client'
@@ -97,6 +98,7 @@ function App() {
                 <Route path="/" element={<ThemeDashboard />} />
                 <Route path="/themes" element={<ThemeLibrary />} />
                 <Route path="/themes/:id" element={<ThemeDetail />} />
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
           </div>

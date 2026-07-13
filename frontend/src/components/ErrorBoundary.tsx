@@ -10,6 +10,48 @@ interface State {
 }
 
 /**
+ * 错误日志上报
+ *
+ * 将错误信息发送到后端日志服务。
+ */
+function reportError(error: Error, errorInfo: ErrorInfo): void {
+  // 开发环境输出到控制台
+  if (import.meta.env.DEV) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo)
+    return
+  }
+
+  // 生产环境上报到后端
+  try {
+    const errorData = {
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      timestamp: new Date().toISOString(),
+    }
+
+    // 使用 sendBeacon 异步上报，不阻塞页面
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/v1/errors', JSON.stringify(errorData))
+    } else {
+      // 降级使用 fetch
+      fetch('/api/v1/errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(errorData),
+        keepalive: true,
+      }).catch(() => {
+        // 上报失败，静默处理
+      })
+    }
+  } catch {
+    // 上报失败，静默处理
+  }
+}
+
+/**
  * 错误边界组件
  *
  * 捕获子组件树中的渲染错误，显示友好的错误回退 UI，
@@ -26,7 +68,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo)
+    reportError(error, errorInfo)
   }
 
   handleReset = (): void => {

@@ -3,6 +3,7 @@
  * 显示上游、中游、下游三个列，每列包含对应的链路点卡片。
  */
 
+import { memo } from 'react'
 import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react'
 import { ChainPointCard } from '@/components/ChainPointCard'
 import type { IndustryChainBrief } from '@/types/theme'
@@ -38,7 +39,7 @@ const LEVEL_CONFIG = {
   },
 } as const
 
-export function IndustryChainSection({ chains, themeId }: IndustryChainSectionProps) {
+export const IndustryChainSection = memo(function IndustryChainSection({ chains, themeId }: IndustryChainSectionProps) {
   const levels = ['upstream', 'midstream', 'downstream'] as const
 
   return (
@@ -85,4 +86,4 @@ export function IndustryChainSection({ chains, themeId }: IndustryChainSectionPr
       </div>
     </section>
   )
-}
+})

@@ -4,6 +4,7 @@
 """
 
 from fastapi import APIRouter, Depends, Query
+from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -23,8 +24,10 @@ router = APIRouter(prefix="/themes", tags=["themes"])
 async def list_themes(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
-    sort_by: str = Query(default="heat_index", description="排序字段: heat_index/rise_fall_pct"),
-    sort_order: str = Query(default="desc", description="排序方向: asc/desc"),
+    sort_by: Literal["heat_index", "rise_fall_pct", "stock_count", "name"] = Query(
+        default="heat_index", description="排序字段"
+    ),
+    sort_order: Literal["asc", "desc"] = Query(default="desc", description="排序方向"),
     category: str | None = Query(default=None, description="按分类筛选"),
     tags: str | None = Query(default=None, description="按标签筛选（逗号分隔）"),
     db: AsyncSession = Depends(get_db),
@@ -91,7 +94,7 @@ async def search_themes(
 @router.get("/{theme_id}/stocks", response_model=StockListResponse)
 async def get_theme_stocks(
     theme_id: int,
-    chain_level: str | None = Query(default=None, description="产业链层级: upstream/midstream/downstream"),
+    chain_level: Literal["upstream", "midstream", "downstream"] | None = Query(default=None, description="产业链层级"),
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
     db: AsyncSession = Depends(get_db),

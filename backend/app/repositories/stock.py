@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.stock import Stock
 from app.models.event import Event
+from app.repositories.base import BaseRepository
 
 
 # 允许排序的字段白名单
@@ -18,11 +19,11 @@ STOCK_SORT_FIELDS = {
 EVENT_SORT_FIELDS = {"title", "event_type", "published_at"}
 
 
-class StockRepository:
+class StockRepository(BaseRepository):
     """股票仓储"""
 
     def __init__(self, session: AsyncSession):
-        self.session = session
+        super().__init__(session)
 
     async def list_paginated(
         self,
@@ -54,27 +55,18 @@ class StockRepository:
         if exchange:
             base_query = base_query.where(Stock.exchange == exchange)
 
-        # 计算总数
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total = (await self.session.execute(count_query)).scalar() or 0
-
-        # 应用排序（白名单验证）
+        # 确定排序列
         sort_column = getattr(Stock, sort_by, None)
         if sort_column is None or sort_by not in STOCK_SORT_FIELDS:
             sort_column = Stock.code
-        if order == "desc":
-            base_query = base_query.order_by(desc(sort_column))
-        else:
-            base_query = base_query.order_by(asc(sort_column))
 
-        # 应用分页
-        offset = (page - 1) * page_size
-        base_query = base_query.offset(offset).limit(page_size)
-
-        result = await self.session.execute(base_query)
-        stocks = list(result.scalars().all())
-
-        return stocks, total
+        return await self._paginate(
+            query=base_query,
+            page=page,
+            page_size=page_size,
+            sort_column=sort_column,
+            sort_order=order,
+        )
 
     async def get_by_code(self, code: str) -> Stock | None:
         """获取股票详情（含最近事件）
@@ -118,28 +110,20 @@ class StockRepository:
 
         base_query = select(Event).where(Event.stock_id == stock_id)
 
-        # 计算总数
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total = (await self.session.execute(count_query)).scalar() or 0
-
-        # 按 published_at 降序排序
-        base_query = base_query.order_by(desc(Event.published_at))
-
-        # 应用分页
-        offset = (page - 1) * page_size
-        base_query = base_query.offset(offset).limit(page_size)
-
-        result = await self.session.execute(base_query)
-        events = list(result.scalars().all())
-
-        return events, total
+        return await self._paginate(
+            query=base_query,
+            page=page,
+            page_size=page_size,
+            sort_column=Event.published_at,
+            sort_order="desc",
+        )
 
 
-class EventRepository:
+class EventRepository(BaseRepository):
     """事件仓储"""
 
     def __init__(self, session: AsyncSession):
-        self.session = session
+        super().__init__(session)
 
     async def list_paginated(
         self,
@@ -167,24 +151,15 @@ class EventRepository:
         if event_type:
             base_query = base_query.where(Event.event_type == event_type)
 
-        # 计算总数
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total = (await self.session.execute(count_query)).scalar() or 0
-
-        # 应用排序（白名单验证）
+        # 确定排序列
         sort_column = getattr(Event, sort_by, None)
         if sort_column is None or sort_by not in EVENT_SORT_FIELDS:
             sort_column = Event.published_at
-        if order == "desc":
-            base_query = base_query.order_by(desc(sort_column))
-        else:
-            base_query = base_query.order_by(asc(sort_column))
 
-        # 应用分页
-        offset = (page - 1) * page_size
-        base_query = base_query.offset(offset).limit(page_size)
-
-        result = await self.session.execute(base_query)
-        events = list(result.scalars().all())
-
-        return events, total
+        return await self._paginate(
+            query=base_query,
+            page=page,
+            page_size=page_size,
+            sort_column=sort_column,
+            sort_order=order,
+        )

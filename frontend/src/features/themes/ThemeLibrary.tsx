@@ -4,6 +4,7 @@
  * 筛选状态同步到 URL search params，支持分享。
  */
 
+import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw, AlertCircle, Inbox, List } from 'lucide-react'
@@ -11,6 +12,7 @@ import { fetchThemes, fetchCategories } from '@/api/theme'
 import { useThemeFilters } from '@/hooks/useThemeFilters'
 import { FilterBar } from '@/components/FilterBar'
 import { SortSelect } from '@/components/SortSelect'
+import { ExportButton } from '@/components/ExportButton'
 import { ThemeTableRow } from '@/components/ThemeTableRow'
 import { ThemeTableSkeleton } from '@/components/ThemeTableSkeleton'
 import { Pagination } from '@/components/Pagination'
@@ -27,6 +29,11 @@ export function ThemeLibrary() {
     clearFilters,
     activeFilterCount,
   } = useThemeFilters()
+
+  const handleThemeClick = useCallback(
+    (themeId: number) => navigate(`/themes/${themeId}`),
+    [navigate],
+  )
 
   // 获取题材列表
   const {
@@ -71,6 +78,7 @@ export function ThemeLibrary() {
             >
               看板
             </button>
+            <ExportButton data={themes} />
             <button
               onClick={() => refetch()}
               disabled={isFetching}
@@ -177,7 +185,7 @@ export function ThemeLibrary() {
                 <ThemeTableRow
                   key={theme.id}
                   theme={theme}
-                  onClick={() => navigate(`/themes/${theme.id}`)}
+                  onClick={() => handleThemeClick(theme.id)}
                 />
               ))}
             </>
