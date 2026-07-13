@@ -1,6 +1,8 @@
 import { lazy, Suspense, createContext, useContext, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ScrollToTop } from '@/components/ScrollToTop'
+import { DevPerformancePanel } from '@/components/DevPerformancePanel'
 import { ToastContainer, useToast, type Toast, type ToastType } from '@/components/Toast'
 import { onApiError } from '@/api/client'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -88,6 +90,7 @@ function App() {
     <ErrorBoundary>
       <ToastContext.Provider value={toast}>
         <Router>
+          <ScrollToTop />
           <div className="min-h-screen bg-background">
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
@@ -99,6 +102,7 @@ function App() {
           </div>
         </Router>
         <ToastContainer toasts={toast.toasts} onClose={toast.removeToast} />
+        <DevPerformancePanel />
       </ToastContext.Provider>
     </ErrorBoundary>
   )

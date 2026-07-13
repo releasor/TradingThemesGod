@@ -22,7 +22,10 @@ export async function fetchThemeRanking(limit = 20): Promise<ThemeRankingRespons
 }
 
 /** 获取题材列表（支持分页、排序、筛选） */
-export async function fetchThemes(params: ThemeListParams): Promise<ThemeListResponse> {
+export async function fetchThemes(
+  params: ThemeListParams,
+  signal?: AbortSignal
+): Promise<ThemeListResponse> {
   // 当有搜索关键词时使用 search 端点，否则使用 list 端点
   if (params.q) {
     const { data } = await apiClient.get<ThemeListResponse>('/themes/search', {
@@ -31,6 +34,7 @@ export async function fetchThemes(params: ThemeListParams): Promise<ThemeListRes
         page: params.page,
         page_size: params.page_size,
       },
+      signal,
     })
     return data
   }
@@ -44,6 +48,7 @@ export async function fetchThemes(params: ThemeListParams): Promise<ThemeListRes
       category: params.category || undefined,
       tags: params.tags || undefined,
     },
+    signal,
   })
   return data
 }

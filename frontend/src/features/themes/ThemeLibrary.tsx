@@ -38,7 +38,7 @@ export function ThemeLibrary() {
     isFetching,
   } = useQuery({
     queryKey: ['themes', filters],
-    queryFn: () => fetchThemes(filters),
+    queryFn: ({ signal }) => fetchThemes(filters, signal),
   })
 
   // 获取分类列表（缓存较长时间）

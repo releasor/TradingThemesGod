@@ -36,6 +36,18 @@ DEFAULT_PARAMS = {
 # 题材板块前缀
 THEME_BOARD_PREFIX = "BK"
 
+# 题材分类关键词映射（模块级常量，避免每次调用重建）
+THEME_CATEGORIES = {
+    "新能源": ["锂电", "光伏", "风电", "储能", "新能源", "电池"],
+    "科技": ["芯片", "半导体", "人工智能", "AI", "5G", "通信", "科技"],
+    "医药": ["医药", "医疗", "生物", "疫苗", "健康"],
+    "消费": ["白酒", "食品", "消费", "零售", "电商"],
+    "金融": ["银行", "证券", "保险", "金融"],
+    "制造": ["机械", "制造", "工业", "自动化"],
+    "地产": ["地产", "房地产", "物业"],
+    "军工": ["军工", "国防", "航天"],
+}
+
 
 class EastMoneyScraper(BaseScraper):
     """东方财富题材爬虫
@@ -163,20 +175,8 @@ class EastMoneyScraper(BaseScraper):
         Returns:
             分类名称
         """
-        # 常见题材分类关键词
-        categories = {
-            "新能源": ["锂电", "光伏", "风电", "储能", "新能源", "电池"],
-            "科技": ["芯片", "半导体", "人工智能", "AI", "5G", "通信", "科技"],
-            "医药": ["医药", "医疗", "生物", "疫苗", "健康"],
-            "消费": ["白酒", "食品", "消费", "零售", "电商"],
-            "金融": ["银行", "证券", "保险", "金融"],
-            "制造": ["机械", "制造", "工业", "自动化"],
-            "地产": ["地产", "房地产", "物业"],
-            "军工": ["军工", "国防", "航天"],
-        }
-
         name_lower = name.lower()
-        for category, keywords in categories.items():
+        for category, keywords in THEME_CATEGORIES.items():
             for keyword in keywords:
                 if keyword.lower() in name_lower:
                     return category
@@ -208,7 +208,7 @@ class EastMoneyScraper(BaseScraper):
         return 0
 
     async def _save_themes(self, themes: list[dict[str, Any]]) -> int:
-        """幂等保存题材数据
+        """幂等保存题材数据（批量查询优化）
 
         Args:
             themes: 题材数据列表
@@ -219,16 +219,19 @@ class EastMoneyScraper(BaseScraper):
         saved_count = 0
 
         async with AsyncSessionLocal() as session:
+            # 批量查询现有题材（避免 N+1 查询）
+            theme_names = [t["name"] for t in themes if t.get("name")]
+            existing_result = await session.execute(
+                select(Theme).where(
+                    Theme.name.in_(theme_names),
+                    Theme.deleted_at.is_(None),
+                )
+            )
+            existing_map = {t.name: t for t in existing_result.scalars().all()}
+
             for theme_data in themes:
                 try:
-                    # 查询现有题材（按名称匹配）
-                    existing = await session.execute(
-                        select(Theme).where(
-                            Theme.name == theme_data["name"],
-                            Theme.deleted_at.is_(None),  # 排除已删除
-                        )
-                    )
-                    theme = existing.scalar_one_or_none()
+                    theme = existing_map.get(theme_data["name"])
 
                     if theme:
                         # 更新现有题材
@@ -267,7 +270,7 @@ class EastMoneyScraper(BaseScraper):
     async def _save_theme_stocks(
         self, theme_code: str, stocks: list[dict[str, Any]]
     ) -> int:
-        """保存题材关联股票
+        """保存题材关联股票（批量查询优化）
 
         Args:
             theme_code: 题材代码
@@ -289,13 +292,29 @@ class EastMoneyScraper(BaseScraper):
                 logger.warning(f"[{self.source_name}] 未找到题材: {theme_code}")
                 return 0
 
+            # 批量查询现有股票（避免 N+1 查询）
+            stock_codes = [s["code"] for s in stocks if s.get("code")]
+            existing_stocks_result = await session.execute(
+                select(Stock).where(Stock.code.in_(stock_codes))
+            )
+            stock_map = {s.code: s for s in existing_stocks_result.scalars().all()}
+
+            # 批量查询现有关联关系
+            existing_stock_ids = list(stock_map.values())
+            if existing_stock_ids:
+                theme_stock_result = await session.execute(
+                    select(ThemeStock).where(
+                        ThemeStock.theme_id == theme.id,
+                        ThemeStock.stock_id.in_([s.id for s in existing_stock_ids]),
+                    )
+                )
+                theme_stock_map = {ts.stock_id: ts for ts in theme_stock_result.scalars().all()}
+            else:
+                theme_stock_map = {}
+
             for stock_data in stocks:
                 try:
-                    # 查询或创建股票
-                    stock_result = await session.execute(
-                        select(Stock).where(Stock.code == stock_data["code"])
-                    )
-                    stock = stock_result.scalar_one_or_none()
+                    stock = stock_map.get(stock_data["code"])
 
                     if not stock:
                         # 创建新股票
@@ -307,15 +326,10 @@ class EastMoneyScraper(BaseScraper):
                         )
                         session.add(stock)
                         await session.flush()  # 获取 stock.id
+                        stock_map[stock_data["code"]] = stock
 
                     # 创建或更新关联关系
-                    theme_stock_result = await session.execute(
-                        select(ThemeStock).where(
-                            ThemeStock.theme_id == theme.id,
-                            ThemeStock.stock_id == stock.id,
-                        )
-                    )
-                    theme_stock = theme_stock_result.scalar_one_or_none()
+                    theme_stock = theme_stock_map.get(stock.id)
 
                     if not theme_stock:
                         theme_stock = ThemeStock(

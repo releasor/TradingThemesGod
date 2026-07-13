@@ -42,7 +42,7 @@ export function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
   }
 
   // 反转以便从上到下显示（最高在上）
-  const reversed = [...top10].reverse()
+  const reversed = top10.slice().reverse()
 
   const option = {
     backgroundColor: colors.backgroundColor,
@@ -100,17 +100,20 @@ export function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
     series: [
       {
         type: 'bar' as const,
-        data: reversed.map((t) => ({
-          value: Number(t.rise_fall_pct),
-          itemStyle: {
-            color: Number(t.rise_fall_pct) > 0
-              ? RISE_FALL_COLORS.rise
-              : Number(t.rise_fall_pct) < 0
-                ? RISE_FALL_COLORS.fall
-                : RISE_FALL_COLORS.neutral,
-            borderRadius: [0, 4, 4, 0],
-          },
-        })),
+        data: reversed.map((t) => {
+          const pct = Number(t.rise_fall_pct)
+          return {
+            value: pct,
+            itemStyle: {
+              color: pct > 0
+                ? RISE_FALL_COLORS.rise
+                : pct < 0
+                  ? RISE_FALL_COLORS.fall
+                  : RISE_FALL_COLORS.neutral,
+              borderRadius: [0, 4, 4, 0],
+            },
+          }
+        }),
         barWidth: '60%',
         label: {
           show: true,

@@ -5,7 +5,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, AlertCircle, Inbox } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { fetchThemeRanking } from '@/api/theme'
 import { useDashboardStore } from '@/stores/dashboard'
 import { ThemeCard } from '@/components/ThemeCard'
@@ -13,10 +13,28 @@ import { ThemeCardSkeleton } from '@/components/ThemeCardSkeleton'
 import { QuickStats } from '@/components/QuickStats'
 import { ThemeRiseFallBar } from '@/components/charts/ThemeRiseFallBar'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LoadingBar } from '@/components/LoadingBar'
+import { EmptyState } from '@/components/EmptyState'
+import { KeyboardShortcutsButton } from '@/components/KeyboardShortcutsPanel'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 export function ThemeDashboard() {
   const navigate = useNavigate()
   const limit = useDashboardStore((s) => s.limit)
+
+  // 键盘快捷键
+  useKeyboardShortcuts([
+    {
+      key: 'r',
+      action: () => refetch(),
+      description: '刷新数据',
+    },
+    {
+      key: 't',
+      action: () => navigate('/themes'),
+      description: '打开题材库',
+    },
+  ])
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['theme-ranking', limit],
@@ -28,6 +46,9 @@ export function ThemeDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* 加载进度条 */}
+      <LoadingBar isLoading={isLoading || isFetching} />
+
       {/* 页头 */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -35,6 +56,7 @@ export function ThemeDashboard() {
             TradingThemesGod <span className="text-muted-foreground font-normal">题材看板</span>
           </h1>
           <div className="flex items-center gap-3">
+            <KeyboardShortcutsButton />
             <ThemeToggle />
             <button
               onClick={() => refetch()}
@@ -87,29 +109,25 @@ export function ThemeDashboard() {
 
           {/* 错误状态 */}
           {isError && (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5 px-6 py-12">
-              <AlertCircle className="h-10 w-10 text-destructive" />
-              <p className="mt-3 text-sm text-destructive">
-                加载失败：{error?.message ?? '未知错误'}
-              </p>
-              <button
-                onClick={() => refetch()}
-                className="mt-4 inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
-              >
-                <RefreshCw className="h-4 w-4" />
-                重试
-              </button>
-            </div>
+            <EmptyState
+              type="error"
+              title="加载失败"
+              description={error?.message ?? '未知错误'}
+              action={
+                <button
+                  onClick={() => refetch()}
+                  className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  重试
+                </button>
+              }
+            />
           )}
 
           {/* 空状态 */}
           {!isLoading && !isError && themes.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card px-6 py-12">
-              <Inbox className="h-10 w-10 text-muted-foreground" />
-              <p className="mt-3 text-sm text-muted-foreground">
-                暂无题材数据
-              </p>
-            </div>
+            <EmptyState type="no-data" />
           )}
 
           {/* 主题卡片网格 */}

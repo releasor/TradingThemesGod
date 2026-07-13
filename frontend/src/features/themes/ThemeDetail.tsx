@@ -4,6 +4,7 @@
  * 路由：/themes/:id
  */
 
+import { useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -156,9 +157,12 @@ export function ThemeDetail() {
     )
   }
 
-  const heatColor = getHeatColor(Number(theme.heat_index))
-  const riseFallColor = getRiseFallColor(Number(theme.rise_fall_pct))
+  const heatValue = Number(theme.heat_index)
+  const riseFallValue = Number(theme.rise_fall_pct)
+  const heatColor = getHeatColor(heatValue)
+  const riseFallColor = getRiseFallColor(riseFallValue)
   const tags = Array.isArray(theme.tags) ? theme.tags : []
+  const mockHeatTrend = useMemo(() => generateMockHeatTrend(heatValue), [heatValue])
 
   return (
     <div className="min-h-screen bg-background">
@@ -230,20 +234,20 @@ export function ThemeDetail() {
                 <div
                   className={`mt-1 rounded-md px-2.5 py-1 text-lg font-bold ${heatColor}`}
                 >
-                  {Number(theme.heat_index).toFixed(1)}
+                  {heatValue.toFixed(1)}
                 </div>
               </div>
 
               {/* 涨跌幅 */}
               <div className="text-center">
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  {Number(theme.rise_fall_pct) > 0 && (
+                  {riseFallValue > 0 && (
                     <TrendingUp className="h-4 w-4" />
                   )}
-                  {Number(theme.rise_fall_pct) < 0 && (
+                  {riseFallValue < 0 && (
                     <TrendingDown className="h-4 w-4" />
                   )}
-                  {Number(theme.rise_fall_pct) === 0 && (
+                  {riseFallValue === 0 && (
                     <Minus className="h-4 w-4" />
                   )}
                   <span>涨跌幅</span>
@@ -251,7 +255,7 @@ export function ThemeDetail() {
                 <div
                   className={`mt-1 text-lg font-bold ${riseFallColor}`}
                 >
-                  {formatRiseFall(Number(theme.rise_fall_pct))}
+                  {formatRiseFall(riseFallValue)}
                 </div>
               </div>
 
@@ -274,7 +278,7 @@ export function ThemeDetail() {
           {/* 热度趋势折线图 */}
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-medium text-muted-foreground">热度趋势</h3>
-            <ThemeHeatTrendLine data={generateMockHeatTrend(Number(theme.heat_index))} />
+            <ThemeHeatTrendLine data={mockHeatTrend} />
           </div>
 
           {/* 产业链分布饼图 */}

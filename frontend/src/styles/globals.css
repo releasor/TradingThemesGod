@@ -95,4 +95,36 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+
+  /* 移动端优化 */
+  @media (max-width: 640px) {
+    /* 触摸友好的点击区域 */
+    button, a, [role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* 禁用移动端双击缩放 */
+    button, a, [role="button"] {
+      touch-action: manipulation;
+    }
+
+    /* 优化移动端滚动 */
+    * {
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* 移动端字体大小优化 */
+    html {
+      font-size: 16px;
+    }
+  }
+
+  /* 桌面端优化 */
+  @media (min-width: 641px) {
+    /* 桌面端可以使用更小的字体 */
+    html {
+      font-size: 14px;
+    }
+  }
 }

@@ -7,6 +7,7 @@
 import { cn } from '@/lib/utils'
 import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
 import { getHeatColor, getRiseFallColor } from '@/lib/theme-colors'
+import { usePrefetchTheme } from '@/hooks/usePrefetch'
 import type { ThemeBrief } from '@/types/theme'
 
 interface ThemeCardProps {
@@ -20,10 +21,12 @@ export function ThemeCard({ theme, onClick }: ThemeCardProps) {
   const heatColor = getHeatColor(heatValue)
   const riseFallColor = getRiseFallColor(riseFallValue)
   const isRising = riseFallValue > 0
+  const prefetchTheme = usePrefetchTheme()
 
   return (
     <button
       onClick={onClick}
+      onMouseEnter={() => prefetchTheme(theme.id)}
       className={cn(
         'w-full text-left rounded-lg border border-border bg-card p-4',
         'transition-all hover:shadow-md hover:border-primary/30',
