@@ -1,0 +1,18 @@
+MODULE: themes/api
+FILES: app/api/theme.py
+RESPONSIBILITY: 题材 REST API 路由定义
+KEY_FILES:
+- app/api/theme.py: 5 个 API 端点（list, detail, ranking, categories, search），约 100 行
+DEPENDENCIES:
+- imports: app.services.theme: ThemeService 业务逻辑
+- imports: app.core.database: get_db 依赖注入
+- imports: app.schemas.theme: 响应模型
+INTERFACES:
+- router = APIRouter(prefix="/themes", tags=["themes"]): 题材路由
+- GET /api/v1/themes: 分页列表，支持排序/筛选
+- GET /api/v1/themes/{theme_id}: 题材详情（含产业链）
+- GET /api/v1/themes/ranking: 热度排名 Top N
+- GET /api/v1/themes/categories: 唯一分类列表
+- GET /api/v1/themes/search?q=keyword: 名称/描述搜索
+TRAPS:
+- [LOW] 端点顺序重要 — /ranking, /categories, /search 必须在 /{theme_id} 之前注册，否则 FastAPI 会将它们解释为 theme_id

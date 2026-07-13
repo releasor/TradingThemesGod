@@ -1,0 +1,17 @@
+MODULE: themes/service
+FILES: app/services/theme.py
+RESPONSIBILITY: 题材业务逻辑编排
+KEY_FILES:
+- app/services/theme.py: ThemeService 类，约 160 行
+DEPENDENCIES:
+- imports: app.repositories.theme: ThemeRepository 数据访问
+- imports: app.schemas.theme: 响应模型
+INTERFACES:
+- ThemeService(session: AsyncSession): 题材服务
+- list_themes(page, page_size, sort_by, sort_order, category, tags) -> ThemeListResponse: 列表查询
+- get_theme_detail(theme_id) -> ThemeDetailResponse: 详情查询（含产业链分组）
+- search_themes(query, page, page_size) -> ThemeListResponse: 搜索
+- get_categories() -> ThemeCategoriesResponse: 分类列表
+- get_ranking(limit) -> ThemeRankingResponse: 排名
+TRAPS:
+- [LOW] get_theme_detail 按 level 分组产业链 — 仅支持 upstream/midstream/downstream，其他 level 值会被忽略

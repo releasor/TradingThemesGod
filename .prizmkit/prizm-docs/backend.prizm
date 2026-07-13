@@ -1,8 +1,9 @@
 MODULE: backend
-FILES: app/main.py, app/core/config.py, app/core/database.py, app/models/base.py, app/api/health.py, alembic/env.py
+FILES: app/main.py, app/core/config.py, app/core/database.py, app/models/base.py, app/api/health.py, app/api/theme.py, app/api/scraper.py, alembic/env.py
 RESPONSIBILITY: FastAPI 后端服务，提供 RESTful API 和数据访问
 DEPENDENCIES: fastapi, sqlalchemy, alembic, pydantic, asyncpg
 SUBDIRS:
 - core: core.prizm
 - models: models.prizm
 - api: api.prizm
+- themes: themes.prizm

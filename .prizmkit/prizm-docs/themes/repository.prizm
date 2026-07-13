@@ -1,0 +1,20 @@
+MODULE: themes/repository
+FILES: app/repositories/theme.py
+RESPONSIBILITY: 题材数据库查询操作
+KEY_FILES:
+- app/repositories/theme.py: ThemeRepository 类，约 180 行
+DEPENDENCIES:
+- uses: sqlalchemy: 异步查询构建
+- uses: sqlalchemy.orm: selectinload 预加载关联数据
+- imports: app.models.theme: Theme 模型
+- imports: app.models.industry_chain: IndustryChain 模型
+INTERFACES:
+- ThemeRepository(session: AsyncSession): 题材仓储
+- list_paginated(page, page_size, sort_by, sort_order, category, tags) -> tuple[list[Theme], int]: 分页查询
+- get_by_id(theme_id) -> Theme | None: 详情查询（含 selectinload）
+- search(query, page, page_size) -> tuple[list[Theme], int]: ILIKE 搜索
+- get_categories() -> list[str]: 唯一分类
+- get_ranking(limit) -> list[Theme]: 热度排名
+TRAPS:
+- [MEDIUM] list_paginated 使用 getattr(Theme, sort_by, Theme.heat_index) 动态排序 — 仅支持已知字段，不验证 sort_by 值 | FIX: 可添加白名单验证
+- [LOW] search 使用 ILIKE 模式匹配 — 大数据量下可能性能较差 | FIX: 可考虑 PostgreSQL 全文搜索
