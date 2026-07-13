@@ -26,11 +26,13 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def get_db() -> AsyncSession:
-    """获取数据库会话（用于 FastAPI 依赖注入）"""
+    """获取数据库会话（用于 FastAPI 依赖注入）
+
+    注意：不再自动 commit。写操作需要在 service/repository 层显式调用 await session.commit()
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise

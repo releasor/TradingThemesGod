@@ -3,7 +3,7 @@
  * 封装 /api/v1/themes 相关请求。
  */
 
-import axios from 'axios'
+import { apiClient } from '@/api/client'
 import type {
   ThemeRankingResponse,
   ThemeListParams,
@@ -12,11 +12,6 @@ import type {
   ThemeDetailResponse,
 } from '@/types/theme'
 import type { StockListResponse } from '@/types/stock'
-
-const apiClient = axios.create({
-  baseURL: '/api/v1',
-  timeout: 10_000,
-})
 
 /** 获取题材排名（按热度降序） */
 export async function fetchThemeRanking(limit = 20): Promise<ThemeRankingResponse> {

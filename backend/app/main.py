@@ -3,14 +3,18 @@
 创建和配置 FastAPI 应用实例。
 """
 
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.core.config import get_settings
 from app.api.health import router as health_router
 from app.api.scraper import router as scraper_router
 from app.api.theme import router as theme_router
 from app.api.stock import router as stock_router
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -50,6 +54,28 @@ def create_app() -> FastAPI:
     app.include_router(scraper_router, prefix="/api/v1")
     app.include_router(theme_router, prefix="/api/v1")
     app.include_router(stock_router, prefix="/api/v1")
+
+    # 全局异常处理器
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        """捕获所有未处理的异常，返回统一错误响应"""
+        logger.error(
+            f"Unhandled exception: {type(exc).__name__}: {exc}",
+            exc_info=True,
+            extra={
+                "method": request.method,
+                "url": str(request.url),
+                "client": request.client.host if request.client else None,
+            },
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": 500,
+                "message": "服务器内部错误，请稍后重试",
+                "detail": None,
+            },
+        )
 
     return app
 
