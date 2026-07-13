@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # CORS 配置
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    # 代理配置（可选）
+    PROXY_ENABLED: bool = False
+    PROXY_URL: str = ""
+
     @property
     def database_url(self) -> str:
         """构建数据库连接 URL"""

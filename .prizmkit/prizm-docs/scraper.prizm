@@ -1,0 +1,9 @@
+MODULE: scraper
+FILES: app/scrapers/__init__.py, app/scrapers/base.py, app/scrapers/anti_scraping.py, app/scrapers/registry.py, app/scrapers/scheduler.py, app/models/scraper_run.py, app/schemas/scraper.py, app/repositories/scraper_run.py, app/api/scraper.py
+RESPONSIBILITY: 爬虫框架和反爬虫策略，提供 BaseScraper 基类、UA 轮换、自动重试、调度器和 API 端点
+DEPENDENCIES: httpx, sqlalchemy, asyncio
+SUBDIRS:
+- base: app/scrapers/base.py -> scraper/base.prizm
+- anti_scraping: app/scrapers/anti_scraping.py -> scraper/anti_scraping.prizm
+- scheduler: app/scrapers/scheduler.py -> scraper/scheduler.prizm
+- registry: app/scrapers/registry.py -> scraper/registry.prizm
