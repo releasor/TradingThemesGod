@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 
 from app.core.database import AsyncSessionLocal
 from app.models.event import Event
@@ -194,7 +194,7 @@ class SinaFinanceScraper(BaseScraper):
             return None
 
     async def save(self, data: list[dict[str, Any]]) -> int:
-        """保存事件数据
+        """保存事件数据（批量查询优化）
 
         Args:
             data: 事件数据列表
@@ -205,16 +205,29 @@ class SinaFinanceScraper(BaseScraper):
         saved_count = 0
 
         async with AsyncSessionLocal() as session:
+            # 批量查询现有事件（避免 N+1 查询）
+            keys = [
+                (d["title"], d.get("published_at"))
+                for d in data
+                if d.get("title")
+            ]
+            if keys:
+                existing_result = await session.execute(
+                    select(Event).where(
+                        tuple_(Event.title, Event.published_at).in_(keys)
+                    )
+                )
+                existing_map = {
+                    (e.title, e.published_at): e
+                    for e in existing_result.scalars().all()
+                }
+            else:
+                existing_map = {}
+
             for event_data in data:
                 try:
-                    # 查询现有记录（按标题和发布时间匹配）
-                    existing = await session.execute(
-                        select(Event).where(
-                            Event.title == event_data["title"],
-                            Event.published_at == event_data.get("published_at"),
-                        )
-                    )
-                    event = existing.scalar_one_or_none()
+                    key = (event_data["title"], event_data.get("published_at"))
+                    event = existing_map.get(key)
 
                     if event:
                         # 更新现有记录

@@ -69,19 +69,20 @@ interface ThemeToggleProps {
   className?: string
 }
 
+/** 主题选项列表（模块级常量，避免每次渲染重建） */
+const THEMES: { value: Theme; icon: typeof Sun; label: string }[] = [
+  { value: 'light', icon: Sun, label: '亮色' },
+  { value: 'dark', icon: Moon, label: '暗色' },
+  { value: 'system', icon: Monitor, label: '系统' },
+]
+
 /** 主题切换按钮 */
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme()
 
-  const themes: { value: Theme; icon: typeof Sun; label: string }[] = [
-    { value: 'light', icon: Sun, label: '亮色' },
-    { value: 'dark', icon: Moon, label: '暗色' },
-    { value: 'system', icon: Monitor, label: '系统' },
-  ]
-
   return (
     <div className={cn('flex items-center rounded-lg border border-border p-1', className)}>
-      {themes.map(({ value, icon: Icon, label }) => (
+      {THEMES.map(({ value, icon: Icon, label }) => (
         <button
           key={value}
           onClick={() => setTheme(value)}

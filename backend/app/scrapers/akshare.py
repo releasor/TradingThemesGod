@@ -122,7 +122,7 @@ class AKShareScraper(BaseScraper):
         return self._stock_data
 
     async def save(self, data: list[dict[str, Any]]) -> int:
-        """保存股票数据（幂等更新）
+        """保存股票数据（幂等更新，批量查询优化）
 
         Args:
             data: 股票数据列表
@@ -133,13 +133,21 @@ class AKShareScraper(BaseScraper):
         saved_count = 0
 
         async with AsyncSessionLocal() as session:
+            # 批量查询现有股票（避免 N+1 查询）
+            stock_codes = [s["code"] for s in data if s.get("code")]
+            if stock_codes:
+                existing_result = await session.execute(
+                    select(Stock).where(Stock.code.in_(stock_codes))
+                )
+                existing_map = {
+                    s.code: s for s in existing_result.scalars().all()
+                }
+            else:
+                existing_map = {}
+
             for stock_data in data:
                 try:
-                    # 查询现有记录（按 code 匹配）
-                    existing = await session.execute(
-                        select(Stock).where(Stock.code == stock_data["code"])
-                    )
-                    stock = existing.scalar_one_or_none()
+                    stock = existing_map.get(stock_data["code"])
 
                     if stock:
                         # 更新现有记录（AKShare 为权威来源）

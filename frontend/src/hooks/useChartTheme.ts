@@ -3,7 +3,7 @@
  * 检测当前是否为暗色模式，并返回相应的图表颜色配置。
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getChartThemeColors } from '@/lib/chart-colors'
 
 /** 检测当前是否为暗色模式 */
@@ -36,8 +36,10 @@ export function useChartTheme() {
     return () => observer.disconnect()
   }, [])
 
+  const colors = useMemo(() => getChartThemeColors(isDark), [isDark])
+
   return {
     isDark,
-    colors: getChartThemeColors(isDark),
+    colors,
   }
 }

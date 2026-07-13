@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 
 from app.core.database import AsyncSessionLocal
 from app.models.industry_chain import IndustryChain
@@ -155,7 +155,7 @@ class TongHuaShunScraper(BaseScraper):
         return blocks
 
     async def save(self, data: list[dict[str, Any]]) -> int:
-        """保存产业链数据
+        """保存产业链数据（批量查询优化）
 
         Args:
             data: 产业链数据列表
@@ -166,16 +166,29 @@ class TongHuaShunScraper(BaseScraper):
         saved_count = 0
 
         async with AsyncSessionLocal() as session:
+            # 批量查询现有产业链记录（避免 N+1 查询）
+            keys = [
+                (d["theme_id"], d["level"])
+                for d in data
+                if d.get("theme_id") and d.get("level")
+            ]
+            if keys:
+                existing_result = await session.execute(
+                    select(IndustryChain).where(
+                        tuple_(IndustryChain.theme_id, IndustryChain.level).in_(keys)
+                    )
+                )
+                existing_map = {
+                    (c.theme_id, c.level): c
+                    for c in existing_result.scalars().all()
+                }
+            else:
+                existing_map = {}
+
             for chain_data in data:
                 try:
-                    # 查询现有记录（按 theme_id 和 level 匹配）
-                    existing = await session.execute(
-                        select(IndustryChain).where(
-                            IndustryChain.theme_id == chain_data.get("theme_id"),
-                            IndustryChain.level == chain_data["level"],
-                        )
-                    )
-                    chain = existing.scalar_one_or_none()
+                    key = (chain_data.get("theme_id"), chain_data["level"])
+                    chain = existing_map.get(key)
 
                     if chain:
                         # 更新现有记录

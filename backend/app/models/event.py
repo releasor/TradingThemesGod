@@ -37,6 +37,7 @@ class Event(Base, TimestampMixin):
         Index("idx_event_stock_id", "stock_id"),
         Index("idx_event_published_at", "published_at"),
         Index("idx_event_type", "event_type"),
+        Index("idx_event_stock_published", "stock_id", "published_at"),
         {"comment": "事件表"},
     )
 

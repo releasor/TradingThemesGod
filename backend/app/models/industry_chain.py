@@ -39,6 +39,7 @@ class IndustryChain(Base, TimestampMixin):
     # 表级配置：索引和约束
     __table_args__ = (
         Index("idx_industry_chain_theme_id", "theme_id"),
+        Index("idx_industry_chain_theme_level", "theme_id", "level"),
         CheckConstraint(
             "level IN ('upstream', 'midstream', 'downstream')",
             name="ck_industry_chain_level"
