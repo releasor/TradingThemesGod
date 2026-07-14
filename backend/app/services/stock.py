@@ -118,15 +118,15 @@ class StockService:
         Raises:
             HTTPException: 股票不存在
         """
-        # 先验证股票存在，避免在无事件时冗余查询
-        if not await self.stock_repo.exists_by_code(code):
-            raise HTTPException(status_code=404, detail="股票不存在")
-
-        events, total = await self.stock_repo.get_events_by_code(
+        # 单次查询：同时获取事件列表和股票是否存在
+        events, total, stock_exists = await self.stock_repo.get_events_by_code(
             code=code,
             page=page,
             page_size=page_size,
         )
+
+        if not stock_exists:
+            raise HTTPException(status_code=404, detail="股票不存在")
 
         return EventListResponse(
             items=[EventListItem.model_validate(e) for e in events],
@@ -171,3 +171,8 @@ class StockService:
             page_size=page_size,
             total_pages=calculate_total_pages(total, page_size),
         )
+
+
+__all__ = [
+    "StockService",
+]

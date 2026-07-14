@@ -3,7 +3,7 @@
  * 提供全局 Toast 通知功能，支持 success/error/warning/info 类型。
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, memo } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -64,7 +64,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: (id: string) => 
 }
 
 /** Toast 容器 */
-export function ToastContainer({ toasts, onClose }: ToastContainerProps) {
+export const ToastContainer = memo(function ToastContainer({ toasts, onClose }: ToastContainerProps) {
   if (toasts.length === 0) return null
 
   return (
@@ -74,7 +74,7 @@ export function ToastContainer({ toasts, onClose }: ToastContainerProps) {
       ))}
     </div>
   )
-}
+})
 
 /** Toast Hook */
 export function useToast() {

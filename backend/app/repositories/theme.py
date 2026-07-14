@@ -79,6 +79,22 @@ class ThemeRepository(BaseRepository):
         )
 
     async def get_by_id(self, theme_id: int) -> Theme | None:
+        """获取题材详情（不含关联数据）
+
+        Args:
+            theme_id: 题材ID
+
+        Returns:
+            题材对象或 None
+        """
+        query = (
+            select(Theme)
+            .where(Theme.id == theme_id, Theme.deleted_at.is_(None))
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_by_id_with_chains(self, theme_id: int) -> Theme | None:
         """获取题材详情（含产业链数据）
 
         Args:
@@ -94,6 +110,23 @@ class ThemeRepository(BaseRepository):
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def exists(self, theme_id: int) -> bool:
+        """轻量级检查题材是否存在（不加载完整对象）
+
+        Args:
+            theme_id: 题材ID
+
+        Returns:
+            是否存在
+        """
+        query = (
+            select(Theme.id)
+            .where(Theme.id == theme_id, Theme.deleted_at.is_(None))
+            .limit(1)
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none() is not None
 
     async def search(
         self,
@@ -164,6 +197,36 @@ class ThemeRepository(BaseRepository):
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def stream_all(
+        self,
+        category: str | None = None,
+        chunk_size: int = 200,
+    ):
+        """流式获取所有题材（用于导出，避免一次性加载全部数据）
+
+        使用 yield_per 实现服务端游标分批读取，内存占用 O(chunk_size) 而非 O(N)。
+
+        Args:
+            category: 分类筛选
+            chunk_size: 每批读取数量
+
+        Yields:
+            单个题材对象
+        """
+        query = (
+            select(Theme)
+            .where(Theme.deleted_at.is_(None))
+            .order_by(Theme.id)
+        )
+
+        if category:
+            query = query.where(Theme.category == category)
+
+        # 使用 yield_per 开启服务端游标，分批读取
+        stream = await self.session.stream(query.execution_options(yield_per=chunk_size))
+        async for result in stream:
+            yield result.scalar_one()
 
     async def get_industry_chains_by_theme(self, theme_id: int) -> list[IndustryChain]:
         """获取题材的产业链数据

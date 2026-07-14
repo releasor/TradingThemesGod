@@ -1,9 +1,12 @@
 /** 题材卡片骨架屏
  *
  * 加载状态下显示的占位符，与 ThemeCard 尺寸一致。
+ * 使用 React.memo 避免父组件重渲染时不必要的更新。
  */
 
-export function ThemeCardSkeleton() {
+import { memo } from 'react'
+
+export const ThemeCardSkeleton = memo(function ThemeCardSkeleton() {
   return (
     <div className="w-full rounded-lg border border-border bg-card p-4 animate-pulse">
       {/* 标题骨架 */}
@@ -21,4 +24,4 @@ export function ThemeCardSkeleton() {
       </div>
     </div>
   )
-}
+})

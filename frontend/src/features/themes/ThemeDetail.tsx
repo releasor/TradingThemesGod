@@ -70,6 +70,7 @@ export function ThemeDetail() {
     queryKey: ['theme-detail', themeId],
     queryFn: () => fetchThemeDetail(themeId),
     enabled: !isNaN(themeId),
+    staleTime: 3 * 60 * 1000, // 3 分钟
   })
 
   // 加载状态

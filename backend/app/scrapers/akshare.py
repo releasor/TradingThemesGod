@@ -4,7 +4,6 @@
 """
 
 import asyncio
-import logging
 from decimal import Decimal
 from typing import Any
 
@@ -14,9 +13,10 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.models.stock import Stock
 from app.scrapers.base import BaseScraper
+from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AKShareScraper(BaseScraper):

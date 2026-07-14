@@ -26,7 +26,7 @@ function parseFilters(searchParams: URLSearchParams): ThemeListParams {
 
 export function useThemeFilters() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const filters = parseFilters(searchParams)
+  const filters = useMemo(() => parseFilters(searchParams), [searchParams])
 
   // 搜索输入的本地状态（防抖前）
   const [searchInput, setSearchInput] = useState(filters.q || '')

@@ -3,6 +3,7 @@
 为不同类型的错误提供友好的展示界面。
 */
 
+import { memo } from 'react'
 import { AlertCircle, RefreshCw, WifiOff, Clock, Server, ShieldQuestion, FileQuestion } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { type ErrorType, getErrorMessageByType } from '@/lib/error-messages'
@@ -16,6 +17,8 @@ const errorIcons: Record<ErrorType, typeof AlertCircle> = {
   unauthorized: ShieldQuestion,
   forbidden: ShieldQuestion,
   validation: AlertCircle,
+  'rate-limit': Clock,
+  conflict: AlertCircle,
   unknown: AlertCircle,
 }
 
@@ -44,7 +47,7 @@ interface ErrorDisplayProps {
  * />
  * ```
  */
-export function ErrorDisplay({
+export const ErrorDisplay = memo(function ErrorDisplay({
   errorType,
   title,
   description,
@@ -84,4 +87,4 @@ export function ErrorDisplay({
       )}
     </div>
   )
-}
+})

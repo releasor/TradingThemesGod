@@ -21,3 +21,8 @@ def calculate_total_pages(total: int, page_size: int) -> int:
         总页数（total 为 0 时返回 0）
     """
     return ceil(total / page_size) if total > 0 else 0
+
+
+__all__ = [
+    "calculate_total_pages",
+]

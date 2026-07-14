@@ -98,8 +98,10 @@ class StockRepository(BaseRepository):
         code: str,
         page: int = 1,
         page_size: int = 20,
-    ) -> tuple[list[Event], int]:
+    ) -> tuple[list[Event], int, bool]:
         """获取股票的事件列表（分页，按 published_at 降序）
+
+        同时返回股票是否存在标志，避免调用方额外查询。
 
         Args:
             code: 股票代码
@@ -107,24 +109,25 @@ class StockRepository(BaseRepository):
             page_size: 每页数量
 
         Returns:
-            (事件列表, 总数)
+            (事件列表, 总数, 股票是否存在)
         """
         # 先查找股票
         stock_query = select(Stock.id).where(Stock.code == code)
         stock_result = await self.session.execute(stock_query)
         stock_id = stock_result.scalar_one_or_none()
         if stock_id is None:
-            return [], 0
+            return [], 0, False
 
         base_query = select(Event).where(Event.stock_id == stock_id)
 
-        return await self._paginate(
+        items, total = await self._paginate(
             query=base_query,
             page=page,
             page_size=page_size,
             sort_column=Event.published_at,
             sort_order="desc",
         )
+        return items, total, True
 
 
 class EventRepository(BaseRepository):
@@ -190,3 +193,9 @@ class EventRepository(BaseRepository):
             sort_column=sort_column,
             sort_order=order,
         )
+
+
+__all__ = [
+    "StockRepository",
+    "EventRepository",
+]

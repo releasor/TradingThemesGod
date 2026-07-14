@@ -4,7 +4,7 @@
  * 使用 TanStack Query 在弹出框打开时获取股票详情。
  */
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, TrendingDown, Minus, Building2, DollarSign, Calendar, AlertCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -19,7 +19,7 @@ interface StockPopoverProps {
   children: React.ReactNode
 }
 
-export function StockPopover({ stock, children }: StockPopoverProps) {
+export const StockPopover = memo(function StockPopover({ stock, children }: StockPopoverProps) {
   const [open, setOpen] = useState(false)
 
   const { data, isLoading, isError, error } = useQuery({
@@ -155,4 +155,4 @@ export function StockPopover({ stock, children }: StockPopoverProps) {
       </PopoverContent>
     </Popover>
   )
-}
+})

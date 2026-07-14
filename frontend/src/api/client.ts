@@ -4,12 +4,13 @@
  * 可在此处添加请求/响应拦截器（如全局错误处理、token 注入）。
  */
 
-import axios from 'axios'
+import axios, { type AxiosRequestConfig } from 'axios'
 
 /** API 错误事件 */
 export interface ApiErrorEvent {
   status: number
   message: string
+  url?: string
 }
 
 /** 错误监听器列表 */
@@ -35,6 +36,25 @@ function notifyError(event: ApiErrorEvent): void {
   }
 }
 
+/** 状态码对应的中文消息 */
+const STATUS_MESSAGES: Record<number, string> = {
+  400: '请求参数错误',
+  401: '未授权访问',
+  403: '权限不足',
+  404: '资源不存在',
+  408: '请求超时',
+  409: '数据冲突',
+  422: '请求参数错误',
+  429: '请求过于频繁，请稍后重试',
+  500: '服务器内部错误',
+  502: '网关错误',
+  503: '服务不可用',
+  504: '网关超时',
+}
+
+/** 是否可重试的状态码 */
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504])
+
 export const apiClient = axios.create({
   baseURL: '/api/v1',
   timeout: 10_000,
@@ -44,25 +64,59 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const url = error.config?.url
+
     // 统一处理网络错误和服务器错误
     if (error.response) {
       const { status, data } = error.response
       const message = data?.message || '请求失败'
 
-      const statusMessages: Record<number, string> = {
-        401: '未授权访问',
-        403: '权限不足',
-        404: '资源不存在',
-        500: '服务器内部错误',
-      }
       notifyError({
         status,
-        message: statusMessages[status] || `请求失败 (${status}): ${message}`,
+        message: STATUS_MESSAGES[status] || `请求失败 (${status}): ${message}`,
+        url,
       })
     } else if (error.request) {
-      notifyError({ status: 0, message: '网络错误，请检查网络连接' })
+      notifyError({ status: 0, message: '网络错误，请检查网络连接', url })
     }
 
     return Promise.reject(error)
   }
 )
+
+/**
+ * 带重试的请求函数
+ *
+ * @param config - axios 请求配置
+ * @param maxRetries - 最大重试次数
+ * @returns 响应数据
+ */
+export async function requestWithRetry<T>(
+  config: AxiosRequestConfig,
+  maxRetries = 2
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await apiClient(config)
+      return response.data
+    } catch (error) {
+      lastError = error as Error
+
+      // 检查是否可重试
+      const axiosError = error as { response?: { status: number } }
+      const status = axiosError.response?.status
+
+      if (!status || !RETRYABLE_STATUS_CODES.has(status) || attempt === maxRetries) {
+        throw error
+      }
+
+      // 指数退避
+      const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+
+  throw lastError
+}

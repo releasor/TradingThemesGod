@@ -3,7 +3,6 @@
 从同花顺网站获取产业链结构数据（上游/中游/下游）。
 """
 
-import logging
 import re
 from typing import Any
 
@@ -13,9 +12,10 @@ from app.core.database import AsyncSessionLocal
 from app.models.industry_chain import IndustryChain
 from app.models.theme import Theme
 from app.scrapers.base import BaseScraper
+from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 同花顺产业链页面基础 URL
 THS_CHAIN_BASE_URL = "http://q.10jqka.com.cn/thshy/detail/code/"

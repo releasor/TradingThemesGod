@@ -4,7 +4,7 @@
  * 支持每页显示数量选择和跳转到指定页。
  */
 
-import { useState } from 'react'
+import { useState, memo, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -47,7 +47,7 @@ export function getVisiblePages(current: number, total: number): (number | '...'
   return pages
 }
 
-export function Pagination({
+export const Pagination = memo(function Pagination({
   page,
   totalPages,
   onPageChange,
@@ -63,13 +63,13 @@ export function Pagination({
 
   const visiblePages = getVisiblePages(page, totalPages)
 
-  const handleJump = () => {
+  const handleJump = useCallback(() => {
     const pageNum = parseInt(jumpValue, 10)
     if (pageNum >= 1 && pageNum <= totalPages) {
       onPageChange(pageNum)
       setJumpValue('')
     }
-  }
+  }, [jumpValue, totalPages, onPageChange])
 
   return (
     <nav className="flex items-center justify-center gap-4" aria-label="分页导航">
@@ -204,4 +204,4 @@ export function Pagination({
       )}
     </nav>
   )
-}
+})

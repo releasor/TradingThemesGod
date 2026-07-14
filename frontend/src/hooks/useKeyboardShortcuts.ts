@@ -3,7 +3,7 @@
 提供全局键盘快捷键支持。
 */
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 
 /** 快捷键配置 */
 interface ShortcutConfig {
@@ -30,9 +30,11 @@ interface ShortcutConfig {
  * ```
  */
 export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
+  const shortcutsRef = useRef(shortcuts)
+  shortcutsRef.current = shortcuts
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      // 忽略输入框中的快捷键
       const target = event.target as HTMLElement
       if (
         target.tagName === 'INPUT' ||
@@ -42,7 +44,7 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
         return
       }
 
-      for (const shortcut of shortcuts) {
+      for (const shortcut of shortcutsRef.current) {
         const keyMatch = event.key.toLowerCase() === shortcut.key.toLowerCase()
         const ctrlMatch = shortcut.ctrl ? event.ctrlKey || event.metaKey : !event.ctrlKey && !event.metaKey
         const shiftMatch = shortcut.shift ? event.shiftKey : !event.shiftKey
@@ -55,7 +57,7 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
         }
       }
     },
-    [shortcuts]
+    []  // no dependencies needed, uses ref
   )
 
   useEffect(() => {

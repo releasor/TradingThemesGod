@@ -1,11 +1,13 @@
 /** 股票列表骨架屏
  *
  * 加载状态占位符，匹配 StockList 样式。
+ * 使用 React.memo 避免父组件重渲染时不必要的更新。
  */
 
+import { memo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 
-export function StockListSkeleton() {
+export const StockListSkeleton = memo(function StockListSkeleton() {
   return (
     <div className="space-y-1">
       {Array.from({ length: 3 }).map((_, i) => (
@@ -22,4 +24,4 @@ export function StockListSkeleton() {
       ))}
     </div>
   )
-}
+})

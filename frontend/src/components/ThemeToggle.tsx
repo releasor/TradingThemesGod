@@ -3,7 +3,7 @@
 支持亮色/暗色/系统主题三种模式。
 */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { Moon, Sun, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -39,11 +39,11 @@ function setStoredTheme(theme: Theme): void {
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(getStoredTheme)
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme)
     setStoredTheme(newTheme)
     applyTheme(newTheme)
-  }
+  }, [])
 
   // 初始化主题
   useEffect(() => {
@@ -77,7 +77,7 @@ const THEMES: { value: Theme; icon: typeof Sun; label: string }[] = [
 ]
 
 /** 主题切换按钮 */
-export function ThemeToggle({ className }: ThemeToggleProps) {
+export const ThemeToggle = memo(function ThemeToggle({ className }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme()
 
   return (
@@ -99,4 +99,4 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       ))}
     </div>
   )
-}
+})

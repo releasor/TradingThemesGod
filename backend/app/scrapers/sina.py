@@ -3,7 +3,6 @@
 从新浪财经获取股票新闻和事件数据。
 """
 
-import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -14,9 +13,10 @@ from app.core.database import AsyncSessionLocal
 from app.models.event import Event
 from app.models.stock import Stock
 from app.scrapers.base import BaseScraper
+from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 新浪财经股票新闻 API
 SINA_NEWS_API = "https://vip.stock.finance.sina.com.cn/corp/go.php/vCB_AllNewsStock/symbol/{code}.phtml"

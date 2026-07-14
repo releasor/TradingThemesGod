@@ -3,7 +3,6 @@
 从东方财富 API 获取题材概念列表和关联股票数据。
 """
 
-import logging
 from decimal import Decimal
 from typing import Any
 
@@ -15,9 +14,10 @@ from app.models.theme import Theme
 from app.models.theme_stock import ThemeStock
 from app.models.stock import Stock
 from app.scrapers.base import BaseScraper
+from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 东方财富 API 基础配置
 EASTMONEY_API_BASE = "http://push2.eastmoney.com/api/qt/clist/get"

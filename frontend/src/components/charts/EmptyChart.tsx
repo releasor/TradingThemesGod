@@ -3,6 +3,7 @@
  * 当图表没有数据时显示占位提示。
  */
 
+import { memo } from 'react'
 import { Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -14,7 +15,7 @@ interface EmptyChartProps {
 }
 
 /** 图表空状态组件 */
-export function EmptyChart({ message = '暂无数据', className }: EmptyChartProps) {
+export const EmptyChart = memo(function EmptyChart({ message = '暂无数据', className }: EmptyChartProps) {
   return (
     <div
       className={cn(
@@ -26,4 +27,4 @@ export function EmptyChart({ message = '暂无数据', className }: EmptyChartPr
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
     </div>
   )
-}
+})

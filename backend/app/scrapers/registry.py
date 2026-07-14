@@ -3,12 +3,12 @@
 管理所有已注册的爬虫类，通过名称查找。
 """
 
-import logging
 from typing import Type
 
+from app.core.logging import get_logger
 from app.scrapers.base import BaseScraper
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ScraperRegistry:

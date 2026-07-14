@@ -33,6 +33,7 @@ export function ThemeDashboard() {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['theme-ranking', limit],
     queryFn: () => fetchThemeRanking(limit),
+    staleTime: 2 * 60 * 1000, // 2 分钟
   })
 
   // 自动刷新

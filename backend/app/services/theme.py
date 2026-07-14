@@ -3,6 +3,8 @@
 提供题材相关的业务逻辑。
 """
 
+import time
+from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +19,30 @@ from app.schemas.theme import (
 )
 from app.schemas.stock import StockBrief, StockListResponse
 from app.schemas.common import calculate_total_pages
+
+# 简单的内存缓存
+_cache: dict[str, tuple[float, Any]] = {}
+CACHE_TTL = 60  # 缓存有效期（秒）
+
+
+def _get_cache(key: str) -> Any | None:
+    """获取缓存值"""
+    if key in _cache:
+        timestamp, value = _cache[key]
+        if time.time() - timestamp < CACHE_TTL:
+            return value
+        del _cache[key]
+    return None
+
+
+def _set_cache(key: str, value: Any) -> None:
+    """设置缓存值"""
+    _cache[key] = (time.time(), value)
+
+
+def clear_cache() -> None:
+    """清除所有缓存"""
+    _cache.clear()
 
 
 class ThemeService:
@@ -77,7 +103,7 @@ class ThemeService:
         Raises:
             HTTPException: 题材不存在
         """
-        theme = await self.repo.get_by_id(theme_id)
+        theme = await self.repo.get_by_id_with_chains(theme_id)
         if theme is None:
             raise HTTPException(status_code=404, detail="题材不存在")
 
@@ -143,8 +169,19 @@ class ThemeService:
         Returns:
             分类列表
         """
+        # 检查缓存
+        cache_key = "categories"
+        cached = _get_cache(cache_key)
+        if cached is not None:
+            return cached
+
         categories = await self.repo.get_categories()
-        return ThemeCategoriesResponse(categories=categories)
+        result = ThemeCategoriesResponse(categories=categories)
+
+        # 设置缓存（分类数据变化不频繁，缓存5分钟）
+        _set_cache(cache_key, result)
+
+        return result
 
     async def get_ranking(self, limit: int = 20) -> ThemeRankingResponse:
         """获取题材排名
@@ -160,6 +197,39 @@ class ThemeService:
             items=[ThemeBrief.model_validate(t) for t in themes],
             limit=limit,
         )
+
+    async def stream_export_csv(self, category: str | None = None):
+        """流式导出题材 CSV（生成器，内存占用 O(1)）
+
+        Args:
+            category: 分类筛选
+
+        Yields:
+            CSV 行字符串（含表头）
+        """
+        import csv
+        import io
+
+        # 表头
+        header = io.StringIO()
+        csv.writer(header).writerow([
+            '题材名称', '题材代码', '分类', '热度指数', '涨跌幅(%)', '关联股票数', '数据来源'
+        ])
+        yield header.getvalue()
+
+        # 数据行：逐条生成，内存占用恒定
+        async for theme in self.repo.stream_all(category=category):
+            row = io.StringIO()
+            csv.writer(row).writerow([
+                theme.name,
+                theme.code,
+                theme.category or '',
+                float(theme.heat_index),
+                float(theme.rise_fall_pct),
+                theme.stock_count,
+                theme.source or '',
+            ])
+            yield row.getvalue()
 
     async def get_theme_stocks(
         self,
@@ -183,8 +253,7 @@ class ThemeService:
             HTTPException: 题材不存在
         """
         # 先验证题材存在
-        theme = await self.repo.get_by_id(theme_id)
-        if theme is None:
+        if not await self.repo.exists(theme_id):
             raise HTTPException(status_code=404, detail="题材不存在")
 
         stocks, total = await self.repo.get_stocks_by_theme(

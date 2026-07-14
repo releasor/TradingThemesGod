@@ -30,7 +30,7 @@ async def list_stocks(
     ),
     order: Literal["asc", "desc"] = Query(default="asc", description="排序方向"),
     industry: str | None = Query(default=None, description="按行业筛选"),
-    exchange: str | None = Query(default=None, description="按交易所筛选(SH/SZ/BJ)"),
+    exchange: Literal["SH", "SZ", "BJ"] | None = Query(default=None, description="按交易所筛选(SH/SZ/BJ)"),
     db: AsyncSession = Depends(get_db),
 ):
     """获取股票列表

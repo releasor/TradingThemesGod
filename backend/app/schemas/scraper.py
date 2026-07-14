@@ -4,13 +4,27 @@
 """
 
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Literal
+from pydantic import BaseModel, Field, field_validator
 
 
 class ScraperRunRequest(BaseModel):
     """爬虫运行请求"""
 
     params: dict = Field(default_factory=dict, description="爬虫参数")
+
+    @field_validator('params')
+    @classmethod
+    def validate_params(cls, v: dict) -> dict:
+        """验证爬虫参数"""
+        if len(v) > 20:
+            raise ValueError('参数数量不能超过20个')
+        for key, value in v.items():
+            if not isinstance(key, str) or len(key) > 50:
+                raise ValueError('参数名必须是字符串且长度不超过50')
+            if isinstance(value, str) and len(value) > 500:
+                raise ValueError(f'参数 {key} 的值长度不能超过500')
+        return v
 
 
 class ScraperRunResponse(BaseModel):

@@ -3,7 +3,7 @@
 显示可用的键盘快捷键。
 */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { X, Keyboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -39,7 +39,7 @@ interface KeyboardShortcutsPanelProps {
  * <KeyboardShortcutsPanel isOpen={isOpen} onClose={() => setIsOpen(false)} />
  * ```
  */
-export function KeyboardShortcutsPanel({ isOpen, onClose }: KeyboardShortcutsPanelProps) {
+export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isOpen, onClose }: KeyboardShortcutsPanelProps) {
   // ESC 关闭
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -126,7 +126,7 @@ export function KeyboardShortcutsPanel({ isOpen, onClose }: KeyboardShortcutsPan
 /**
  * 快捷键帮助按钮
  */
-export function KeyboardShortcutsButton() {
+export const KeyboardShortcutsButton = memo(function KeyboardShortcutsButton() {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -142,4 +142,4 @@ export function KeyboardShortcutsButton() {
       <KeyboardShortcutsPanel isOpen={isOpen} onClose={() => setIsOpen(false)} />
     </>
   )
-}
+})

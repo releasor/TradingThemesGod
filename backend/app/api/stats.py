@@ -3,6 +3,8 @@
 提供系统数据统计信息。
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
@@ -17,34 +19,53 @@ from app.models.scraper_run import ScraperRun
 router = APIRouter(prefix="/stats", tags=["stats"])
 
 
-@router.get("")
-async def get_stats(db: AsyncSession = Depends(get_db)):
-    """获取系统数据统计
-
-    返回题材数量、股票数量、事件数量等统计信息。
-    """
-    # 并行查询各表数量
-    theme_count = await db.scalar(
+async def _query_theme_count(db: AsyncSession) -> int:
+    """查询有效题材数量"""
+    return (await db.scalar(
         select(func.count()).select_from(Theme).where(Theme.deleted_at.is_(None))
-    )
-    stock_count = await db.scalar(
-        select(func.count()).select_from(Stock)
-    )
-    event_count = await db.scalar(
-        select(func.count()).select_from(Event)
-    )
-    chain_count = await db.scalar(
-        select(func.count()).select_from(IndustryChain)
-    )
+    )) or 0
 
-    # 获取最近一次爬虫运行
+
+async def _query_stock_count(db: AsyncSession) -> int:
+    """查询股票数量"""
+    return (await db.scalar(
+        select(func.count()).select_from(Stock)
+    )) or 0
+
+
+async def _query_event_count(db: AsyncSession) -> int:
+    """查询事件数量"""
+    return (await db.scalar(
+        select(func.count()).select_from(Event)
+    )) or 0
+
+
+async def _query_chain_count(db: AsyncSession) -> int:
+    """查询产业链数量"""
+    return (await db.scalar(
+        select(func.count()).select_from(IndustryChain)
+    )) or 0
+
+
+async def _query_last_scraper(db: AsyncSession) -> dict | None:
+    """查询最近一次爬虫运行"""
     last_scraper = await db.scalar(
         select(ScraperRun)
         .order_by(ScraperRun.created_at.desc())
         .limit(1)
     )
+    if last_scraper is None:
+        return None
+    return {
+        "id": last_scraper.id,
+        "source": last_scraper.source,
+        "status": last_scraper.status,
+        "created_at": last_scraper.created_at.isoformat(),
+    }
 
-    # 获取分类统计
+
+async def _query_category_stats(db: AsyncSession) -> list[dict]:
+    """查询题材分类统计（Top 10）"""
     category_stats = await db.execute(
         select(
             Theme.category,
@@ -55,31 +76,46 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         .order_by(func.count().desc())
         .limit(10)
     )
-    categories = [
+    return [
         {"category": row[0], "count": row[1]}
         for row in category_stats.all()
     ]
 
+
+@router.get("")
+async def get_stats(db: AsyncSession = Depends(get_db)):
+    """获取系统数据统计
+
+    返回题材数量、股票数量、事件数量等统计信息。
+    使用 asyncio.gather 并行执行所有统计查询，减少响应延迟。
+    """
+    # 并行执行所有查询，减少总响应时间
+    theme_count, stock_count, event_count, chain_count, last_scraper, categories = (
+        await asyncio.gather(
+            _query_theme_count(db),
+            _query_stock_count(db),
+            _query_event_count(db),
+            _query_chain_count(db),
+            _query_last_scraper(db),
+            _query_category_stats(db),
+        )
+    )
+
     return {
         "themes": {
-            "total": theme_count or 0,
+            "total": theme_count,
             "categories": categories,
         },
         "stocks": {
-            "total": stock_count or 0,
+            "total": stock_count,
         },
         "events": {
-            "total": event_count or 0,
+            "total": event_count,
         },
         "chains": {
-            "total": chain_count or 0,
+            "total": chain_count,
         },
         "scraper": {
-            "last_run": {
-                "id": last_scraper.id if last_scraper else None,
-                "source": last_scraper.source if last_scraper else None,
-                "status": last_scraper.status if last_scraper else None,
-                "created_at": last_scraper.created_at.isoformat() if last_scraper else None,
-            } if last_scraper else None,
+            "last_run": last_scraper,
         },
     }

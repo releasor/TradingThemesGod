@@ -6,12 +6,13 @@
 import asyncio
 import random
 import time
-import logging
 from typing import Any
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # 50+ 真实 User-Agent 字符串
 USER_AGENTS = [
@@ -103,6 +104,7 @@ class AntiScrapingMiddleware:
         self.max_retries = max_retries
         self._last_request_time: float = 0.0
         self._client: httpx.AsyncClient | None = None
+        self._interval_lock: asyncio.Lock = asyncio.Lock()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """获取或创建 httpx 客户端"""
@@ -124,13 +126,14 @@ class AntiScrapingMiddleware:
         return self._client
 
     async def _wait_for_interval(self) -> None:
-        """等待请求间隔"""
-        now = time.monotonic()
-        elapsed = now - self._last_request_time
-        interval = random.uniform(self.min_interval, self.max_interval)
-        if elapsed < interval:
-            await asyncio.sleep(interval - elapsed)
-        self._last_request_time = time.monotonic()
+        """等待请求间隔（使用锁序列化，避免并发协程同时跳过等待）"""
+        async with self._interval_lock:
+            now = time.monotonic()
+            elapsed = now - self._last_request_time
+            interval = random.uniform(self.min_interval, self.max_interval)
+            if elapsed < interval:
+                await asyncio.sleep(interval - elapsed)
+            self._last_request_time = time.monotonic()
 
     async def request(
         self,

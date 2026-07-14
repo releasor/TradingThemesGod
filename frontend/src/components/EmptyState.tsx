@@ -3,6 +3,7 @@
 提供友好的空状态展示和引导。
 */
 
+import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { Inbox, Search, AlertCircle, FileText, BarChart3 } from 'lucide-react'
 
@@ -77,7 +78,7 @@ interface EmptyStateProps {
  * />
  * ```
  */
-export function EmptyState({
+export const EmptyState = memo(function EmptyState({
   type = 'no-data',
   title,
   description,
@@ -109,4 +110,4 @@ export function EmptyState({
       {action && <div className="mt-6">{action}</div>}
     </div>
   )
-}
+})

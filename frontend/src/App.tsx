@@ -95,9 +95,9 @@ function App() {
           <div className="min-h-screen bg-background">
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
-                <Route path="/" element={<ThemeDashboard />} />
-                <Route path="/themes" element={<ThemeLibrary />} />
-                <Route path="/themes/:id" element={<ThemeDetail />} />
+                <Route path="/" element={<ErrorBoundary><ThemeDashboard /></ErrorBoundary>} />
+                <Route path="/themes" element={<ErrorBoundary><ThemeLibrary /></ErrorBoundary>} />
+                <Route path="/themes/:id" element={<ErrorBoundary><ThemeDetail /></ErrorBoundary>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

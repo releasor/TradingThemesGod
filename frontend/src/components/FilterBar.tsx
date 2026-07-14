@@ -54,20 +54,20 @@ export const FilterBar = memo(function FilterBar({
     onTagsChange(next.length > 0 ? serializeTags(next) : undefined)
   }, [selectedTags, onTagsChange])
 
-  const addTagFromInput = () => {
+  const addTagFromInput = useCallback(() => {
     const trimmed = tagInput.trim()
     if (trimmed && !tags.includes(trimmed)) {
       onTagsChange(serializeTags([...tags, trimmed]))
     }
     setTagInput('')
-  }
+  }, [tagInput, tags, onTagsChange])
 
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleTagKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
       addTagFromInput()
     }
-  }
+  }, [addTagFromInput])
 
   return (
     <div className="space-y-3">

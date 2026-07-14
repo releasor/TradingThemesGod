@@ -1,8 +1,10 @@
 /** 排序选择组件
  *
  * 提供排序字段和排序方向选择。
+ * 使用 React.memo 避免父组件重渲染时不必要的更新。
  */
 
+import { memo, useCallback } from 'react'
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ThemeListParams } from '@/types/theme'
@@ -23,23 +25,27 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: 'name', label: '名称' },
 ]
 
-export function SortSelect({ sortBy, sortOrder, onSortChange }: SortSelectProps) {
-  const handleSortByChange = (newSortBy: SortBy) => {
-    // 切换字段时，name 默认升序，其他默认降序
-    const defaultOrder: SortOrder = newSortBy === 'name' ? 'asc' : 'desc'
-    onSortChange(newSortBy, defaultOrder)
-  }
+export const SortSelect = memo(function SortSelect({ sortBy, sortOrder, onSortChange }: SortSelectProps) {
+  const handleSortByChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newSortBy = e.target.value as SortBy
+      // 切换字段时，name 默认升序，其他默认降序
+      const defaultOrder: SortOrder = newSortBy === 'name' ? 'asc' : 'desc'
+      onSortChange(newSortBy, defaultOrder)
+    },
+    [onSortChange],
+  )
 
-  const toggleOrder = () => {
+  const toggleOrder = useCallback(() => {
     onSortChange(sortBy, sortOrder === 'asc' ? 'desc' : 'asc')
-  }
+  }, [sortBy, sortOrder, onSortChange])
 
   return (
     <div className="flex items-center gap-2">
       <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
       <select
         value={sortBy}
-        onChange={(e) => handleSortByChange(e.target.value as SortBy)}
+        onChange={handleSortByChange}
         className={cn(
           'rounded-md border border-input bg-background px-2 py-1.5 text-sm',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -68,4 +74,4 @@ export function SortSelect({ sortBy, sortOrder, onSortChange }: SortSelectProps)
       </button>
     </div>
   )
-}
+})

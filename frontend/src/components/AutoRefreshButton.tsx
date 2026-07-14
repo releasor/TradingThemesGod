@@ -3,6 +3,7 @@
 提供自动刷新功能的按钮和设置。
 */
 
+import { memo } from 'react'
 import { RefreshCw, Clock, Play, Pause } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -47,7 +48,7 @@ interface AutoRefreshButtonProps {
  * />
  * ```
  */
-export function AutoRefreshButton({
+export const AutoRefreshButton = memo(function AutoRefreshButton({
   isRefreshing = false,
   isAutoRefresh,
   onToggleAutoRefresh,
@@ -106,4 +107,4 @@ export function AutoRefreshButton({
       )}
     </div>
   )
-}
+})

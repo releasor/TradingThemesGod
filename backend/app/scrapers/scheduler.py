@@ -4,7 +4,6 @@
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,8 +13,9 @@ from app.repositories.scraper_run import ScraperRunRepository
 from app.scrapers.registry import ScraperRegistry, scraper_registry
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.core.config import get_settings
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ScraperScheduler:
@@ -53,8 +53,13 @@ class ScraperScheduler:
             await session.commit()
             run_id = run.id
 
-        # 后台执行爬虫
-        asyncio.create_task(self._execute_scraper(source, run_id, params))
+        # 后台执行爬虫，添加异常回调避免静默吞没错误
+        task = asyncio.create_task(self._execute_scraper(source, run_id, params))
+        task.add_done_callback(
+            lambda t: t.exception() and logger.error(
+                f"爬虫 {source} 后台任务异常: {t.exception()}"
+            )
+        )
 
         return run_id
 
@@ -86,10 +91,8 @@ class ScraperScheduler:
         error_message = None
 
         try:
-            url = (params or {}).get("url", "")
-            if not url:
-                raise ValueError("缺少目标 URL")
-
+            # URL 从 params 中提取，不强制要求（部分爬虫如 eastmoney 内置 URL）
+            url = (params or {}).pop("url", "")
             data, items_scraped = await scraper.run(url, params)
             status = "completed"
             logger.info(f"爬虫 {source} 完成，共 {items_scraped} 条数据")

@@ -3,7 +3,7 @@
 提供数据导出功能，支持 CSV 和 JSON 格式。
 */
 
-import { useState } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { Download, FileSpreadsheet, FileJson } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { type ExportFormat, type ExportThemes, exportThemes } from '@/lib/export'
@@ -24,13 +24,13 @@ interface ExportButtonProps {
  * <ExportButton data={themes} />
  * ```
  */
-export function ExportButton({ data, className }: ExportButtonProps) {
+export const ExportButton = memo(function ExportButton({ data, className }: ExportButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const handleExport = (format: ExportFormat) => {
+  const handleExport = useCallback((format: ExportFormat) => {
     exportThemes(data, format)
     setIsOpen(false)
-  }
+  }, [data])
 
   return (
     <div className={cn('relative', className)}>
@@ -71,4 +71,4 @@ export function ExportButton({ data, className }: ExportButtonProps) {
       )}
     </div>
   )
-}
+})

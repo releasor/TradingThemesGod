@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from app.core.logging import get_logger
+
+# 速率限制器
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/errors", tags=["errors"])
 logger = get_logger(__name__)
@@ -25,6 +30,7 @@ class FrontendError(BaseModel):
 
 
 @router.post("")
+@limiter.limit("30/minute")  # 每分钟最多 30 次错误上报
 async def report_frontend_error(error: FrontendError, request: Request):
     """接收前端错误上报
 

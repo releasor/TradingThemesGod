@@ -3,6 +3,7 @@
 当用户访问不存在的路由时显示。
 */
 
+import { memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Home, ArrowLeft, Search } from 'lucide-react'
 
@@ -14,7 +15,7 @@ import { Home, ArrowLeft, Search } from 'lucide-react'
  * <Route path="*" element={<NotFound />} />
  * ```
  */
-export function NotFound() {
+export const NotFound = memo(function NotFound() {
   const navigate = useNavigate()
 
   return (
@@ -62,4 +63,4 @@ export function NotFound() {
       </div>
     </div>
   )
-}
+})

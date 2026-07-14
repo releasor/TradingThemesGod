@@ -122,10 +122,17 @@ def create_app() -> FastAPI:
         if request.url.path in _SKIP_LOG_PATHS:
             return await call_next(request)
 
+        # 生成请求 ID
+        request_id = str(uuid4())
+        request.state.request_id = request_id
+
         start_time = time.monotonic()
 
         # 处理请求
         response = await call_next(request)
+
+        # 将请求 ID 添加到响应头
+        response.headers["X-Request-ID"] = request_id
 
         # 计算耗时
         duration_ms = (time.monotonic() - start_time) * 1000
@@ -138,6 +145,7 @@ def create_app() -> FastAPI:
             status_code=response.status_code,
             duration_ms=round(duration_ms, 2),
             client=request.client.host if request.client else None,
+            request_id=request_id,
         )
 
         return response

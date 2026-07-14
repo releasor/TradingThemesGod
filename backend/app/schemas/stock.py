@@ -5,7 +5,8 @@
 
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from typing import Literal
+from pydantic import BaseModel, Field, field_validator
 
 
 class StockBrief(BaseModel):
@@ -75,6 +76,14 @@ class StockDetailResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator('code')
+    @classmethod
+    def validate_stock_code(cls, v: str) -> str:
+        """验证股票代码格式"""
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError('股票代码必须是6位数字')
+        return v
+
 
 class EventListResponse(BaseModel):
     """事件列表响应"""
@@ -84,3 +93,13 @@ class EventListResponse(BaseModel):
     page: int = Field(description="当前页码")
     page_size: int = Field(description="每页数量")
     total_pages: int = Field(description="总页数")
+
+
+__all__ = [
+    "StockBrief",
+    "EventBrief",
+    "EventListItem",
+    "StockListResponse",
+    "StockDetailResponse",
+    "EventListResponse",
+]
