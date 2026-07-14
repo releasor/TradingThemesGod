@@ -38,7 +38,7 @@ export function DevPerformancePanel() {
     if (import.meta.env.PROD) return
 
     // 动态导入 web-vitals
-    import('web-vitals').then(({ onLCP, onFID, onCLS, onFCP, onTTFB }) => {
+    import('web-vitals').then(({ onLCP, onINP, onCLS, onFCP, onTTFB }) => {
       const handleMetric = (metric: Metric) => {
         setMetrics((prev) => {
           const existing = prev.find((m) => m.name === metric.name)
@@ -62,7 +62,7 @@ export function DevPerformancePanel() {
       }
 
       onLCP(handleMetric)
-      onFID(handleMetric)
+      onINP(handleMetric)
       onCLS(handleMetric)
       onFCP(handleMetric)
       onTTFB(handleMetric)

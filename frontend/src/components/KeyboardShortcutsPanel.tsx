@@ -121,7 +121,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isO
       </div>
     </div>
   )
-}
+})
 
 /**
  * 快捷键帮助按钮
