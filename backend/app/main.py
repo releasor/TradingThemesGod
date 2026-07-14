@@ -6,20 +6,22 @@
 import time
 from contextlib import asynccontextmanager
 from uuid import uuid4
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from app.core.config import get_settings
-from app.core.logging import setup_logging, get_logger
+
+from app.api.errors import router as errors_router
 from app.api.health import router as health_router
 from app.api.scraper import router as scraper_router
-from app.api.theme import router as theme_router
-from app.api.stock import router as stock_router
-from app.api.errors import router as errors_router
 from app.api.stats import router as stats_router
+from app.api.stock import router as stock_router
+from app.api.theme import router as theme_router
+from app.core.config import get_settings
+from app.core.logging import get_logger, setup_logging
 
 # 配置结构化日志
 setup_logging()
@@ -65,7 +67,7 @@ def create_app() -> FastAPI:
 ### 技术栈
 
 - **后端**: Python FastAPI + SQLAlchemy
-- **数据库**: PostgreSQL
+- **数据库**: MySQL
 - **爬虫**: httpx + BeautifulSoup
 """,
         version="0.1.0",

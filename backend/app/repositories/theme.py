@@ -3,13 +3,13 @@
 提供 Theme 的数据库查询操作。
 """
 
-from sqlalchemy import func, select, or_, desc, asc
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.theme import Theme
 from app.models.industry_chain import IndustryChain
 from app.models.stock import Stock
+from app.models.theme import Theme
 from app.models.theme_stock import ThemeStock
 from app.repositories.base import BaseRepository
 
@@ -22,6 +22,11 @@ THEME_SORT_FIELDS = {
 def _escape_like(value: str) -> str:
     """转义 LIKE 查询中的特殊字符（% 和 _），防止注入"""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _tag_contains(tag: str):
+    """构建 MySQL JSON 数组成员匹配条件。"""
+    return func.json_contains(Theme.tags, func.json_quote(tag)) == 1
 
 
 class ThemeRepository(BaseRepository):
@@ -60,10 +65,9 @@ class ThemeRepository(BaseRepository):
             base_query = base_query.where(Theme.category == category)
 
         if tags:
-            # JSONB 数组包含查询
             tag_list = [t.strip() for t in tags.split(",") if t.strip()]
             for tag in tag_list:
-                base_query = base_query.where(Theme.tags.contains([tag]))
+                base_query = base_query.where(_tag_contains(tag))
 
         # 确定排序列
         sort_column = getattr(Theme, sort_by, None)
@@ -147,8 +151,8 @@ class ThemeRepository(BaseRepository):
         # 构建搜索条件
         search_pattern = f"%{_escape_like(query)}%"
         search_condition = or_(
-            Theme.name.ilike(search_pattern),
-            Theme.description.ilike(search_pattern),
+            Theme.name.like(search_pattern, escape="\\"),
+            Theme.description.like(search_pattern, escape="\\"),
         )
 
         # 基础查询

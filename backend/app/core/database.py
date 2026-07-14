@@ -3,7 +3,7 @@
 提供 SQLAlchemy 异步引擎和会话管理。
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 
@@ -20,7 +20,6 @@ engine = create_async_engine(
     pool_recycle=3600,  # 连接回收时间（秒）
     connect_args={
         "connect_timeout": 10,  # 连接超时时间（秒）
-        "command_timeout": 30,  # 命令超时时间（秒）
     },
 )
 

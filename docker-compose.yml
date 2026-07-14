@@ -1,18 +1,17 @@
 services:
   db:
-    image: postgres:16
+    image: mysql:8.0
     container_name: trading-themes-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-trading_themes}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mysql}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-trading_themes}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-3306}:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-trading_themes}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,13 +25,13 @@ services:
     restart: unless-stopped
     environment:
       DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-trading_themes}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:-trading_themes}
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mysql}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost"]}'
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
@@ -47,8 +46,8 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: trading-themes-frontend
     restart: unless-stopped
     ports:
@@ -63,4 +62,4 @@ services:
       start_period: 10s
 
 volumes:
-  postgres_data:
+  mysql_data:

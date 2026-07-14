@@ -1,15 +1,17 @@
 """创建 scraper_runs 表
 
-Revision ID: 002
+Revision ID: 002_create_scraper_runs
 Revises: 001_create_themes
 Create Date: 2026-07-13
 """
 from typing import Sequence, Union
-from alembic import op
+
 import sqlalchemy as sa
 
+from alembic import op
+
 # revision identifiers, used by Alembic.
-revision: str = "002"
+revision: str = "002_create_scraper_runs"
 down_revision: Union[str, None] = "001_create_themes"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -38,6 +40,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
+        mysql_engine="InnoDB",
+        mysql_charset="utf8mb4",
+        mysql_collate="utf8mb4_0900_ai_ci",
     )
     op.create_index("idx_scraper_runs_source", "scraper_runs", ["source"])
 

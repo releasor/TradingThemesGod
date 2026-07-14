@@ -4,12 +4,16 @@
 """
 
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import BigInteger, Index, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.event import Event
+    from app.models.theme_stock import ThemeStock
 
 
 class Stock(Base, TimestampMixin):
@@ -37,7 +41,7 @@ class Stock(Base, TimestampMixin):
     events: Mapped[list["Event"]] = relationship(back_populates="stock")
 
     # 表级配置：索引
-    # 注意：code 字段有 UNIQUE 约束，PostgreSQL 会自动创建索引，无需额外定义
+    # 注意：code 字段有 UNIQUE 约束，MySQL 会自动创建索引，无需额外定义
     __table_args__ = (
         Index("idx_stock_name", "name"),
         Index("idx_stock_industry", "industry"),

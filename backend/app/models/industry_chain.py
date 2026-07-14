@@ -3,13 +3,24 @@
 定义产业链表结构。
 """
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.theme import Theme
 
 
 class IndustryChain(Base, TimestampMixin):
@@ -26,8 +37,8 @@ class IndustryChain(Base, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False, comment="环节名称")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="环节描述")
-    representative_companies: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True, comment="代表公司列表"
+    representative_companies: Mapped[Optional[list | dict]] = mapped_column(
+        JSON, nullable=True, comment="代表公司列表"
     )
     sort_order: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0", comment="排序顺序"

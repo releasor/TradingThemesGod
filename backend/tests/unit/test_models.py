@@ -3,11 +3,12 @@
 测试模型定义、字段验证、索引和软删除功能。
 """
 
-import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.models import Theme, Stock, Event, IndustryChain, ThemeStock
+from sqlalchemy import JSON
+
+from app.models import Event, IndustryChain, Stock, Theme, ThemeStock
 
 
 class TestThemeModel:
@@ -77,6 +78,9 @@ class TestThemeModel:
         }
         assert expected_columns == columns
 
+    def test_tags_use_portable_json_type(self):
+        assert isinstance(Theme.__table__.c.tags.type, JSON)
+
     def test_theme_repr(self):
         """测试 Theme 字符串表示"""
         theme = Theme(id=1, name="人工智能", code="AI")
@@ -105,7 +109,7 @@ class TestStockModel:
     def test_stock_indexes(self):
         """测试 Stock 索引定义"""
         indexes = {idx.name for idx in Stock.__table__.indexes}
-        # code 字段有 UNIQUE 约束，PostgreSQL 自动创建索引
+        # code 字段有 UNIQUE 约束，MySQL 自动创建索引
         assert "idx_stock_name" in indexes
 
     def test_stock_columns(self):
@@ -163,6 +167,10 @@ class TestIndustryChainModel:
         """测试 IndustryChain 索引定义"""
         indexes = {idx.name for idx in IndustryChain.__table__.indexes}
         assert "idx_industry_chain_theme_id" in indexes
+
+    def test_representative_companies_use_portable_json_type(self):
+        column_type = IndustryChain.__table__.c.representative_companies.type
+        assert isinstance(column_type, JSON)
 
     def test_industry_chain_check_constraint(self):
         """测试 IndustryChain.level 的 CHECK 约束"""

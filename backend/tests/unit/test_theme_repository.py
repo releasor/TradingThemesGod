@@ -3,13 +3,16 @@
 测试题材仓储的数据库查询操作。
 """
 
-import pytest
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from app.models.theme import Theme
+import pytest
+from sqlalchemy import select
+from sqlalchemy.dialects import mysql
+
 from app.models.industry_chain import IndustryChain
-from app.repositories.theme import ThemeRepository
+from app.models.theme import Theme
+from app.repositories.theme import ThemeRepository, _tag_contains
 
 
 @pytest.fixture
@@ -82,6 +85,16 @@ class TestThemeRepository:
         """测试初始化"""
         repo = ThemeRepository(mock_session)
         assert repo.session is mock_session
+
+    def test_tag_filter_compiles_to_mysql_json_contains(self):
+        statement = select(Theme).where(_tag_contains("AI"))
+        compiled = statement.compile(dialect=mysql.dialect(paramstyle="named"))
+        sql = str(compiled).lower()
+
+        assert "json_contains" in sql
+        assert "json_quote" in sql
+        assert "@>" not in sql
+        assert "AI" in compiled.params.values()
 
     @pytest.mark.asyncio
     async def test_list_paginated_basic(self, mock_session, sample_themes):

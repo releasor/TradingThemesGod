@@ -52,4 +52,4 @@ shell-backend:
 
 # 进入数据库容器
 shell-db:
-	docker compose exec db psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-trading_themes}
+	docker compose exec db mysql -u root -p$${MYSQL_ROOT_PASSWORD:-mysql} $${MYSQL_DATABASE:-trading_themes}

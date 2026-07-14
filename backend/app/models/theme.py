@@ -5,13 +5,25 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    DateTime,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.industry_chain import IndustryChain
+    from app.models.theme_stock import ThemeStock
 
 
 class Theme(Base, TimestampMixin):
@@ -33,7 +45,9 @@ class Theme(Base, TimestampMixin):
         Integer, nullable=False, default=0, server_default="0", comment="关联股票数量"
     )
     category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, comment="题材分类")
-    tags: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True, comment="标签列表")
+    tags: Mapped[Optional[list | dict]] = mapped_column(
+        JSON, nullable=True, comment="标签列表"
+    )
     source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, comment="数据来源")
 
     # 软删除字段

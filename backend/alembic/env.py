@@ -1,11 +1,12 @@
 ﻿"""Alembic 环境配置"""
 
-from logging.config import fileConfig
-from sqlalchemy import pool
-from alembic import context
 import asyncio
+from logging.config import fileConfig
+
+from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from app.core.config import get_settings
 from app.models.base import Base
 
@@ -16,7 +17,7 @@ config = context.config
 settings = get_settings()
 
 # 设置数据库 URL
-config.set_main_option("sqlalchemy.url", settings.database_url_sync)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

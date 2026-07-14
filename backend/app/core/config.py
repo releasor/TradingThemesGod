@@ -3,8 +3,10 @@
 使用 Pydantic Settings 管理配置，支持环境变量和 .env 文件。
 """
 
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
@@ -14,13 +16,13 @@ class Settings(BaseSettings):
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     APP_ENV: str = "development"
-    APP_DEBUG: bool = True
+    APP_DEBUG: bool = False
 
     # 数据库配置
     DB_HOST: str = "localhost"
-    DB_PORT: int = 5432
+    DB_PORT: int = 3306
     DB_NAME: str = "trading_themes"
-    DB_USER: str = "postgres"
+    DB_USER: str = "root"
     DB_PASSWORD: str = ""
 
     # CORS 配置
@@ -33,12 +35,16 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """构建数据库连接 URL"""
-        return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-
-    @property
-    def database_url_sync(self) -> str:
-        """构建同步数据库连接 URL（用于 Alembic）"""
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        url = URL.create(
+            drivername="mysql+asyncmy",
+            username=self.DB_USER,
+            password=self.DB_PASSWORD,
+            host=self.DB_HOST,
+            port=self.DB_PORT,
+            database=self.DB_NAME,
+            query={"charset": "utf8mb4"},
+        )
+        return url.render_as_string(hide_password=False)
 
     model_config = {
         "env_file": ".env",

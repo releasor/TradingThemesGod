@@ -12,9 +12,9 @@ Create Date: 2026-07-13
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "001_create_themes"
@@ -37,19 +37,22 @@ def upgrade() -> None:
         sa.Column("rise_fall_pct", sa.Numeric(8, 4), nullable=False, server_default="0", comment="涨跌幅(%)"),
         sa.Column("stock_count", sa.Integer(), nullable=False, server_default="0", comment="关联股票数量"),
         sa.Column("category", sa.String(50), nullable=True, comment="题材分类"),
-        sa.Column("tags", JSONB, nullable=True, comment="标签列表"),
+        sa.Column("tags", sa.JSON(), nullable=True, comment="标签列表"),
         sa.Column("source", sa.String(100), nullable=True, comment="数据来源"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True, comment="软删除时间"),
         sa.PrimaryKeyConstraint("id"),
         comment="题材表",
+        mysql_engine="InnoDB",
+        mysql_charset="utf8mb4",
+        mysql_collate="utf8mb4_0900_ai_ci",
     )
     op.create_index("idx_theme_name", "themes", ["name"])
     op.create_index("idx_theme_heat_index", "themes", ["heat_index"])
 
     # 创建股票表
-    # 注意：code 字段有 UNIQUE 约束，PostgreSQL 会自动创建索引
+    # 注意：code 字段有 UNIQUE 约束，MySQL 会自动创建索引
     op.create_table(
         "stocks",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -64,6 +67,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         comment="股票表",
+        mysql_engine="InnoDB",
+        mysql_charset="utf8mb4",
+        mysql_collate="utf8mb4_0900_ai_ci",
     )
     op.create_index("idx_stock_name", "stocks", ["name"])
 
@@ -81,6 +87,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         comment="事件表",
+        mysql_engine="InnoDB",
+        mysql_charset="utf8mb4",
+        mysql_collate="utf8mb4_0900_ai_ci",
     )
     op.create_index("idx_event_stock_id", "events", ["stock_id"])
     op.create_index("idx_event_published_at", "events", ["published_at"])
@@ -93,7 +102,7 @@ def upgrade() -> None:
         sa.Column("level", sa.String(20), nullable=False, comment="产业链层级(upstream/midstream/downstream)"),
         sa.Column("name", sa.String(100), nullable=False, comment="环节名称"),
         sa.Column("description", sa.Text(), nullable=True, comment="环节描述"),
-        sa.Column("representative_companies", JSONB, nullable=True, comment="代表公司列表"),
+        sa.Column("representative_companies", sa.JSON(), nullable=True, comment="代表公司列表"),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0", comment="排序顺序"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -103,6 +112,9 @@ def upgrade() -> None:
             name="ck_industry_chain_level"
         ),
         comment="产业链表",
+        mysql_engine="InnoDB",
+        mysql_charset="utf8mb4",
+        mysql_collate="utf8mb4_0900_ai_ci",
     )
     op.create_index("idx_industry_chain_theme_id", "industry_chains", ["theme_id"])
 
@@ -117,6 +129,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("theme_id", "stock_id", name="pk_theme_stocks"),
         comment="题材-股票关联表",
+        mysql_engine="InnoDB",
+        mysql_charset="utf8mb4",
+        mysql_collate="utf8mb4_0900_ai_ci",
     )
     op.create_index("idx_theme_stocks_stock_id", "theme_stocks", ["stock_id"])
 
