@@ -63,6 +63,11 @@ frontend/vite-output.txt
 # Playwright
 .playwright-cli/
 frontend/.playwright-cli/
+/news-page.yaml
+/news-after-refresh.yaml
+/news-*.yaml
+frontend/news-*.yaml
+frontend/news-heat-final.yaml
 
 # OS
 .DS_Store
