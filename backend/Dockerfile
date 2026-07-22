@@ -4,24 +4,31 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# 安装系统依赖（psycopg2 编译需要）
+# 使用国内镜像加速 apt（腾讯云服务器）
+RUN sed -i 's/deb.debian.org/mirrors.tencent.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's/deb.debian.org/mirrors.tencent.com/g' /etc/apt/sources.list
+
+# 仅需 gcc 编译少量 Python 原生扩展（项目使用 MySQL/asyncmy，无需 libpq）
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    apt-get install -y --no-install-recommends gcc && \
     rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+    pip install --no-cache-dir -i https://mirrors.cloud.tencent.com/pypi/simple .
 
 # Stage 2: 运行时
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# 安装运行时系统依赖
+RUN sed -i 's/deb.debian.org/mirrors.tencent.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's/deb.debian.org/mirrors.tencent.com/g' /etc/apt/sources.list
+
+# 运行时仅需 curl（健康检查）
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq-dev curl && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 # 从 builder 阶段复制已安装的 Python 包
