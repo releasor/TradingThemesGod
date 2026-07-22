@@ -7,11 +7,7 @@ import { memo, useMemo } from 'react'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import * as echarts from 'echarts/core'
 import { BarChart } from 'echarts/charts'
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-} from 'echarts/components'
+import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ThemeBrief } from '@/types/theme'
 import { useChartTheme } from '@/hooks/useChartTheme'
@@ -27,25 +23,27 @@ interface ThemeRiseFallBarProps {
   themes: ThemeBrief[]
   /** 自定义类名 */
   className?: string
+  /** 点击题材时回传题材 ID */
+  onThemeClick?: (themeId: number) => void
 }
 
 /** 题材涨跌幅柱状图组件 */
-export const ThemeRiseFallBar = memo(function ThemeRiseFallBar({ themes, className }: ThemeRiseFallBarProps) {
+export const ThemeRiseFallBar = memo(function ThemeRiseFallBar({
+  themes,
+  className,
+  onThemeClick,
+}: ThemeRiseFallBarProps) {
   const { colors } = useChartTheme()
 
-  // 取 Top 10 并按涨跌幅排序
-  const top10 = useMemo(
-    () => [...themes].sort((a, b) => b.rise_fall_pct - a.rise_fall_pct).slice(0, 10),
-    [themes],
+  // 取 Top 20 并按涨跌幅排序
+  const top20 = useMemo(
+    () => [...themes].sort((a, b) => b.rise_fall_pct - a.rise_fall_pct).slice(0, 20),
+    [themes]
   )
-
-  if (top10.length === 0) {
-    return <EmptyChart className={cn('h-[300px]', className)} />
-  }
 
   const option = useMemo(() => {
     // 反转以便从上到下显示（最高在上）
-    const reversed = top10.slice().reverse()
+    const reversed = top20.slice().reverse()
     return {
       backgroundColor: colors.backgroundColor,
       tooltip: {
@@ -88,6 +86,7 @@ export const ThemeRiseFallBar = memo(function ThemeRiseFallBar({ themes, classNa
       yAxis: {
         type: 'category' as const,
         data: reversed.map((t) => t.name),
+        triggerEvent: Boolean(onThemeClick),
         axisLabel: {
           color: colors.textColor,
           width: 100,
@@ -106,16 +105,19 @@ export const ThemeRiseFallBar = memo(function ThemeRiseFallBar({ themes, classNa
             const pct = Number(t.rise_fall_pct)
             return {
               value: pct,
+              themeId: t.id,
               itemStyle: {
-                color: pct > 0
-                  ? RISE_FALL_COLORS.rise
-                  : pct < 0
-                    ? RISE_FALL_COLORS.fall
-                    : RISE_FALL_COLORS.neutral,
+                color:
+                  pct > 0
+                    ? RISE_FALL_COLORS.rise
+                    : pct < 0
+                      ? RISE_FALL_COLORS.fall
+                      : RISE_FALL_COLORS.neutral,
                 borderRadius: [0, 4, 4, 0],
               },
             }
           }),
+          cursor: onThemeClick ? 'pointer' : 'default',
           barWidth: '60%',
           label: {
             show: true,
@@ -131,14 +133,37 @@ export const ThemeRiseFallBar = memo(function ThemeRiseFallBar({ themes, classNa
         },
       ],
     }
-  }, [top10, colors])
+  }, [top20, colors, onThemeClick])
+
+  const onEvents = useMemo(() => {
+    if (!onThemeClick) return undefined
+
+    return {
+      click: (params: { componentType?: string; data?: { themeId?: number }; value?: string }) => {
+        if (params.componentType === 'series' && params.data?.themeId !== undefined) {
+          onThemeClick(params.data.themeId)
+          return
+        }
+
+        if (params.componentType === 'yAxis' && params.value !== undefined) {
+          const theme = top20.find((item) => item.name === params.value)
+          if (theme) onThemeClick(theme.id)
+        }
+      },
+    }
+  }, [onThemeClick, top20])
+
+  if (top20.length === 0) {
+    return <EmptyChart className={cn('h-[380px]', className)} />
+  }
 
   return (
     <div className={cn('w-full', className)}>
       <ReactEChartsCore
         echarts={echarts}
         option={option}
-        style={{ height: '300px', width: '100%' }}
+        onEvents={onEvents}
+        style={{ height: '380px', width: '100%' }}
         opts={{ renderer: 'canvas' }}
         notMerge={true}
       />

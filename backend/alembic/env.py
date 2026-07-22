@@ -12,6 +12,7 @@ from app.models.base import Base
 
 # 导入所有模型以确保它们被注册
 from app.models.scraper_run import ScraperRun  # noqa: F401
+from app.models.news_article import NewsArticle  # noqa: F401
 
 config = context.config
 settings = get_settings()

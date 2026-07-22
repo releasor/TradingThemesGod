@@ -73,7 +73,7 @@ export const StockPopover = memo(function StockPopover({ stock, children }: Stoc
                   <span className="font-semibold text-foreground">{data.name}</span>
                 </div>
                 {data.exchange && (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                  <span className="rounded-xl bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {data.exchange}
                   </span>
                 )}
@@ -128,7 +128,7 @@ export const StockPopover = memo(function StockPopover({ stock, children }: Stoc
                   {data.recent_events.map((event) => (
                     <div
                       key={event.id}
-                      className="rounded-md border border-border p-2 text-xs"
+                      className="rounded-xl border border-border p-2 text-xs"
                     >
                       <div className="font-medium text-foreground line-clamp-2">
                         {event.title}

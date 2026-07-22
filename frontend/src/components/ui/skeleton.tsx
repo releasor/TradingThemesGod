@@ -24,7 +24,7 @@ function Skeleton({
   return (
     <div
       className={cn(
-        'rounded-md bg-muted',
+        'rounded-xl bg-muted',
         variantClasses[variant],
         className
       )}

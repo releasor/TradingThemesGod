@@ -88,6 +88,18 @@ class TestScraperAPI:
         assert response.status_code == 404
         assert "未知的数据源" in response.json()["detail"]
 
+    @patch("app.api.scraper.scraper_scheduler")
+    def test_run_scraper_conflict_when_already_running(self, mock_scheduler, client):
+        """同数据源运行中再次触发应返回 409。"""
+        mock_scheduler.run = AsyncMock(
+            side_effect=ValueError("爬虫 eastmoney 正在运行中，请稍后再试")
+        )
+
+        response = client.post("/api/v1/scraper/run/eastmoney")
+
+        assert response.status_code == 409
+        assert "正在运行中" in response.json()["detail"]
+
     @patch("app.api.scraper.ScraperRunRepository")
     def test_get_scraper_status(self, mock_repo_class, client, sample_scraper_run):
         """测试获取爬虫运行状态"""

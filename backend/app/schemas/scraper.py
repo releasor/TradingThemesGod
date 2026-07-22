@@ -5,7 +5,7 @@
 
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 class ScraperRunRequest(BaseModel):
@@ -30,7 +30,10 @@ class ScraperRunRequest(BaseModel):
 class ScraperRunResponse(BaseModel):
     """爬虫运行响应"""
 
-    run_id: int = Field(description="运行记录 ID")
+    run_id: int = Field(
+        validation_alias=AliasChoices("run_id", "id"),
+        description="运行记录 ID",
+    )
     source: str = Field(description="数据源名称")
     status: str = Field(description="运行状态: running/completed/failed")
     started_at: datetime = Field(description="开始时间")

@@ -44,7 +44,9 @@ async def run_scraper(
     try:
         run_id = await scraper_scheduler.run(source, params=body.params)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        detail = str(e)
+        status_code = 409 if "正在运行中" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail)
 
     # 查询刚创建的记录
     repo = ScraperRunRepository(db)

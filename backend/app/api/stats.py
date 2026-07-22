@@ -3,8 +3,6 @@
 提供系统数据统计信息。
 """
 
-import asyncio
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
@@ -89,17 +87,13 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     返回题材数量、股票数量、事件数量等统计信息。
     使用 asyncio.gather 并行执行所有统计查询，减少响应延迟。
     """
-    # 并行执行所有查询，减少总响应时间
-    theme_count, stock_count, event_count, chain_count, last_scraper, categories = (
-        await asyncio.gather(
-            _query_theme_count(db),
-            _query_stock_count(db),
-            _query_event_count(db),
-            _query_chain_count(db),
-            _query_last_scraper(db),
-            _query_category_stats(db),
-        )
-    )
+    # AsyncSession does not support concurrent operations on one connection.
+    theme_count = await _query_theme_count(db)
+    stock_count = await _query_stock_count(db)
+    event_count = await _query_event_count(db)
+    chain_count = await _query_chain_count(db)
+    last_scraper = await _query_last_scraper(db)
+    categories = await _query_category_stats(db)
 
     return {
         "themes": {

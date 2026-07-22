@@ -7,8 +7,8 @@ import type { IndustryChainBrief } from '@/types/theme'
 
 // Mock echarts-for-react
 vi.mock('echarts-for-react/lib/core', () => ({
-  default: vi.fn(({ style }) => (
-    <div data-testid="echarts-mock" style={style} />
+  default: vi.fn(({ style, option }) => (
+    <div data-testid="echarts-mock" data-option={JSON.stringify(option)} style={style} />
   )),
 }))
 
@@ -50,6 +50,18 @@ describe('IndustryChainPie', () => {
   it('renders chart when chains provided', () => {
     render(<IndustryChainPie chains={mockChains} />)
     expect(screen.getByTestId('echarts-mock')).toBeInTheDocument()
+  })
+
+  it('uses constituent stock counts instead of chain record counts', () => {
+    render(
+      <IndustryChainPie
+        chains={mockChains}
+        stockCounts={{ upstream: 8, midstream: 5, downstream: 3 }}
+      />
+    )
+
+    const option = JSON.parse(screen.getByTestId('echarts-mock').dataset.option ?? '{}')
+    expect(option.series[0].data.map((item: { value: number }) => item.value)).toEqual([8, 5, 3])
   })
 
   it('renders empty state when no chains', () => {

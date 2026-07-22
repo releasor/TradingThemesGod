@@ -4,16 +4,14 @@
 """
 
 import asyncio
-from datetime import datetime, timezone
+from contextlib import suppress
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.database import AsyncSessionLocal
-from app.repositories.scraper_run import ScraperRunRepository
-from app.scrapers.registry import ScraperRegistry, scraper_registry
-from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.core.config import get_settings
+from app.core.database import AsyncSessionLocal
 from app.core.logging import get_logger
+from app.repositories.scraper_run import ScraperRunRepository
+from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.registry import ScraperRegistry, scraper_registry
 
 logger = get_logger(__name__)
 
@@ -26,6 +24,58 @@ class ScraperScheduler:
 
     def __init__(self, registry: ScraperRegistry | None = None):
         self.registry = registry or scraper_registry
+        self._execution_tasks: dict[str, asyncio.Task[None]] = {}
+        self._periodic_tasks: dict[str, asyncio.Task[None]] = {}
+
+    def is_running(self, source: str) -> bool:
+        """判断指定数据源是否正在采集"""
+        task = self._execution_tasks.get(source)
+        return task is not None and not task.done()
+
+    def start_periodic(
+        self,
+        source: str,
+        interval_seconds: int,
+    ) -> asyncio.Task[None]:
+        """启动指定数据源的周期采集任务"""
+        if self.registry.get(source) is None:
+            raise ValueError(f"未注册的数据源: {source}")
+        if interval_seconds <= 0:
+            raise ValueError("采集间隔必须大于 0 秒")
+
+        existing_task = self._periodic_tasks.get(source)
+        if existing_task is not None and not existing_task.done():
+            return existing_task
+
+        task = asyncio.create_task(
+            self._periodic_loop(source, interval_seconds),
+            name=f"scraper-periodic-{source}",
+        )
+        self._periodic_tasks[source] = task
+        return task
+
+    async def stop_periodic(self, source: str) -> None:
+        """停止指定数据源的周期采集任务"""
+        task = self._periodic_tasks.pop(source, None)
+        if task is None:
+            return
+
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+    async def _periodic_loop(self, source: str, interval_seconds: int) -> None:
+        """立即执行采集，并按固定间隔持续触发"""
+        while True:
+            if self.is_running(source):
+                logger.warning(f"爬虫 {source} 仍在运行，跳过本次周期采集")
+            else:
+                try:
+                    await self.run(source)
+                except Exception as exc:
+                    logger.error(f"启动爬虫 {source} 周期采集失败: {exc}")
+
+            await asyncio.sleep(interval_seconds)
 
     async def run(self, source: str, params: dict | None = None) -> int:
         """触发爬虫运行
@@ -46,6 +96,9 @@ class ScraperScheduler:
         if scraper_cls is None:
             raise ValueError(f"未注册的数据源: {source}")
 
+        if self.is_running(source):
+            raise ValueError(f"爬虫 {source} 正在运行中，请稍后再试")
+
         # 创建运行记录
         async with AsyncSessionLocal() as session:
             repo = ScraperRunRepository(session)
@@ -54,14 +107,35 @@ class ScraperScheduler:
             run_id = run.id
 
         # 后台执行爬虫，添加异常回调避免静默吞没错误
-        task = asyncio.create_task(self._execute_scraper(source, run_id, params))
+        task = asyncio.create_task(
+            self._execute_scraper(source, run_id, dict(params or {})),
+            name=f"scraper-execution-{source}-{run_id}",
+        )
+        self._execution_tasks[source] = task
         task.add_done_callback(
-            lambda t: t.exception() and logger.error(
-                f"爬虫 {source} 后台任务异常: {t.exception()}"
+            lambda completed_task: self._handle_execution_done(
+                source,
+                completed_task,
             )
         )
 
         return run_id
+
+    def _handle_execution_done(
+        self,
+        source: str,
+        task: asyncio.Task[None],
+    ) -> None:
+        """清理已结束任务并记录未处理异常"""
+        if self._execution_tasks.get(source) is task:
+            self._execution_tasks.pop(source, None)
+
+        if task.cancelled():
+            return
+
+        exception = task.exception()
+        if exception is not None:
+            logger.error(f"爬虫 {source} 后台任务异常: {exception}")
 
     async def _execute_scraper(
         self, source: str, run_id: int, params: dict | None = None
@@ -92,8 +166,9 @@ class ScraperScheduler:
 
         try:
             # URL 从 params 中提取，不强制要求（部分爬虫如 eastmoney 内置 URL）
-            url = (params or {}).pop("url", "")
-            data, items_scraped = await scraper.run(url, params)
+            run_params = dict(params or {})
+            url = run_params.pop("url", "")
+            data, items_scraped = await scraper.run(url, run_params)
             status = "completed"
             logger.info(f"爬虫 {source} 完成，共 {items_scraped} 条数据")
 

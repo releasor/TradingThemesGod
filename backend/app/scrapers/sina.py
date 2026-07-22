@@ -4,17 +4,17 @@
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select, tuple_
 
 from app.core.database import AsyncSessionLocal
+from app.core.logging import get_logger
 from app.models.event import Event
 from app.models.stock import Stock
-from app.scrapers.base import BaseScraper
-from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.base import BaseScraper
 
 logger = get_logger(__name__)
 
@@ -46,6 +46,18 @@ class SinaFinanceScraper(BaseScraper):
             middleware: 反爬虫中间件实例
         """
         super().__init__(middleware)
+
+    @staticmethod
+    def _normalize_stock_symbol(code: str) -> str:
+        """将数据库股票代码转换为新浪接口使用的市场代码。"""
+        normalized = str(code).strip().lower()
+        if normalized.startswith(("sh", "sz", "bj")):
+            return normalized
+        if normalized.startswith(("4", "8", "9")):
+            return f"bj{normalized}"
+        if normalized.startswith(("5", "6")):
+            return f"sh{normalized}"
+        return f"sz{normalized}"
 
     def parse(self, html: str) -> list[dict[str, Any]]:
         """解析事件页面内容
@@ -182,7 +194,7 @@ class SinaFinanceScraper(BaseScraper):
             # 尝试多种日期格式
             for fmt in ["%Y-%m-%d", "%Y/%m/%d", "%Y年%m月%d日"]:
                 try:
-                    return datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
+                    return datetime.strptime(date_str, fmt).replace(tzinfo=UTC)
                 except ValueError:
                     continue
 
@@ -207,18 +219,18 @@ class SinaFinanceScraper(BaseScraper):
         async with AsyncSessionLocal() as session:
             # 批量查询现有事件（避免 N+1 查询）
             keys = [
-                (d["title"], d.get("published_at"))
+                (d["title"], d.get("published_at"), d.get("stock_id"))
                 for d in data
                 if d.get("title")
             ]
             if keys:
                 existing_result = await session.execute(
                     select(Event).where(
-                        tuple_(Event.title, Event.published_at).in_(keys)
+                        tuple_(Event.title, Event.published_at, Event.stock_id).in_(keys)
                     )
                 )
                 existing_map = {
-                    (e.title, e.published_at): e
+                    (e.title, e.published_at, e.stock_id): e
                     for e in existing_result.scalars().all()
                 }
             else:
@@ -226,7 +238,11 @@ class SinaFinanceScraper(BaseScraper):
 
             for event_data in data:
                 try:
-                    key = (event_data["title"], event_data.get("published_at"))
+                    key = (
+                        event_data["title"],
+                        event_data.get("published_at"),
+                        event_data.get("stock_id"),
+                    )
                     event = existing_map.get(key)
 
                     if event:
@@ -286,7 +302,9 @@ class SinaFinanceScraper(BaseScraper):
             return [], 0
 
         # 构建请求 URL
-        request_url = SINA_NEWS_API.format(code=stock_code)
+        request_url = SINA_NEWS_API.format(
+            code=self._normalize_stock_symbol(stock_code)
+        )
 
         try:
             # Step 1: 获取页面内容

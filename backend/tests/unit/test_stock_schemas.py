@@ -3,16 +3,17 @@
 验证 Pydantic 模型的正确性。
 """
 
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.schemas.stock import (
-    StockBrief,
-    StockDetailResponse,
-    StockListResponse,
     EventBrief,
     EventListItem,
     EventListResponse,
+    StockBrief,
+    StockDetailResponse,
+    StockListResponse,
 )
 
 
@@ -47,6 +48,24 @@ class TestStockBrief:
         assert brief.current_price is None
         assert brief.rise_fall_pct is None
         assert brief.exchange is None
+
+    def test_decimal_fields_serialize_as_json_numbers(self):
+        """股票数值字段在 JSON 响应中序列化为数字。"""
+        brief = StockBrief(
+            id=1,
+            code="600000",
+            name="浦发银行",
+            market_cap=Decimal("1000000.00"),
+            current_price=Decimal("10.50"),
+            rise_fall_pct=Decimal("1.25"),
+        )
+
+        data = json.loads(brief.model_dump_json())
+
+        assert data["market_cap"] == 1000000.0
+        assert data["current_price"] == 10.5
+        assert data["rise_fall_pct"] == 1.25
+        assert isinstance(data["rise_fall_pct"], float)
 
 
 class TestEventBrief:
@@ -148,6 +167,28 @@ class TestStockDetailResponse:
         )
         assert len(response.recent_events) == 1
         assert response.recent_events[0].title == "测试事件"
+
+    def test_decimal_fields_serialize_as_json_numbers(self):
+        """股票详情数值字段在 JSON 响应中序列化为数字。"""
+        now = datetime.now(timezone.utc)
+        response = StockDetailResponse(
+            id=1,
+            code="600000",
+            name="浦发银行",
+            market_cap=Decimal("1000000.00"),
+            current_price=Decimal("10.50"),
+            rise_fall_pct=Decimal("1.25"),
+            created_at=now,
+            updated_at=now,
+            recent_events=[],
+        )
+
+        data = json.loads(response.model_dump_json())
+
+        assert data["market_cap"] == 1000000.0
+        assert data["current_price"] == 10.5
+        assert data["rise_fall_pct"] == 1.25
+        assert isinstance(data["current_price"], float)
 
 
 class TestEventListResponse:

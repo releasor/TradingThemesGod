@@ -78,7 +78,7 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
           <div className="mx-auto max-w-md text-center">
             <div className="mb-4 text-6xl">😵</div>
             <h1 className="mb-2 text-2xl font-bold text-foreground">
@@ -88,7 +88,7 @@ export class ErrorBoundary extends Component<Props, State> {
               抱歉，页面渲染时发生了错误。请尝试刷新页面。
             </p>
             {this.state.error && (
-              <details className="mb-6 rounded-lg border bg-muted p-4 text-left text-sm">
+              <details className="mb-6 rounded-xl border bg-muted p-4 text-left text-sm">
                 <summary className="cursor-pointer font-medium">
                   错误详情
                 </summary>
@@ -100,13 +100,13 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex justify-center gap-4">
               <button
                 onClick={this.handleReset}
-                className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                className="rounded-xl bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
               >
                 重试
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="rounded-md border border-input bg-background px-4 py-2 hover:bg-accent"
+                className="rounded-xl border border-input bg-background px-4 py-2 hover:bg-accent"
               >
                 刷新页面
               </button>

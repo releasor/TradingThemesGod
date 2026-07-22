@@ -164,9 +164,8 @@ class AntiScrapingMiddleware:
         last_exception: Exception | None = None
 
         for attempt in range(self.max_retries + 1):
-            # 等待请求间隔（首次请求不等待）
-            if attempt > 0:
-                await self._wait_for_interval()
+            # 所有外部请求都经过统一节流；首次请求若没有前序请求不会实际等待。
+            await self._wait_for_interval()
 
             try:
                 response = await client.request(method, url, **kwargs)
@@ -197,7 +196,7 @@ class AntiScrapingMiddleware:
                 else:
                     raise
 
-            except httpx.ConnectError as e:
+            except (httpx.ConnectError, httpx.RemoteProtocolError) as e:
                 last_exception = e
                 if attempt < self.max_retries:
                     backoff = (2**attempt) + random.uniform(0, 1)

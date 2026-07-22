@@ -9,11 +9,11 @@ from typing import Any
 from sqlalchemy import select, tuple_
 
 from app.core.database import AsyncSessionLocal
+from app.core.logging import get_logger
 from app.models.industry_chain import IndustryChain
 from app.models.theme import Theme
-from app.scrapers.base import BaseScraper
-from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.base import BaseScraper
 
 logger = get_logger(__name__)
 
@@ -234,24 +234,33 @@ class TongHuaShunScraper(BaseScraper):
 
         Args:
             url: 未使用（使用默认 URL）
-            params: 额外参数，可包含 theme_code
+            params: 额外参数，必须包含本地 theme_code 和同花顺 source_code
 
         Returns:
             (产业链数据列表, 保存的记录数) 元组
         """
         logger.info(f"[{self.source_name}] 开始爬取产业链数据")
 
-        theme_code = params.get("theme_code", "") if params else ""
+        theme_code = str(params.get("theme_code", "")).strip() if params else ""
         if not theme_code:
-            logger.error(f"[{self.source_name}] 未提供题材代码")
-            return [], 0
+            raise ValueError("未提供本地题材代码 theme_code")
+
+        source_code = str(params.get("source_code", "")).strip() if params else ""
+        if not source_code:
+            raise ValueError("未提供同花顺代码 source_code")
 
         # 构建请求 URL
-        request_url = f"{THS_CHAIN_BASE_URL}{theme_code}"
+        request_url = f"{THS_CHAIN_BASE_URL}{source_code}"
 
         try:
             # Step 1: 获取页面内容
-            html = await self.fetch(request_url)
+            response = await self.middleware.get(request_url)
+            response.raise_for_status()
+            expected_path = f"/thshy/detail/code/{source_code}"
+            if response.url.path.rstrip("/") != expected_path:
+                raise ValueError("同花顺代码无效或页面已重定向")
+
+            html = response.text
             logger.info(f"[{self.source_name}] 获取到 {len(html)} 字节")
 
             # Step 2: 解析产业链数据

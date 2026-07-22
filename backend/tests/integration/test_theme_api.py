@@ -3,22 +3,22 @@
 测试题材 API 端点的完整请求流程。
 """
 
-import pytest
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.theme import Theme
-from app.models.industry_chain import IndustryChain
 from app.schemas.theme import (
+    IndustryChainBrief,
     ThemeBrief,
+    ThemeCategoriesResponse,
     ThemeDetailResponse,
     ThemeListResponse,
     ThemeRankingResponse,
-    ThemeCategoriesResponse,
-    IndustryChainBrief,
 )
 
 
@@ -71,8 +71,8 @@ def sample_theme_detail():
         category="科技",
         tags=["AI", "机器学习"],
         source="东方财富",
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 15, tzinfo=UTC),
         industry_chains={
             "upstream": [
                 IndustryChainBrief(
@@ -86,6 +86,11 @@ def sample_theme_detail():
             ],
             "midstream": [],
             "downstream": [],
+        },
+        chain_stock_counts={
+            "upstream": 0,
+            "midstream": 0,
+            "downstream": 0,
         },
     )
 
@@ -108,8 +113,52 @@ def sample_categories_response():
 class TestThemeAPI:
     """Theme API 测试"""
 
+    @patch("app.api.theme.ThemeInsightRefreshService")
+    def test_refresh_theme_insights(self, mock_service_class, client):
+        service = mock_service_class.return_value
+        service.refresh = AsyncMock(
+            return_value={
+                "theme_id": 1,
+                "theme_name": "机器人",
+                "profile_updated": True,
+                "candidate_events": 2,
+                "inserted_events": 1,
+                "updated_events": 0,
+                "ignored_events": 1,
+                "successful_sources": ["示例网"],
+                "failed_sources": [],
+                "degraded": False,
+                "refreshed_at": datetime(2026, 7, 20, tzinfo=UTC),
+                "message": "题材资料已更新",
+            }
+        )
+        service.research.middleware.close = AsyncMock()
+
+        response = client.post("/api/v1/themes/1/insights/refresh")
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "题材资料已更新"
+        service.research.middleware.close.assert_awaited_once()
+
+    @patch("app.api.theme.ThemeInsightRefreshService")
+    def test_refresh_theme_insights_closes_client_after_failure(
+        self, mock_service_class, client
+    ):
+        service = mock_service_class.return_value
+        service.refresh = AsyncMock(
+            side_effect=HTTPException(status_code=502, detail="公开来源不可用")
+        )
+        service.research.middleware.close = AsyncMock()
+
+        response = client.post("/api/v1/themes/1/insights/refresh")
+
+        assert response.status_code == 502
+        service.research.middleware.close.assert_awaited_once()
+
     @patch("app.api.theme.ThemeService")
-    def test_list_themes_basic(self, mock_service_class, client, sample_theme_list_response):
+    def test_list_themes_basic(
+        self, mock_service_class, client, sample_theme_list_response
+    ):
         """测试基本列表查询"""
         mock_service = AsyncMock()
         mock_service.list_themes.return_value = sample_theme_list_response
@@ -124,7 +173,9 @@ class TestThemeAPI:
         assert data["items"][0]["name"] == "人工智能"
 
     @patch("app.api.theme.ThemeService")
-    def test_list_themes_with_pagination(self, mock_service_class, client, sample_theme_list_response):
+    def test_list_themes_with_pagination(
+        self, mock_service_class, client, sample_theme_list_response
+    ):
         """测试分页参数"""
         mock_service = AsyncMock()
         mock_service.list_themes.return_value = sample_theme_list_response
@@ -143,7 +194,9 @@ class TestThemeAPI:
         )
 
     @patch("app.api.theme.ThemeService")
-    def test_list_themes_with_category(self, mock_service_class, client, sample_theme_list_response):
+    def test_list_themes_with_category(
+        self, mock_service_class, client, sample_theme_list_response
+    ):
         """测试按分类筛选"""
         mock_service = AsyncMock()
         mock_service.list_themes.return_value = sample_theme_list_response
@@ -162,7 +215,9 @@ class TestThemeAPI:
         )
 
     @patch("app.api.theme.ThemeService")
-    def test_list_themes_with_sorting(self, mock_service_class, client, sample_theme_list_response):
+    def test_list_themes_with_sorting(
+        self, mock_service_class, client, sample_theme_list_response
+    ):
         """测试排序参数"""
         mock_service = AsyncMock()
         mock_service.list_themes.return_value = sample_theme_list_response
@@ -181,7 +236,9 @@ class TestThemeAPI:
         )
 
     @patch("app.api.theme.ThemeService")
-    def test_get_theme_ranking(self, mock_service_class, client, sample_ranking_response):
+    def test_get_theme_ranking(
+        self, mock_service_class, client, sample_ranking_response
+    ):
         """测试获取排名"""
         mock_service = AsyncMock()
         mock_service.get_ranking.return_value = sample_ranking_response
@@ -195,7 +252,37 @@ class TestThemeAPI:
         assert data["limit"] == 10
 
     @patch("app.api.theme.ThemeService")
-    def test_get_theme_categories(self, mock_service_class, client, sample_categories_response):
+    def test_get_market_signals(
+        self, mock_service_class, client, sample_ranking_response
+    ):
+        mock_service = AsyncMock()
+        mock_service.get_market_signals.return_value = sample_ranking_response
+        mock_service_class.return_value = mock_service
+
+        response = client.get("/api/v1/themes/market-signals")
+
+        assert response.status_code == 200
+        assert response.json()["items"][0]["id"] == 1
+        mock_service.get_market_signals.assert_awaited_once_with()
+
+    @patch("app.api.theme.ThemeService")
+    def test_get_indicator_signals(
+        self, mock_service_class, client, sample_ranking_response
+    ):
+        mock_service = AsyncMock()
+        mock_service.get_indicator_signals.return_value = sample_ranking_response
+        mock_service_class.return_value = mock_service
+
+        response = client.get("/api/v1/themes/indicator-signals")
+
+        assert response.status_code == 200
+        assert response.json()["items"][0]["id"] == 1
+        mock_service.get_indicator_signals.assert_awaited_once_with()
+
+    @patch("app.api.theme.ThemeService")
+    def test_get_theme_categories(
+        self, mock_service_class, client, sample_categories_response
+    ):
         """测试获取分类列表"""
         mock_service = AsyncMock()
         mock_service.get_categories.return_value = sample_categories_response
@@ -209,7 +296,9 @@ class TestThemeAPI:
         assert "科技" in data["categories"]
 
     @patch("app.api.theme.ThemeService")
-    def test_search_themes(self, mock_service_class, client, sample_theme_list_response):
+    def test_search_themes(
+        self, mock_service_class, client, sample_theme_list_response
+    ):
         """测试搜索题材"""
         mock_service = AsyncMock()
         mock_service.search_themes.return_value = sample_theme_list_response

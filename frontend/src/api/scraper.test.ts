@@ -1,0 +1,103 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mockGet = vi.fn()
+const mockPost = vi.fn()
+
+vi.mock('@/api/client', () => ({
+  apiClient: {
+    get: mockGet,
+    post: mockPost,
+  },
+}))
+
+const { fetchLatestSuccessfulRun, runScraperAndWait } = await import('./scraper')
+
+describe('scraper API', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns the latest successful run for a source', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        runs: [
+          {
+            run_id: 2,
+            source: 'eastmoney',
+            status: 'failed',
+            started_at: '2026-07-16T01:00:00Z',
+            finished_at: '2026-07-16T01:01:00Z',
+            items_scraped: 0,
+            error_message: '请求失败',
+          },
+          {
+            run_id: 1,
+            source: 'eastmoney',
+            status: 'completed',
+            started_at: '2026-07-15T01:00:00Z',
+            finished_at: '2026-07-15T01:02:00Z',
+            items_scraped: 20,
+            error_message: null,
+          },
+        ],
+        count: 2,
+      },
+    })
+
+    const result = await fetchLatestSuccessfulRun('eastmoney')
+
+    expect(mockGet).toHaveBeenCalledWith('/scraper/runs', {
+      params: { source: 'eastmoney', limit: 20 },
+    })
+    expect(result?.run_id).toBe(1)
+  })
+
+  it('starts a scraper and waits until it completes', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        run_id: 3,
+        source: 'eastmoney',
+        status: 'running',
+        started_at: '2026-07-16T02:00:00Z',
+        finished_at: null,
+        items_scraped: 0,
+        error_message: null,
+      },
+    })
+    mockGet
+      .mockResolvedValueOnce({ data: { run_id: 3, status: 'running' } })
+      .mockResolvedValueOnce({
+        data: {
+          run_id: 3,
+          source: 'eastmoney',
+          status: 'completed',
+          started_at: '2026-07-16T02:00:00Z',
+          finished_at: '2026-07-16T02:03:00Z',
+          items_scraped: 120,
+          error_message: null,
+        },
+      })
+
+    const result = await runScraperAndWait('eastmoney', { pollInterval: 0 })
+
+    expect(mockPost).toHaveBeenCalledWith('/scraper/run/eastmoney', { params: {} })
+    expect(mockGet).toHaveBeenCalledTimes(2)
+    expect(result.status).toBe('completed')
+  })
+
+  it('returns the failed scraper result', async () => {
+    mockPost.mockResolvedValue({ data: { run_id: 4, status: 'running' } })
+    mockGet.mockResolvedValue({
+      data: {
+        run_id: 4,
+        status: 'failed',
+        error_message: '数据源不可用',
+      },
+    })
+
+    const result = await runScraperAndWait('eastmoney', { pollInterval: 0 })
+
+    expect(result.status).toBe('failed')
+    expect(result.error_message).toBe('数据源不可用')
+  })
+})

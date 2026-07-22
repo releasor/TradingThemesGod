@@ -28,7 +28,7 @@ export const StockList = memo(function StockList({ stocks }: StockListProps) {
     <div className="space-y-1">
       {stocks.map((stock) => (
         <StockPopover key={stock.code} stock={stock}>
-          <button className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent">
+          <button className="flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-sm transition-colors hover:bg-accent">
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-muted-foreground">
                 {stock.code}

@@ -58,6 +58,120 @@ export interface IndustryChainBrief {
   sort_order: number
 }
 
+export interface SourceReference {
+  title: string
+  url: string
+  publisher: string | null
+  published_at: string | null
+}
+
+export interface ConceptStockLink {
+  code: string
+  name: string
+  relation_type: string
+  rationale: string
+  relevance_score: number
+  is_core: boolean
+  sources: SourceReference[]
+}
+
+export interface ConceptNode {
+  id: number
+  name: string
+  node_type: string
+  description: string | null
+  chain_level: 'upstream' | 'midstream' | 'downstream' | null
+  market_logic: string | null
+  catalysts: string[]
+  risks: string[]
+  sources: SourceReference[]
+  confidence: number
+  depth: number
+  stocks: ConceptStockLink[]
+  children: ConceptNode[]
+}
+
+export interface ConceptGraph {
+  roots: ConceptNode[]
+  node_count: number
+  stock_count: number
+  max_depth: number
+  updated_at: string | null
+}
+
+export interface ConceptGraphRefreshResponse {
+  theme_id: number
+  theme_name: string
+  source_count: number
+  added_nodes: number
+  updated_nodes: number
+  stock_links: number
+  message: string
+}
+
+export interface ConceptGraphBatchItem {
+  theme_id: number
+  success: boolean
+  result: ConceptGraphRefreshResponse | null
+  error: string | null
+}
+
+export interface ThemeSourceReference {
+  title: string
+  url: string
+  publisher: string | null
+  published_at: string | null
+}
+
+export interface ThemeProfile {
+  definition: string
+  core_logic: string
+  applications: string[]
+  catalysts: string[]
+  risks: string[]
+  sources: ThemeSourceReference[]
+  generated_at: string
+}
+
+export interface ThemeDriverEvent {
+  id: number
+  title: string
+  summary: string
+  source: string
+  url: string
+  published_at: string
+  relevance_score: number
+  crawled_at: string
+}
+
+export interface ThemeMarketSnapshot {
+  trade_date: string
+  up_count: number
+  down_count: number
+  flat_count: number
+  suspended_count: number
+  limit_up_count: number | null
+  limit_down_count: number | null
+  calculated_at: string
+  up_down_ratio: number | null
+  up_down_display: string
+}
+
+export interface ThemeInsightRefreshResponse {
+  theme_id: number
+  theme_name: string
+  profile_updated: boolean
+  candidate_events: number
+  inserted_events: number
+  updated_events: number
+  ignored_events: number
+  successful_sources: string[]
+  failed_sources: string[]
+  degraded: boolean
+  refreshed_at: string
+  message: string
+}
+
 /** 题材详情响应 */
 export interface ThemeDetailResponse {
   id: number
@@ -77,4 +191,13 @@ export interface ThemeDetailResponse {
     midstream: IndustryChainBrief[]
     downstream: IndustryChainBrief[]
   }
+  chain_stock_counts: {
+    upstream: number
+    midstream: number
+    downstream: number
+  }
+  concept_graph: ConceptGraph
+  profile: ThemeProfile | null
+  recent_driver_events: ThemeDriverEvent[]
+  market_snapshot: ThemeMarketSnapshot | null
 }

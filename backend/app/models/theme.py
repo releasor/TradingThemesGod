@@ -22,7 +22,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.concept_node import ConceptNode
     from app.models.industry_chain import IndustryChain
+    from app.models.theme_driver_event import ThemeDriverEvent
+    from app.models.theme_market_snapshot import ThemeMarketSnapshot
+    from app.models.theme_profile import ThemeProfile
     from app.models.theme_stock import ThemeStock
 
 
@@ -54,16 +58,30 @@ class Theme(Base, TimestampMixin):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="软删除时间"
     )
+    insights_last_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="题材洞察最近尝试刷新时间"
+    )
 
     # 关系定义
     stocks: Mapped[list["ThemeStock"]] = relationship(back_populates="theme", cascade="all, delete-orphan")
     industry_chains: Mapped[list["IndustryChain"]] = relationship(back_populates="theme", cascade="all, delete-orphan")
+    concept_nodes: Mapped[list["ConceptNode"]] = relationship(back_populates="theme", cascade="all, delete-orphan")
+    profile: Mapped[Optional["ThemeProfile"]] = relationship(
+        back_populates="theme", cascade="all, delete-orphan", uselist=False
+    )
+    driver_events: Mapped[list["ThemeDriverEvent"]] = relationship(
+        back_populates="theme", cascade="all, delete-orphan"
+    )
+    market_snapshots: Mapped[list["ThemeMarketSnapshot"]] = relationship(
+        back_populates="theme", cascade="all, delete-orphan"
+    )
 
     # 表级配置：索引
     __table_args__ = (
         Index("idx_theme_name", "name"),
         Index("idx_theme_heat_index", "heat_index"),
         Index("idx_theme_category", "category"),
+        Index("idx_themes_insights_last_attempted_at", "insights_last_attempted_at"),
         {"comment": "题材表"},
     )
 

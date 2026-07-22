@@ -7,6 +7,7 @@ import { DevPerformancePanel } from '@/components/DevPerformancePanel'
 import { ToastContainer, useToast, type Toast, type ToastType } from '@/components/Toast'
 import { onApiError } from '@/api/client'
 import { Skeleton } from '@/components/ui/skeleton'
+import { GlobalSideRaysBackground } from '@/components/GlobalSideRaysBackground'
 
 // 路由级懒加载 - 实现代码分割
 const ThemeDashboard = lazy(() =>
@@ -23,6 +24,9 @@ const ThemeDetail = lazy(() =>
   import('@/features/themes/ThemeDetail').then((m) => ({
     default: m.ThemeDetail,
   }))
+)
+const ModelSettings = lazy(() =>
+  import('@/features/settings/ModelSettings').then((m) => ({ default: m.ModelSettings }))
 )
 
 // Toast 上下文
@@ -49,8 +53,8 @@ export function useToastContext() {
 /** 页面加载占位符 */
 function PageSkeleton() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
+    <div className="relative z-10 min-h-screen">
+      <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Skeleton className="h-8 w-48" />
         </div>
@@ -92,12 +96,42 @@ function App() {
       <ToastContext.Provider value={toast}>
         <Router>
           <ScrollToTop />
-          <div className="min-h-screen bg-background">
+          <GlobalSideRaysBackground />
+          <div className="relative z-10 min-h-screen">
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
-                <Route path="/" element={<ErrorBoundary><ThemeDashboard /></ErrorBoundary>} />
-                <Route path="/themes" element={<ErrorBoundary><ThemeLibrary /></ErrorBoundary>} />
-                <Route path="/themes/:id" element={<ErrorBoundary><ThemeDetail /></ErrorBoundary>} />
+                <Route
+                  path="/"
+                  element={
+                    <ErrorBoundary>
+                      <ThemeDashboard />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/themes"
+                  element={
+                    <ErrorBoundary>
+                      <ThemeLibrary />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/themes/:id"
+                  element={
+                    <ErrorBoundary>
+                      <ThemeDetail />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/settings/models"
+                  element={
+                    <ErrorBoundary>
+                      <ModelSettings />
+                    </ErrorBoundary>
+                  }
+                />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

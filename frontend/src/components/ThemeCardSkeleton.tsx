@@ -8,9 +8,9 @@ import { memo } from 'react'
 
 export const ThemeCardSkeleton = memo(function ThemeCardSkeleton() {
   return (
-    <div className="w-full rounded-lg border border-border bg-card p-4 animate-pulse">
+    <div className="w-full rounded-xl border border-border bg-card p-4 animate-pulse">
       {/* 标题骨架 */}
-      <div className="h-4 w-3/4 rounded bg-muted" />
+      <div className="h-4 w-3/4 rounded-xl bg-muted" />
 
       {/* 热度标签骨架 */}
       <div className="mt-2">
@@ -19,8 +19,8 @@ export const ThemeCardSkeleton = memo(function ThemeCardSkeleton() {
 
       {/* 底部信息骨架 */}
       <div className="mt-3 flex items-center justify-between">
-        <div className="h-3 w-16 rounded bg-muted" />
-        <div className="h-3 w-12 rounded bg-muted" />
+        <div className="h-3 w-16 rounded-xl bg-muted" />
+        <div className="h-3 w-12 rounded-xl bg-muted" />
       </div>
     </div>
   )

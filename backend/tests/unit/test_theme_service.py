@@ -3,23 +3,23 @@
 测试题材服务的业务逻辑。
 """
 
-import pytest
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
+
+import pytest
 from fastapi import HTTPException
 
-from app.models.theme import Theme
 from app.models.industry_chain import IndustryChain
-from app.services.theme import ThemeService
+from app.models.theme import Theme
+from app.schemas.concept_graph import ConceptGraphResponse
 from app.schemas.theme import (
-    ThemeBrief,
+    ThemeCategoriesResponse,
     ThemeDetailResponse,
     ThemeListResponse,
     ThemeRankingResponse,
-    ThemeCategoriesResponse,
-    IndustryChainBrief,
 )
+from app.services.theme import ThemeService
 
 
 @pytest.fixture
@@ -42,8 +42,8 @@ def sample_theme():
         category="科技",
         tags=["AI", "机器学习"],
         source="东方财富",
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 15, tzinfo=UTC),
     )
 
 
@@ -90,6 +90,13 @@ class TestThemeService:
         assert service.session is mock_session
         assert service.repo is not None
 
+    @staticmethod
+    def mock_empty_concept_graph(service):
+        service.concept_graph.get_graph = AsyncMock(return_value=ConceptGraphResponse())
+        service.insights.get_profile = AsyncMock(return_value=None)
+        service.insights.list_recent_events = AsyncMock(return_value=[])
+        service.insights.get_latest_snapshot = AsyncMock(return_value=None)
+
     @pytest.mark.asyncio
     async def test_list_themes_basic(self, mock_session, sample_theme):
         """测试基本列表查询"""
@@ -123,13 +130,19 @@ class TestThemeService:
         assert result.total_pages == 0
 
     @pytest.mark.asyncio
-    async def test_get_theme_detail_found(self, mock_session, sample_theme, sample_chains):
+    async def test_get_theme_detail_found(
+        self, mock_session, sample_theme, sample_chains
+    ):
         """测试获取详情（找到）"""
         service = ThemeService(mock_session)
 
         # 设置 theme 的 industry_chains 关系
         sample_theme.industry_chains = sample_chains
-        service.repo.get_by_id = AsyncMock(return_value=sample_theme)
+        service.repo.get_by_id_with_chains = AsyncMock(return_value=sample_theme)
+        self.mock_empty_concept_graph(service)
+        service.repo.count_stocks_by_chain_level = AsyncMock(
+            return_value={"upstream": 20, "midstream": 18, "downstream": 12}
+        )
 
         result = await service.get_theme_detail(theme_id=1)
 
@@ -147,7 +160,7 @@ class TestThemeService:
         """测试获取详情（未找到）"""
         service = ThemeService(mock_session)
 
-        service.repo.get_by_id = AsyncMock(return_value=None)
+        service.repo.get_by_id_with_chains = AsyncMock(return_value=None)
 
         with pytest.raises(HTTPException) as exc_info:
             await service.get_theme_detail(theme_id=999)
@@ -198,6 +211,28 @@ class TestThemeService:
         assert result.items[0].name == "人工智能"
 
     @pytest.mark.asyncio
+    async def test_get_market_signals(self, mock_session, sample_theme):
+        service = ThemeService(mock_session)
+        service.repo.get_market_signals = AsyncMock(return_value=[sample_theme])
+
+        result = await service.get_market_signals()
+
+        assert isinstance(result, ThemeRankingResponse)
+        assert result.limit == 1
+        assert result.items[0].id == sample_theme.id
+
+    @pytest.mark.asyncio
+    async def test_get_indicator_signals(self, mock_session, sample_theme):
+        service = ThemeService(mock_session)
+        service.repo.get_indicator_signals = AsyncMock(return_value=[sample_theme])
+
+        result = await service.get_indicator_signals()
+
+        assert isinstance(result, ThemeRankingResponse)
+        assert result.limit == 1
+        assert result.items[0].id == sample_theme.id
+
+    @pytest.mark.asyncio
     async def test_get_theme_detail_groups_chains_by_level(
         self, mock_session, sample_theme, sample_chains
     ):
@@ -205,7 +240,11 @@ class TestThemeService:
         service = ThemeService(mock_session)
 
         sample_theme.industry_chains = sample_chains
-        service.repo.get_by_id = AsyncMock(return_value=sample_theme)
+        service.repo.get_by_id_with_chains = AsyncMock(return_value=sample_theme)
+        self.mock_empty_concept_graph(service)
+        service.repo.count_stocks_by_chain_level = AsyncMock(
+            return_value={"upstream": 20, "midstream": 18, "downstream": 12}
+        )
 
         result = await service.get_theme_detail(theme_id=1)
 
@@ -220,12 +259,37 @@ class TestThemeService:
         assert result.industry_chains["downstream"][0].level == "downstream"
 
     @pytest.mark.asyncio
+    async def test_get_theme_detail_includes_stock_counts_by_chain_level(
+        self, mock_session, sample_theme, sample_chains
+    ):
+        service = ThemeService(mock_session)
+        sample_theme.industry_chains = sample_chains
+        service.repo.get_by_id_with_chains = AsyncMock(return_value=sample_theme)
+        self.mock_empty_concept_graph(service)
+        service.repo.count_stocks_by_chain_level = AsyncMock(
+            return_value={"upstream": 8, "midstream": 5, "downstream": 3}
+        )
+
+        result = await service.get_theme_detail(theme_id=1)
+
+        assert result.chain_stock_counts == {
+            "upstream": 8,
+            "midstream": 5,
+            "downstream": 3,
+        }
+        service.repo.count_stocks_by_chain_level.assert_awaited_once_with(1)
+
+    @pytest.mark.asyncio
     async def test_get_theme_detail_empty_chains(self, mock_session, sample_theme):
         """测试详情接口（无产业链数据）"""
         service = ThemeService(mock_session)
 
         sample_theme.industry_chains = []
-        service.repo.get_by_id = AsyncMock(return_value=sample_theme)
+        service.repo.get_by_id_with_chains = AsyncMock(return_value=sample_theme)
+        self.mock_empty_concept_graph(service)
+        service.repo.count_stocks_by_chain_level = AsyncMock(
+            return_value={"upstream": 0, "midstream": 0, "downstream": 0}
+        )
 
         result = await service.get_theme_detail(theme_id=1)
 

@@ -1,10 +1,13 @@
 """爬虫调度器单元测试"""
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from app.scrapers.scheduler import ScraperScheduler
-from app.scrapers.registry import ScraperRegistry
+
 from app.scrapers.base import BaseScraper
+from app.scrapers.registry import ScraperRegistry
+from app.scrapers.scheduler import ScraperScheduler
 
 
 class MockScraper(BaseScraper):
@@ -62,3 +65,44 @@ async def test_scraper_registry_invalid_class():
 
     with pytest.raises(TypeError):
         reg.register("test", str)
+
+
+@pytest.mark.asyncio
+async def test_scheduler_periodic_collection_runs_immediately(registry):
+    """周期采集启动后应立即执行一次"""
+    scheduler = ScraperScheduler(registry=registry)
+    scheduler.run = AsyncMock(return_value=1)
+
+    first_task = scheduler.start_periodic("test", interval_seconds=60)
+    second_task = scheduler.start_periodic("test", interval_seconds=60)
+    await asyncio.sleep(0)
+
+    assert first_task is second_task
+    scheduler.run.assert_awaited_once_with("test")
+
+    await scheduler.stop_periodic("test")
+    assert first_task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_periodic_collection_skips_overlapping_run(registry):
+    """上一次采集未结束时不应重复启动同一数据源"""
+    scheduler = ScraperScheduler(registry=registry)
+    scheduler.run = AsyncMock(return_value=1)
+    scheduler.is_running = MagicMock(return_value=True)
+
+    scheduler.start_periodic("test", interval_seconds=60)
+    await asyncio.sleep(0)
+
+    scheduler.run.assert_not_awaited()
+    await scheduler.stop_periodic("test")
+
+
+@pytest.mark.asyncio
+async def test_scheduler_run_rejects_when_source_already_running(registry):
+    """手动触发时若同数据源已在运行则拒绝。"""
+    scheduler = ScraperScheduler(registry=registry)
+    scheduler.is_running = MagicMock(return_value=True)
+
+    with pytest.raises(ValueError, match="正在运行中"):
+        await scheduler.run("test")

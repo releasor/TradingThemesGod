@@ -15,6 +15,7 @@
 ### 新建文件
 
 - `backend/alembic/versions/010_create_theme_insights.py`：创建三张题材洞察表及其约束。
+- `backend/alembic/versions/011_add_theme_insight_refresh_keys.py`：增加跨刷新事件键和持久调度游标。
 - `backend/app/models/theme_profile.py`：题材结构化档案 ORM。
 - `backend/app/models/theme_driver_event.py`：题材驱动事件 ORM。
 - `backend/app/models/theme_market_snapshot.py`：题材每日行情快照 ORM。
@@ -65,7 +66,7 @@
 - Modify: `backend/app/models/__init__.py`
 - Test: `backend/tests/unit/test_theme_insight_models.py`
 
-- [ ] **Step 1：先写失败的模型元数据测试**
+- [x] **Step 1：先写失败的模型元数据测试**
 
 ```python
 from app.models.theme_driver_event import ThemeDriverEvent
@@ -90,13 +91,13 @@ def test_market_snapshot_distinguishes_zero_from_unavailable_limit_pool():
     assert ThemeMarketSnapshot.__table__.c.limit_down_count.nullable is True
 ```
 
-- [ ] **Step 2：运行测试并确认因模型不存在而失败**
+- [x] **Step 2：运行测试并确认因模型不存在而失败**
 
 Run: `cd backend; .\.venv\Scripts\python.exe -m pytest tests/unit/test_theme_insight_models.py -q`
 
 Expected: FAIL，错误包含 `ModuleNotFoundError: No module named 'app.models.theme_profile'`。
 
-- [ ] **Step 3：实现三个 ORM 模型及题材关系**
+- [x] **Step 3：实现三个 ORM 模型及题材关系**
 
 模型字段必须与设计文档一致。关键定义如下：
 
@@ -162,7 +163,7 @@ class ThemeMarketSnapshot(Base, TimestampMixin):
 
 `Theme` 增加 `profile`、`driver_events`、`market_snapshots` 三个 `relationship`，并在 `models/__init__.py` 导入和导出新模型，保证 Alembic 可以发现元数据。
 
-- [ ] **Step 4：编写迁移并验证升级/降级结构**
+- [x] **Step 4：编写迁移并验证升级/降级结构**
 
 `010_create_theme_insights.py` 使用 `down_revision = "009_create_model_providers"`，按模型字段创建三张 InnoDB/utf8mb4 表和命名索引；`downgrade()` 按快照、事件、档案顺序删除表。
 
@@ -187,7 +188,7 @@ git commit -m "feat(backend): add theme insight persistence"
 - Test: `backend/tests/unit/test_theme_schemas.py`
 - Test: `backend/tests/unit/test_theme_insight_repository.py`
 
-- [ ] **Step 1：写失败的 Schema 与仓储测试**
+- [x] **Step 1：写失败的 Schema 与仓储测试**
 
 ```python
 def test_market_snapshot_ratio_is_null_when_down_count_is_zero():
@@ -206,13 +207,13 @@ async def test_recent_events_falls_back_to_30_days_when_seven_days_has_fewer_tha
     assert [item.title for item in items] == ["近一天", "近六天", "近十天"]
 ```
 
-- [ ] **Step 2：运行定向测试确认契约和仓储尚不存在**
+- [x] **Step 2：运行定向测试确认契约和仓储尚不存在**
 
 Run: `cd backend; .\.venv\Scripts\python.exe -m pytest tests/unit/test_theme_schemas.py tests/unit/test_theme_insight_repository.py -q`
 
 Expected: FAIL，缺少 `ThemeMarketSnapshotResponse` 或 `ThemeInsightRepository`。
 
-- [ ] **Step 3：实现 Pydantic 契约**
+- [x] **Step 3：实现 Pydantic 契约**
 
 在 `theme_insight.py` 定义：
 
@@ -266,7 +267,7 @@ recent_driver_events: list[ThemeDriverEventResponse] = Field(default_factory=lis
 market_snapshot: ThemeMarketSnapshotResponse | None = None
 ```
 
-- [ ] **Step 4：实现仓储的读取和幂等写入**
+- [x] **Step 4：实现仓储的读取和幂等写入**
 
 先在 `domain/theme_insights.py` 定义 `MarketCounts` 不可变数据类，字段为 `up_count`、`down_count`、`flat_count`、`suspended_count`、`limit_up_count` 和 `limit_down_count`，后两个字段允许 `None`。仓储和后续行情服务统一使用该类型。
 
@@ -299,7 +300,7 @@ git commit -m "feat(backend): add theme insight contracts and repository"
 - Test: `backend/tests/unit/test_limit_pool.py`
 - Test: `backend/tests/unit/test_theme_market_service.py`
 
-- [ ] **Step 1：写失败的行情纯函数和服务测试**
+- [x] **Step 1：写失败的行情纯函数和服务测试**
 
 ```python
 def test_classify_market_counts_excludes_missing_quotes_from_ratio():
@@ -319,13 +320,13 @@ async def test_refresh_all_fetches_limit_pools_once(service, provider, repo):
     assert repo.upsert_snapshot.await_count == 2
 ```
 
-- [ ] **Step 2：运行测试并确认失败**
+- [x] **Step 2：运行测试并确认失败**
 
 Run: `cd backend; .\.venv\Scripts\python.exe -m pytest tests/unit/test_theme_insight_domain.py tests/unit/test_limit_pool.py tests/unit/test_theme_market_service.py -q`
 
 Expected: FAIL，缺少市场领域函数和适配器。
 
-- [ ] **Step 3：实现纯函数与 AKShare 适配器**
+- [x] **Step 3：实现纯函数与 AKShare 适配器**
 
 `theme_insights.py` 定义不可变计数对象和分类函数：
 
@@ -346,7 +347,7 @@ def normalize_stock_code(value: object) -> str:
 
 `LimitPoolProvider.fetch(trade_date)` 通过 `asyncio.to_thread` 调用官方 AKShare 接口 `stock_zt_pool_em(date="YYYYMMDD")` 和 `stock_zt_pool_dtgc_em(date="YYYYMMDD")`，从 DataFrame 的“代码”列返回两个代码集合。两个池分别捕获异常；某一池失败时对应集合为 `None`，不能伪装为空集合。
 
-- [ ] **Step 4：实现批量市场快照服务**
+- [x] **Step 4：实现批量市场快照服务**
 
 在 `ThemeRepository` 新增一次加载全部有效题材及其成分股行情的方法，使用 `selectinload` 避免 N+1。`ThemeMarketService.refresh_all()` 只抓取一次全市场涨跌停池，然后逐题材调用 `classify_market_counts` 和 `ThemeInsightRepository.upsert_snapshot`，最后一次提交事务。
 
@@ -369,7 +370,7 @@ git commit -m "feat(backend): aggregate theme market breadth"
 - Test: `backend/tests/unit/test_web_research.py`
 - Test: `backend/tests/unit/test_news_repository.py`
 
-- [ ] **Step 1：写失败的搜索、反爬注入和新闻候选测试**
+- [x] **Step 1：写失败的搜索、反爬注入和新闻候选测试**
 
 ```python
 @pytest.mark.asyncio
@@ -387,13 +388,13 @@ async def test_news_candidates_filter_by_theme_or_stock_keyword(repo):
     assert [item.title for item in items] == ["机器人产业政策发布"]
 ```
 
-- [ ] **Step 2：运行测试并确认缺少新接口**
+- [x] **Step 2：运行测试并确认缺少新接口**
 
 Run: `cd backend; .\.venv\Scripts\python.exe -m pytest tests/unit/test_web_research.py tests/unit/test_news_repository.py -q`
 
 Expected: FAIL，缺少 `research_profile`、`research_driver_events` 或 `list_theme_candidates`。
 
-- [ ] **Step 3：让网页研究服务复用反爬能力**
+- [x] **Step 3：让网页研究服务复用反爬能力**
 
 `WebResearchService` 构造函数接受可注入的 `AntiScrapingMiddleware`，搜索和正文请求统一经中间件发送，同时保留 `validate_public_url` 和重定向后再次校验。新增两个聚焦入口：
 
@@ -401,7 +402,7 @@ Expected: FAIL，缺少 `research_profile`、`research_driver_events` 或 `list_
 
 档案查询覆盖概念、产业链、应用、催化和风险；事件查询覆盖题材名、最多 10 个核心成分股名及政策、订单、发布、突破、涨价、扩产和业绩语义。所有 URL 统一去重，每批最多抓取配置的来源数。
 
-- [ ] **Step 4：增加近 30 天新闻候选查询**
+- [x] **Step 4：增加近 30 天新闻候选查询**
 
 `NewsRepository.list_theme_candidates(keywords, since, limit=50)` 使用转义后的 `LIKE` 条件匹配标题和摘要，要求 `published_at >= since`，按发布时间倒序返回。空关键词直接返回空列表，避免生成无条件全表查询。
 
@@ -423,7 +424,7 @@ git commit -m "feat(backend): collect theme research sources"
 - Create: `backend/app/services/theme_insight.py`
 - Test: `backend/tests/unit/test_theme_insight_service.py`
 
-- [ ] **Step 1：写失败的刷新服务测试**
+- [x] **Step 1：写失败的刷新服务测试**
 
 ```python
 @pytest.mark.asyncio
@@ -457,13 +458,13 @@ async def test_all_sources_failed_preserves_existing_data(service, repo):
     repo.delete_existing.assert_not_called()
 ```
 
-- [ ] **Step 2：运行测试并确认刷新服务不存在**
+- [x] **Step 2：运行测试并确认刷新服务不存在**
 
 Run: `cd backend; .\.venv\Scripts\python.exe -m pytest tests/unit/test_theme_insight_service.py -q`
 
 Expected: FAIL，缺少 `ThemeInsightRefreshService`。
 
-- [ ] **Step 3：实现可校验的模型抽取**
+- [x] **Step 3：实现可校验的模型抽取**
 
 `ThemeInsightRefreshService` 复用 `ModelProviderService` 和 `parse_model_json`。系统提示明确要求只基于提供来源返回 JSON：
 
@@ -489,7 +490,7 @@ Expected: FAIL，缺少 `ThemeInsightRefreshService`。
 
 解析后使用 `ExtractedThemeInsights.model_validate()`；所有 `source_url` 必须属于实际抓取或新闻候选 URL，事件相关性低于 60 不入库，摘要限制长度，模型异常不得覆盖旧档案。
 
-- [ ] **Step 4：实现关键词降级和事务编排**
+- [x] **Step 4：实现关键词降级和事务编排**
 
 领域函数 `keyword_event_fallback(theme_name, stock_names, candidates)` 只有在标题或摘要同时命中题材/成分股词与至少一个驱动词时才返回事件；相关性固定为 40，并保留原始标题、来源、URL 和发布时间。
 
@@ -514,7 +515,7 @@ git commit -m "feat(backend): refresh theme profiles and driver events"
 - Modify: `backend/tests/unit/test_theme_service.py`
 - Modify: `backend/tests/integration/test_theme_api.py`
 
-- [ ] **Step 1：写失败的详情聚合和刷新接口测试**
+- [x] **Step 1：写失败的详情聚合和刷新接口测试**
 
 ```python
 @pytest.mark.asyncio
@@ -531,13 +532,13 @@ def test_refresh_theme_insights_endpoint(client):
     assert response.json()["message"] == "题材资料已更新"
 ```
 
-- [ ] **Step 2：运行测试并确认详情字段或路由缺失**
+- [x] **Step 2：运行测试并确认详情字段或路由缺失**
 
 Run: `cd backend; .\.venv\Scripts\python.exe -m pytest tests/unit/test_theme_service.py tests/integration/test_theme_api.py -q`
 
 Expected: FAIL，详情响应缺少新字段，刷新端点返回 404。
 
-- [ ] **Step 3：聚合题材洞察数据**
+- [x] **Step 3：聚合题材洞察数据**
 
 `ThemeService.__init__` 接受可注入的 `ThemeInsightRepository`，`get_theme_detail()` 在加载现有产业链和概念图谱后读取：
 
@@ -549,7 +550,7 @@ snapshot = await self.insights.get_latest_snapshot(theme_id)
 
 将三个值分别转换为 `ThemeProfileResponse`、`ThemeDriverEventResponse` 和 `ThemeMarketSnapshotResponse`；无数据分别返回 `None`、`[]`、`None`。
 
-- [ ] **Step 4：新增手动刷新端点**
+- [x] **Step 4：新增手动刷新端点**
 
 在动态 `/{theme_id}` 详情路由之前声明：
 
@@ -590,7 +591,7 @@ git commit -m "feat(api): expose theme insights in detail"
 - Modify: `backend/tests/unit/test_scraper_akshare.py`
 - Modify: `backend/tests/unit/test_app_lifespan.py`
 
-- [ ] **Step 1：写失败的周期任务和行情触发测试**
+- [x] **Step 1：写失败的周期任务和行情触发测试**
 
 ```python
 @pytest.mark.asyncio
@@ -607,13 +608,13 @@ async def test_eastmoney_run_refreshes_market_snapshots_after_stock_save(scraper
     scraper.market_service.refresh_all.assert_awaited_once()
 ```
 
-- [ ] **Step 2：运行测试并确认配置和调度器缺失**
+- [x] **Step 2：运行测试并确认配置和调度器缺失**
 
 Run: `cd backend; .\.venv\Scripts\python.exe -m pytest tests/unit/test_theme_insight_scheduler.py tests/unit/test_scraper_akshare.py tests/unit/test_app_lifespan.py -q`
 
 Expected: FAIL，缺少研究调度器或配置项。
 
-- [ ] **Step 3：实现有界的题材研究周期任务**
+- [x] **Step 3：实现有界的题材研究周期任务**
 
 新增配置：
 
@@ -626,7 +627,7 @@ THEME_INSIGHT_BATCH_SIZE: int = 10
 
 实现 `ThemeInsightScheduler`：每轮选择最多 10 个“档案缺失/过期或事件最后抓取时间最旧”的有效题材，逐个调用 `ThemeInsightRefreshService.refresh()`；每个题材单独事务和异常边界，避免一个题材失败中止整批。`start()` 防止重复启动，`stop()` 取消并等待任务退出。
 
-- [ ] **Step 4：连接应用生命周期和市场快照刷新**
+- [x] **Step 4：连接应用生命周期和市场快照刷新**
 
 `main.py` 在启用配置时启动和停止研究周期任务。`EastMoneyScraper` 完成全部题材及成分股持久化后，在新的数据库会话中调用一次 `ThemeMarketService.refresh_all()`；若涨跌停池失败，记录警告并按可空字段规则保存可用的涨跌统计，不能把整个行情采集标记为失败。
 
@@ -648,7 +649,7 @@ git commit -m "feat(backend): schedule theme insight refreshes"
 - Modify: `frontend/src/api/theme.ts`
 - Modify: `frontend/src/api/theme.test.ts`
 
-- [ ] **Step 1：写失败的前端刷新 API 测试**
+- [x] **Step 1：写失败的前端刷新 API 测试**
 
 ```typescript
 it('refreshes theme insights', async () => {
@@ -658,13 +659,13 @@ it('refreshes theme insights', async () => {
 })
 ```
 
-- [ ] **Step 2：运行测试并确认函数不存在**
+- [x] **Step 2：运行测试并确认函数不存在**
 
 Run: `cd frontend; pnpm vitest run src/api/theme.test.ts`
 
 Expected: FAIL，错误包含 `refreshThemeInsights is not a function` 或缺少导出。
 
-- [ ] **Step 3：添加完整 TypeScript 契约**
+- [x] **Step 3：添加完整 TypeScript 契约**
 
 在 `types/theme.ts` 增加 `ThemeSourceReference`、`ThemeProfile`、`ThemeDriverEvent`、`ThemeMarketSnapshot` 和 `ThemeInsightRefreshResponse`，并扩展详情类型：
 
@@ -701,7 +702,7 @@ export interface ThemeDetailResponse {
 
 数值字段使用 `number`，日期使用 ISO 字符串，`limit_up_count`、`limit_down_count` 和 `up_down_ratio` 使用 `number | null`。
 
-- [ ] **Step 4：实现刷新 API 函数并通过测试**
+- [x] **Step 4：实现刷新 API 函数并通过测试**
 
 ```typescript
 export async function refreshThemeInsights(
@@ -735,7 +736,7 @@ git commit -m "feat(frontend): add theme insight API contracts"
 - Create: `frontend/src/components/ThemeDriverEvents.tsx`
 - Create: `frontend/src/components/ThemeDriverEvents.test.tsx`
 
-- [ ] **Step 1：写三个组件的失败测试**
+- [x] **Step 1：写三个组件的失败测试**
 
 ```typescript
 it('distinguishes unavailable limit count from zero', () => {
@@ -757,13 +758,13 @@ it('renders at most five driver events', () => {
 })
 ```
 
-- [ ] **Step 2：运行测试并确认组件缺失**
+- [x] **Step 2：运行测试并确认组件缺失**
 
 Run: `cd frontend; pnpm vitest run src/components/ThemeMarketBreadth.test.tsx src/components/ThemeProfileSection.test.tsx src/components/ThemeDriverEvents.test.tsx`
 
 Expected: FAIL，三个组件模块不存在。
 
-- [ ] **Step 3：实现行情和档案组件**
+- [x] **Step 3：实现行情和档案组件**
 
 `ThemeMarketBreadth` 使用语义化 `<section>` 和紧凑响应式网格，分别渲染涨停、跌停、上涨、下跌、上涨:下跌和交易日期。只对 `null` 显示“暂无数据”，真实 `0` 必须显示 `0`。
 
@@ -777,7 +778,7 @@ Expected: FAIL，三个组件模块不存在。
 
 `profile === null` 时显示“暂无详细介绍，可点击刷新题材资料获取”。
 
-- [ ] **Step 4：实现事件时间线组件并通过测试**
+- [x] **Step 4：实现事件时间线组件并通过测试**
 
 `ThemeDriverEvents` 对 `events.slice(0, 5)` 渲染时间线，包含 `published_at`、标题、摘要、来源、相关性分数和安全原文链接；空数组显示“近 30 天暂未发现可靠驱动事件”。长标题和 URL 容器使用可换行样式，避免移动端溢出。
 
@@ -800,7 +801,7 @@ git commit -m "feat(frontend): render theme research insights"
 - Verify: `backend/tests/`
 - Verify: `frontend/src/`
 
-- [ ] **Step 1：写失败的详情页组合和刷新测试**
+- [x] **Step 1：写失败的详情页组合和刷新测试**
 
 ```typescript
 it('renders market breadth, profile and driver events before existing charts', async () => {
@@ -823,13 +824,13 @@ it('refreshes insights and then refetches detail', async () => {
 })
 ```
 
-- [ ] **Step 2：运行详情页测试并确认新区域尚未组合**
+- [x] **Step 2：运行详情页测试并确认新区域尚未组合**
 
 Run: `cd frontend; pnpm vitest run src/features/themes/ThemeDetail.test.tsx`
 
 Expected: FAIL，找不到“题材详细介绍”“最近驱动事件”或刷新按钮。
 
-- [ ] **Step 3：组合组件和独立刷新状态**
+- [x] **Step 3：组合组件和独立刷新状态**
 
 在 `ThemeDetail.tsx`：
 
@@ -844,7 +845,7 @@ Run: `cd frontend; pnpm vitest run src/features/themes/ThemeDetail.test.tsx`
 
 Expected: PASS。
 
-- [ ] **Step 4：执行格式、完整测试和迁移验证**
+- [x] **Step 4：执行格式、完整测试和迁移验证**
 
 Run:
 
@@ -859,9 +860,9 @@ pnpm vitest run
 pnpm build
 ```
 
-Expected: Ruff、Black、pytest、ESLint、Vitest 和 Vite build 全部退出码为 0。测试环境数据库运行 `alembic upgrade head` 后当前 revision 为 `010_create_theme_insights`；再执行一次升级不产生额外变更。
+Expected: Ruff、Black、pytest、ESLint、Vitest 和 Vite build 全部退出码为 0。测试环境数据库运行 `alembic upgrade head` 后当前 revision 为 `011_theme_insight_keys`；再执行一次升级不产生额外变更。
 
-- [ ] **Step 5：执行真实服务冒烟验证**
+- [x] **Step 5：执行真实服务冒烟验证**
 
 启动现有 MySQL、后端和前端后验证：
 
@@ -881,12 +882,12 @@ git commit -m "feat(frontend): integrate theme insights into detail page"
 
 ## 最终验收清单
 
-- [ ] 三张新表的迁移、唯一约束、可空涨跌停字段和级联关系正确。
-- [ ] 详情 API 对完整、部分缺失和完全缺失洞察数据均保持兼容。
-- [ ] 研究刷新按 URL 幂等增量写入，AI 失败时只降级事件，不覆盖已有档案。
-- [ ] 事件严格最多 5 条，先查 7 天，不足时扩展到 30 天。
-- [ ] 涨跌分类排除平盘和停牌；真实零和数据不可用可区分。
-- [ ] AKShare 涨停池、跌停池分别失败时不会伪造零值。
-- [ ] 自动刷新有批量上限，不会重复启动，应用退出时可正常停止。
-- [ ] 前端在桌面和移动宽度下无横向溢出，外链使用安全属性。
+- [x] 三张新表的迁移、唯一约束、可空涨跌停字段和级联关系正确。
+- [x] 详情 API 对完整、部分缺失和完全缺失洞察数据均保持兼容。
+- [x] 研究刷新按 URL 幂等增量写入，AI 失败时只降级事件，不覆盖已有档案。
+- [x] 事件严格最多 5 条，先查 7 天，不足时扩展到 30 天。
+- [x] 涨跌分类排除平盘和停牌；真实零和数据不可用可区分。
+- [x] AKShare 涨停池、跌停池分别失败时不会伪造零值。
+- [x] 自动刷新有批量上限，不会重复启动，应用退出时可正常停止。
+- [x] 前端在桌面和移动宽度下无横向溢出，外链使用安全属性。
 - [ ] 后端和前端完整测试、静态检查与构建通过。

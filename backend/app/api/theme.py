@@ -3,22 +3,62 @@
 提供题材查询、搜索、排名和分类接口。
 """
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
 from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.services.theme import ThemeService
+from app.models.theme import Theme
+from app.schemas.concept_refresh import (
+    ConceptGraphBatchItem,
+    ConceptGraphBatchRequest,
+    ConceptGraphBatchResponse,
+    ConceptGraphRefreshResponse,
+)
+from app.schemas.stock import StockListResponse
 from app.schemas.theme import (
     ThemeCategoriesResponse,
     ThemeDetailResponse,
     ThemeListResponse,
     ThemeRankingResponse,
 )
-from app.schemas.stock import StockListResponse
+from app.schemas.theme_insight import ThemeInsightRefreshResponse
+from app.services.concept_graph_refresh import ConceptGraphRefreshService
+from app.services.theme import ThemeService
+from app.services.theme_insight import ThemeInsightRefreshService
 
 router = APIRouter(prefix="/themes", tags=["themes"])
+
+
+@router.post("/concept-graphs/refresh", response_model=ConceptGraphBatchResponse)
+async def refresh_concept_graphs(
+    payload: ConceptGraphBatchRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """有限批量更新题材图谱，逐个处理并返回每项结果。"""
+    query = select(Theme.id).where(Theme.deleted_at.is_(None)).order_by(Theme.id)
+    if payload.theme_ids:
+        query = query.where(Theme.id.in_(payload.theme_ids))
+    theme_ids = list((await db.execute(query.limit(payload.limit))).scalars())
+    service = ConceptGraphRefreshService(db)
+    items: list[ConceptGraphBatchItem] = []
+    for theme_id in theme_ids:
+        try:
+            result = await service.refresh(theme_id)
+            items.append(
+                ConceptGraphBatchItem(theme_id=theme_id, success=True, result=result)
+            )
+        except HTTPException as exc:
+            await db.rollback()
+            items.append(
+                ConceptGraphBatchItem(
+                    theme_id=theme_id, success=False, error=str(exc.detail)
+                )
+            )
+    return ConceptGraphBatchResponse(items=items)
 
 
 @router.get("", response_model=ThemeListResponse)
@@ -92,10 +132,58 @@ async def search_themes(
     )
 
 
+@router.get("/market-signals", response_model=ThemeRankingResponse)
+async def get_market_signals(
+    db: AsyncSession = Depends(get_db),
+):
+    """获取独立于实际题材的市场表现板块。"""
+    service = ThemeService(db)
+    return await service.get_market_signals()
+
+
+@router.get("/indicator-signals", response_model=ThemeRankingResponse)
+async def get_indicator_signals(
+    db: AsyncSession = Depends(get_db),
+):
+    """获取独立于实际题材的行情指标板块（新高、财报预告、破增发等）。"""
+    service = ThemeService(db)
+    return await service.get_indicator_signals()
+
+
+@router.post(
+    "/{theme_id}/concept-graph/refresh",
+    response_model=ConceptGraphRefreshResponse,
+)
+async def refresh_concept_graph(
+    theme_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """抓取公开资料并使用默认模型增量刷新单个题材图谱。"""
+    return await ConceptGraphRefreshService(db).refresh(theme_id)
+
+
+@router.post(
+    "/{theme_id}/insights/refresh",
+    response_model=ThemeInsightRefreshResponse,
+)
+async def refresh_theme_insights(
+    theme_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """抓取公开资料并增量刷新单个题材的介绍和驱动事件。"""
+    service = ThemeInsightRefreshService(db)
+    try:
+        return await service.refresh(theme_id)
+    finally:
+        await service.research.middleware.close()
+
+
 @router.get("/{theme_id}/stocks", response_model=StockListResponse)
 async def get_theme_stocks(
     theme_id: int,
-    chain_level: Literal["upstream", "midstream", "downstream"] | None = Query(default=None, description="产业链层级"),
+    chain_level: Literal["upstream", "midstream", "downstream"] | None = Query(
+        default=None, description="产业链层级"
+    ),
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
     db: AsyncSession = Depends(get_db),
@@ -140,7 +228,5 @@ async def export_themes_csv(
     return StreamingResponse(
         service.stream_export_csv(category=category),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": "attachment; filename=themes_export.csv"
-        },
+        headers={"Content-Disposition": "attachment; filename=themes_export.csv"},
     )

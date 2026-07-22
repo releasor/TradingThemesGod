@@ -80,7 +80,7 @@ export const Pagination = memo(function Pagination({
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="rounded border border-input bg-background px-2 py-1 text-sm"
+            className="rounded-xl border border-input bg-background px-2 py-1 text-sm"
             aria-label="每页显示数量"
           >
             {pageSizeOptions.map((size) => (
@@ -99,7 +99,7 @@ export const Pagination = memo(function Pagination({
         onClick={() => onPageChange(1)}
         disabled={page === 1}
         className={cn(
-          'inline-flex h-8 w-8 items-center justify-center rounded-md text-sm',
+          'inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm',
           'hover:bg-accent transition-colors',
           'disabled:pointer-events-none disabled:opacity-50',
         )}
@@ -114,7 +114,7 @@ export const Pagination = memo(function Pagination({
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
         className={cn(
-          'inline-flex h-8 w-8 items-center justify-center rounded-md text-sm',
+          'inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm',
           'hover:bg-accent transition-colors',
           'disabled:pointer-events-none disabled:opacity-50',
         )}
@@ -136,7 +136,7 @@ export const Pagination = memo(function Pagination({
             onClick={() => onPageChange(p)}
             aria-current={p === page ? 'page' : undefined}
             className={cn(
-              'inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm',
+              'inline-flex h-8 min-w-8 items-center justify-center rounded-xl px-2 text-sm',
               'transition-colors',
               p === page
                 ? 'bg-primary text-primary-foreground font-medium'
@@ -153,7 +153,7 @@ export const Pagination = memo(function Pagination({
         onClick={() => onPageChange(page + 1)}
         disabled={page === totalPages}
         className={cn(
-          'inline-flex h-8 w-8 items-center justify-center rounded-md text-sm',
+          'inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm',
           'hover:bg-accent transition-colors',
           'disabled:pointer-events-none disabled:opacity-50',
         )}
@@ -168,7 +168,7 @@ export const Pagination = memo(function Pagination({
         onClick={() => onPageChange(totalPages)}
         disabled={page === totalPages}
         className={cn(
-          'inline-flex h-8 w-8 items-center justify-center rounded-md text-sm',
+          'inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm',
           'hover:bg-accent transition-colors',
           'disabled:pointer-events-none disabled:opacity-50',
         )}
@@ -190,13 +190,13 @@ export const Pagination = memo(function Pagination({
             value={jumpValue}
             onChange={(e) => setJumpValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleJump()}
-            className="w-16 rounded border border-input bg-background px-2 py-1 text-center text-sm"
+            className="w-16 rounded-xl border border-input bg-background px-2 py-1 text-center text-sm"
             placeholder="页码"
             aria-label="跳转到页码"
           />
           <button
             onClick={handleJump}
-            className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
+            className="rounded-xl bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
           >
             确定
           </button>

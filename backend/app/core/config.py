@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     PROXY_ENABLED: bool = False
     PROXY_URL: str = ""
 
+    # 自动采集配置
+    SCRAPER_AUTO_ENABLED: bool = True
+    SCRAPER_INTERVAL_SECONDS: int = 21600
+    THEME_INSIGHT_AUTO_ENABLED: bool = True
+    THEME_INSIGHT_INTERVAL_SECONDS: int = 3600
+    THEME_INSIGHT_BATCH_SIZE: int = 10
+    THEME_PROFILE_MAX_AGE_DAYS: int = 7
+
+    # 雪球公开信息访问配置（可选）
+    XUEQIU_COOKIE: str = ""
+
     @property
     def database_url(self) -> str:
         """构建数据库连接 URL"""

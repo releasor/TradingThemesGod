@@ -45,7 +45,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: (id: string) => 
   return (
     <div
       className={cn(
-        'flex items-center gap-3 rounded-lg border px-4 py-3 shadow-lg backdrop-blur-sm',
+        'flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm',
         'animate-in slide-in-from-right-full fade-in duration-300',
         config.className,
       )}
@@ -54,7 +54,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: (id: string) => 
       <p className="flex-1 text-sm">{toast.message}</p>
       <button
         onClick={() => onClose(toast.id)}
-        className="shrink-0 rounded p-0.5 hover:bg-black/10"
+        className="shrink-0 rounded-xl p-0.5 hover:bg-black/10"
         aria-label="关闭通知"
       >
         <X className="h-3.5 w-3.5" />

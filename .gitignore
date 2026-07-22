@@ -44,6 +44,10 @@ env/
 .env.local
 .env.*.local
 
+# Model credential encryption keys
+.model-secret.key
+**/.model-secret.key
+
 # Node
 node_modules/
 npm-debug.log*

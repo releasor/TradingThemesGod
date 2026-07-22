@@ -55,7 +55,7 @@ export const IndustryChainSection = memo(function IndustryChainSection({ chains,
             <div key={level} className="space-y-3">
               {/* 列头 */}
               <div className="flex items-center gap-2">
-                <div className={`rounded-md p-1.5 ${config.color}`}>
+                <div className={`rounded-xl p-1.5 ${config.color}`}>
                   <Icon className="h-4 w-4" />
                 </div>
                 <div>
@@ -76,7 +76,7 @@ export const IndustryChainSection = memo(function IndustryChainSection({ chains,
                   ))}
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
                   暂无数据
                 </div>
               )}

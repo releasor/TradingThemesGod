@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export const ThemeTableSkeleton = memo(function ThemeTableSkeleton() {
   return (
-    <div className="w-full rounded-lg border border-border bg-card p-4">
+    <div className="w-full rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-4">
         {/* 左侧 */}
         <div className="min-w-0 flex-1">

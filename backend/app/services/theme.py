@@ -4,21 +4,30 @@
 """
 
 import time
+from datetime import UTC, datetime
 from typing import Any
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.theme import ThemeRepository
+from app.repositories.theme_insight import ThemeInsightRepository
+from app.schemas.common import calculate_total_pages
+from app.schemas.stock import StockBrief, StockListResponse
 from app.schemas.theme import (
+    IndustryChainBrief,
     ThemeBrief,
     ThemeCategoriesResponse,
     ThemeDetailResponse,
     ThemeListResponse,
     ThemeRankingResponse,
-    IndustryChainBrief,
 )
-from app.schemas.stock import StockBrief, StockListResponse
-from app.schemas.common import calculate_total_pages
+from app.schemas.theme_insight import (
+    ThemeDriverEventResponse,
+    ThemeMarketSnapshotResponse,
+    ThemeProfileResponse,
+)
+from app.services.concept_graph import ConceptGraphService
 
 # 简单的内存缓存
 _cache: dict[str, tuple[float, Any]] = {}
@@ -51,6 +60,8 @@ class ThemeService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.repo = ThemeRepository(session)
+        self.insights = ThemeInsightRepository(session)
+        self.concept_graph = ConceptGraphService(session)
 
     async def list_themes(
         self,
@@ -117,6 +128,14 @@ class ThemeService:
             brief = IndustryChainBrief.model_validate(chain)
             chains_by_level[chain.level].append(brief)
 
+        chain_stock_counts = await self.repo.count_stocks_by_chain_level(theme_id)
+        concept_graph = await self.concept_graph.get_graph(theme_id)
+        profile = await self.insights.get_profile(theme_id)
+        events = await self.insights.list_recent_events(
+            theme_id, now=datetime.now(UTC), limit=5
+        )
+        snapshot = await self.insights.get_latest_snapshot(theme_id)
+
         return ThemeDetailResponse(
             id=theme.id,
             name=theme.name,
@@ -131,6 +150,17 @@ class ThemeService:
             created_at=theme.created_at,
             updated_at=theme.updated_at,
             industry_chains=chains_by_level,
+            chain_stock_counts=chain_stock_counts,
+            concept_graph=concept_graph,
+            profile=(ThemeProfileResponse.model_validate(profile) if profile else None),
+            recent_driver_events=[
+                ThemeDriverEventResponse.model_validate(event) for event in events
+            ],
+            market_snapshot=(
+                ThemeMarketSnapshotResponse.model_validate(snapshot)
+                if snapshot
+                else None
+            ),
         )
 
     async def search_themes(
@@ -198,6 +228,22 @@ class ThemeService:
             limit=limit,
         )
 
+    async def get_market_signals(self) -> ThemeRankingResponse:
+        """获取独立展示的市场表现板块。"""
+        themes = await self.repo.get_market_signals()
+        return ThemeRankingResponse(
+            items=[ThemeBrief.model_validate(theme) for theme in themes],
+            limit=len(themes),
+        )
+
+    async def get_indicator_signals(self) -> ThemeRankingResponse:
+        """获取独立展示的行情指标板块。"""
+        themes = await self.repo.get_indicator_signals()
+        return ThemeRankingResponse(
+            items=[ThemeBrief.model_validate(theme) for theme in themes],
+            limit=len(themes),
+        )
+
     async def stream_export_csv(self, category: str | None = None):
         """流式导出题材 CSV（生成器，内存占用 O(1)）
 
@@ -212,23 +258,33 @@ class ThemeService:
 
         # 表头
         header = io.StringIO()
-        csv.writer(header).writerow([
-            '题材名称', '题材代码', '分类', '热度指数', '涨跌幅(%)', '关联股票数', '数据来源'
-        ])
+        csv.writer(header).writerow(
+            [
+                "题材名称",
+                "题材代码",
+                "分类",
+                "热度指数",
+                "涨跌幅(%)",
+                "关联股票数",
+                "数据来源",
+            ]
+        )
         yield header.getvalue()
 
         # 数据行：逐条生成，内存占用恒定
         async for theme in self.repo.stream_all(category=category):
             row = io.StringIO()
-            csv.writer(row).writerow([
-                theme.name,
-                theme.code,
-                theme.category or '',
-                float(theme.heat_index),
-                float(theme.rise_fall_pct),
-                theme.stock_count,
-                theme.source or '',
-            ])
+            csv.writer(row).writerow(
+                [
+                    theme.name,
+                    theme.code,
+                    theme.category or "",
+                    float(theme.heat_index),
+                    float(theme.rise_fall_pct),
+                    theme.stock_count,
+                    theme.source or "",
+                ]
+            )
             yield row.getvalue()
 
     async def get_theme_stocks(

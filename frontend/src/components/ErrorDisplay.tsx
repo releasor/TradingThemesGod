@@ -79,7 +79,7 @@ export const ErrorDisplay = memo(function ErrorDisplay({
       {onRetry && error.retryable && (
         <button
           onClick={onRetry}
-          className="mt-6 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           <RefreshCw className="h-4 w-4" />
           重试

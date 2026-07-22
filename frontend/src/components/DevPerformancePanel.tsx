@@ -85,7 +85,7 @@ export function DevPerformancePanel() {
 
       {/* 面板 */}
       {isOpen && (
-        <div className="fixed bottom-16 right-4 z-50 w-64 rounded-lg border border-border bg-card p-4 shadow-lg">
+        <div className="fixed bottom-16 right-4 z-50 w-64 rounded-xl border border-border bg-card p-4 shadow-lg">
           {/* 头部 */}
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">
@@ -93,7 +93,7 @@ export function DevPerformancePanel() {
             </h3>
             <button
               onClick={() => setIsOpen(false)}
-              className="rounded p-1 text-muted-foreground hover:bg-accent"
+              className="rounded-xl p-1 text-muted-foreground hover:bg-accent"
             >
               <X className="h-4 w-4" />
             </button>

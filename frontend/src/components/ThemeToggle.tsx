@@ -81,13 +81,13 @@ export const ThemeToggle = memo(function ThemeToggle({ className }: ThemeToggleP
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className={cn('flex items-center rounded-lg border border-border p-1', className)}>
+    <div className={cn('flex items-center rounded-xl border border-border p-1', className)}>
       {THEMES.map(({ value, icon: Icon, label }) => (
         <button
           key={value}
           onClick={() => setTheme(value)}
           className={cn(
-            'rounded-md p-1.5 transition-colors',
+            'rounded-xl p-1.5 transition-colors',
             theme === value
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'

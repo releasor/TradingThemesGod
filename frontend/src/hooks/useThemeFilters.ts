@@ -33,6 +33,10 @@ export function useThemeFilters() {
 
   // 防抖搜索：300ms 后更新 URL
   useEffect(() => {
+    if (searchInput === (filters.q || '')) {
+      return
+    }
+
     const timer = setTimeout(() => {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev)
@@ -48,7 +52,7 @@ export function useThemeFilters() {
     }, DEBOUNCE_MS)
 
     return () => clearTimeout(timer)
-  }, [searchInput, setSearchParams])
+  }, [filters.q, searchInput, setSearchParams])
 
   // 更新筛选参数（非搜索）
   const updateFilter = useCallback(

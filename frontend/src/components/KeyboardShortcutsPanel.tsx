@@ -16,7 +16,7 @@ interface Shortcut {
 
 /** 快捷键列表 */
 const shortcuts: Shortcut[] = [
-  { key: 'R', description: '刷新数据' },
+  { key: 'R', description: '刷新看板' },
   { key: 'T', description: '打开题材库' },
   { key: '/', description: '聚焦搜索' },
   { key: '?', description: '显示快捷键帮助' },
@@ -63,7 +63,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isO
       />
 
       {/* 面板内容 */}
-      <div className="relative z-10 w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg">
+      <div className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
         {/* 头部 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isO
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="rounded-xl p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label="关闭快捷键面板"
           >
             <X className="h-5 w-5" />
@@ -96,7 +96,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isO
                   <kbd
                     key={mod}
                     className={cn(
-                      'inline-flex h-6 min-w-[24px] items-center justify-center rounded border border-border bg-muted px-1.5 text-xs font-medium text-muted-foreground'
+                      'inline-flex h-6 min-w-[24px] items-center justify-center rounded-xl border border-border bg-muted px-1.5 text-xs font-medium text-muted-foreground'
                     )}
                   >
                     {mod}
@@ -104,7 +104,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isO
                 ))}
                 <kbd
                   className={cn(
-                    'inline-flex h-6 min-w-[24px] items-center justify-center rounded border border-border bg-muted px-1.5 text-xs font-medium text-muted-foreground'
+                    'inline-flex h-6 min-w-[24px] items-center justify-center rounded-xl border border-border bg-muted px-1.5 text-xs font-medium text-muted-foreground'
                   )}
                 >
                   {shortcut.key}
@@ -116,7 +116,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isO
 
         {/* 底部提示 */}
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          按 <kbd className="rounded border border-border bg-muted px-1">Esc</kbd> 关闭
+          按 <kbd className="rounded-xl border border-border bg-muted px-1">Esc</kbd> 关闭
         </p>
       </div>
     </div>
@@ -133,7 +133,7 @@ export const KeyboardShortcutsButton = memo(function KeyboardShortcutsButton() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="rounded-xl p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
         title="键盘快捷键 (?)"
         aria-label="键盘快捷键帮助"
       >

@@ -249,6 +249,94 @@ class TestThemeRepository:
         assert themes[0].heat_index >= themes[1].heat_index
 
     @pytest.mark.asyncio
+    async def test_get_market_signals_only_includes_classified_codes(
+        self, mock_session, sample_themes
+    ):
+        repo = ThemeRepository(mock_session)
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = sample_themes
+        mock_session.execute.return_value = mock_result
+
+        themes = await repo.get_market_signals()
+
+        assert themes == sample_themes
+        query = mock_session.execute.await_args.args[0]
+        compiled = query.compile(dialect=mysql.dialect(paramstyle="named"))
+        sql = str(compiled)
+        assert " IN " in sql
+        assert "NOT IN" not in sql
+        assert "themes.rise_fall_pct DESC" in sql
+        assert any("BK0815" in value for value in compiled.params.values())
+        assert all(
+            "BK1676" not in value
+            for value in compiled.params.values()
+            if isinstance(value, (str, tuple, list, set, frozenset))
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_indicator_signals_only_includes_classified_codes(
+        self, mock_session, sample_themes
+    ):
+        repo = ThemeRepository(mock_session)
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = sample_themes
+        mock_session.execute.return_value = mock_result
+
+        themes = await repo.get_indicator_signals()
+
+        assert themes == sample_themes
+        query = mock_session.execute.await_args.args[0]
+        compiled = query.compile(dialect=mysql.dialect(paramstyle="named"))
+        sql = str(compiled)
+        assert " IN " in sql
+        assert "NOT IN" not in sql
+        assert "themes.rise_fall_pct DESC" in sql
+        assert any("BK1676" in value for value in compiled.params.values())
+        assert all(
+            "BK0815" not in value
+            for value in compiled.params.values()
+            if isinstance(value, (str, tuple, list, set, frozenset))
+        )
+
+    @pytest.mark.asyncio
+    async def test_regular_theme_queries_exclude_market_signals(self, mock_session):
+        repo = ThemeRepository(mock_session)
+        repo._paginate = AsyncMock(return_value=([], 0))
+
+        await repo.list_paginated()
+        list_query = repo._paginate.await_args.kwargs["query"]
+        await repo.search(query="AI")
+        search_query = repo._paginate.await_args.kwargs["query"]
+
+        empty_result = MagicMock()
+        empty_result.all.return_value = []
+        empty_result.scalars.return_value.all.return_value = []
+        mock_session.execute.return_value = empty_result
+        await repo.get_categories()
+        categories_query = mock_session.execute.await_args.args[0]
+        await repo.get_ranking()
+        ranking_query = mock_session.execute.await_args.args[0]
+
+        empty_stream = MagicMock()
+        empty_stream.__aiter__.return_value = iter([])
+        mock_session.stream.return_value = empty_stream
+        async for _ in repo.stream_all():
+            pass
+        export_query = mock_session.stream.await_args.args[0]
+
+        for query in (
+            list_query,
+            search_query,
+            categories_query,
+            ranking_query,
+            export_query,
+        ):
+            compiled = query.compile(dialect=mysql.dialect(paramstyle="named"))
+            assert "NOT IN" in str(compiled)
+            assert any("BK0815" in value for value in compiled.params.values())
+            assert any("BK1676" in value for value in compiled.params.values())
+
+    @pytest.mark.asyncio
     async def test_get_industry_chains_by_theme(self, mock_session, sample_chains):
         """测试获取产业链数据"""
         repo = ThemeRepository(mock_session)

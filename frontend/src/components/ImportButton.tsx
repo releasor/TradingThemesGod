@@ -73,7 +73,7 @@ export const ImportButton = memo(function ImportButton<T extends Record<string, 
     <div className={cn('relative', className)}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent"
+        className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent"
       >
         <Upload className="h-4 w-4" />
         导入
@@ -91,7 +91,7 @@ export const ImportButton = memo(function ImportButton<T extends Record<string, 
           />
 
           {/* 导入面板 */}
-          <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border border-border bg-card p-4 shadow-lg">
+          <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-xl border border-border bg-card p-4 shadow-lg">
             {/* 标题 */}
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">导入数据</h3>
@@ -100,7 +100,7 @@ export const ImportButton = memo(function ImportButton<T extends Record<string, 
                   setIsOpen(false)
                   reset()
                 }}
-                className="rounded p-1 text-muted-foreground hover:bg-accent"
+                className="rounded-xl p-1 text-muted-foreground hover:bg-accent"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -110,7 +110,7 @@ export const ImportButton = memo(function ImportButton<T extends Record<string, 
             <div
               onDrop={handleDrop}
               onDragOver={handleDragOver}
-              className="mt-4 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-6"
+              className="mt-4 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 p-6"
             >
               <Upload className="h-8 w-8 text-muted-foreground" />
               <p className="mt-2 text-sm text-muted-foreground">
@@ -145,12 +145,12 @@ export const ImportButton = memo(function ImportButton<T extends Record<string, 
             {result && (
               <div className="mt-4">
                 {result.success ? (
-                  <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">
+                  <div className="flex items-center gap-2 rounded-xl bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">
                     <Check className="h-4 w-4" />
                     <span>成功导入 {result.imported} 条数据</span>
                   </div>
                 ) : (
-                  <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+                  <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
                     <div className="flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
                       <span>导入失败</span>

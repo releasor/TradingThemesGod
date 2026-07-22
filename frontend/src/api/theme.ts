@@ -10,6 +10,9 @@ import type {
   ThemeListResponse,
   ThemeCategoriesResponse,
   ThemeDetailResponse,
+  ConceptGraphRefreshResponse,
+  ConceptGraphBatchItem,
+  ThemeInsightRefreshResponse,
 } from '@/types/theme'
 import type { StockListResponse } from '@/types/stock'
 
@@ -19,6 +22,32 @@ export async function fetchThemeRanking(limit = 20): Promise<ThemeRankingRespons
     params: { limit },
   })
   return data
+}
+
+/** 获取独立展示的市场表现板块。 */
+export async function fetchMarketSignals(): Promise<ThemeRankingResponse> {
+  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/market-signals')
+  return {
+    ...data,
+    items: data.items.map((item) => ({
+      ...item,
+      heat_index: Number(item.heat_index),
+      rise_fall_pct: Number(item.rise_fall_pct),
+    })),
+  }
+}
+
+/** 获取独立展示的行情指标板块（新高、财报预告、破增发等）。 */
+export async function fetchIndicatorSignals(): Promise<ThemeRankingResponse> {
+  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/indicator-signals')
+  return {
+    ...data,
+    items: data.items.map((item) => ({
+      ...item,
+      heat_index: Number(item.heat_index),
+      rise_fall_pct: Number(item.rise_fall_pct),
+    })),
+  }
 }
 
 /** 获取题材列表（支持分页、排序、筛选） */
@@ -63,6 +92,38 @@ export async function fetchCategories(): Promise<ThemeCategoriesResponse> {
 export async function fetchThemeDetail(id: number): Promise<ThemeDetailResponse> {
   const { data } = await apiClient.get<ThemeDetailResponse>(`/themes/${id}`)
   return data
+}
+
+/** 抓取真实公开资料并增量刷新单个题材图谱。 */
+export async function refreshConceptGraph(id: number): Promise<ConceptGraphRefreshResponse> {
+  const { data } = await apiClient.post<ConceptGraphRefreshResponse>(
+    `/themes/${id}/concept-graph/refresh`,
+    undefined,
+    { timeout: 300_000 }
+  )
+  return data
+}
+
+export async function refreshThemeInsights(id: number): Promise<ThemeInsightRefreshResponse> {
+  const { data } = await apiClient.post<ThemeInsightRefreshResponse>(
+    `/themes/${id}/insights/refresh`,
+    undefined,
+    { timeout: 300_000 }
+  )
+  return data
+}
+
+/** 有限批量刷新题材图谱。 */
+export async function refreshConceptGraphs(
+  themeIds: number[],
+  limit = 5
+): Promise<ConceptGraphBatchItem[]> {
+  const { data } = await apiClient.post<{ items: ConceptGraphBatchItem[] }>(
+    '/themes/concept-graphs/refresh',
+    { theme_ids: themeIds, limit },
+    { timeout: 900_000 }
+  )
+  return data.items
 }
 
 /** 获取题材关联的股票列表 */

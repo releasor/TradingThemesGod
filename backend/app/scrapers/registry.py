@@ -3,8 +3,6 @@
 管理所有已注册的爬虫类，通过名称查找。
 """
 
-from typing import Type
-
 from app.core.logging import get_logger
 from app.scrapers.base import BaseScraper
 
@@ -21,9 +19,9 @@ class ScraperRegistry:
     """
 
     def __init__(self):
-        self._scrapers: dict[str, Type[BaseScraper]] = {}
+        self._scrapers: dict[str, type[BaseScraper]] = {}
 
-    def register(self, name: str, scraper_class: Type[BaseScraper]) -> None:
+    def register(self, name: str, scraper_class: type[BaseScraper]) -> None:
         """注册爬虫类
 
         Args:
@@ -38,7 +36,7 @@ class ScraperRegistry:
         self._scrapers[name] = scraper_class
         logger.info(f"已注册爬虫: {name} -> {scraper_class.__name__}")
 
-    def get(self, name: str) -> Type[BaseScraper] | None:
+    def get(self, name: str) -> type[BaseScraper] | None:
         """获取爬虫类
 
         Args:
@@ -60,7 +58,13 @@ scraper_registry = ScraperRegistry()
 
 def register_default_scrapers() -> None:
     """注册默认爬虫"""
+    from app.scrapers.akshare import AKShareScraper
     from app.scrapers.eastmoney import EastMoneyScraper
+    from app.scrapers.sina import SinaFinanceScraper
+    from app.scrapers.ths import TongHuaShunScraper
 
     scraper_registry.register("eastmoney", EastMoneyScraper)
-    logger.info("已注册默认爬虫: eastmoney")
+    scraper_registry.register("ths", TongHuaShunScraper)
+    scraper_registry.register("akshare", AKShareScraper)
+    scraper_registry.register("sina", SinaFinanceScraper)
+    logger.info("已注册默认爬虫: eastmoney, ths, akshare, sina")

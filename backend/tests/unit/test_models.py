@@ -74,7 +74,8 @@ class TestThemeModel:
         expected_columns = {
             "id", "name", "code", "description", "heat_index",
             "rise_fall_pct", "stock_count", "category", "tags",
-            "source", "created_at", "updated_at", "deleted_at"
+            "source", "created_at", "updated_at", "deleted_at",
+            "insights_last_attempted_at"
         }
         assert expected_columns == columns
 

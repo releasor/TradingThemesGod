@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Building, AlertCircle } from 'lucide-react'
 import { StockList } from '@/components/StockList'
 import { StockListSkeleton } from '@/components/StockListSkeleton'
+import { GlowCard } from '@/components/GlowCard'
 import { fetchThemeStocks } from '@/api/theme'
 import type { IndustryChainBrief } from '@/types/theme'
 
@@ -44,7 +45,8 @@ export const ChainPointCard = memo(function ChainPointCard({ chainPoint, themeId
   )
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/20">
+    <GlowCard>
+      <div className="p-3">
       {/* 头部：名称和展开按钮 */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -59,7 +61,7 @@ export const ChainPointCard = memo(function ChainPointCard({ chainPoint, themeId
         </div>
         <button
           onClick={() => setExpanded(!expanded)}
-          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="shrink-0 rounded-xl p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label={expanded ? '折叠' : '展开'}
         >
           {expanded ? (
@@ -76,7 +78,7 @@ export const ChainPointCard = memo(function ChainPointCard({ chainPoint, themeId
           {companies.map((company, index) => (
             <span
               key={index}
-              className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+              className="inline-flex items-center gap-1 rounded-xl bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
             >
               <Building className="h-3 w-3" />
               {company}
@@ -98,6 +100,7 @@ export const ChainPointCard = memo(function ChainPointCard({ chainPoint, themeId
           {!isLoading && !isError && <StockList stocks={stocks} />}
         </div>
       )}
-    </div>
+      </div>
+    </GlowCard>
   )
 })

@@ -19,7 +19,7 @@ export const NotFound = memo(function NotFound() {
   const navigate = useNavigate()
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
       <div className="mx-auto max-w-md text-center">
         {/* 404 图标 */}
         <div className="mb-6 text-8xl font-bold text-muted-foreground/30">
@@ -40,21 +40,21 @@ export const NotFound = memo(function NotFound() {
         <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <button
             onClick={() => navigate('/')}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             <Home className="h-4 w-4" />
             返回首页
           </button>
           <button
             onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+            className="inline-flex items-center gap-2 rounded-xl border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
           >
             <ArrowLeft className="h-4 w-4" />
             返回上页
           </button>
           <button
             onClick={() => navigate('/themes')}
-            className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+            className="inline-flex items-center gap-2 rounded-xl border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
           >
             <Search className="h-4 w-4" />
             浏览题材库

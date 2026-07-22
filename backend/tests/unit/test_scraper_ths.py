@@ -1,7 +1,7 @@
-"""同花顺产业链爬虫单元测试"""
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+import pytest
 
 from app.scrapers.ths import TongHuaShunScraper
 
@@ -91,6 +91,7 @@ def test_source_name(scraper):
 async def test_save_with_valid_data(scraper):
     """测试保存有效数据"""
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
 
     with patch("app.scrapers.ths.AsyncSessionLocal") as mock_local:
@@ -122,3 +123,80 @@ async def test_save_with_empty_data(scraper):
 
         result = await scraper.save([])
         assert result == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("params", "message"),
+    [
+        ({"source_code": "881121"}, "未提供本地题材代码 theme_code"),
+        ({"theme_code": "BK1632"}, "未提供同花顺代码 source_code"),
+    ],
+)
+async def test_run_rejects_missing_codes(scraper, params, message):
+    """缺少任一代码都应明确失败，避免任务被误记为完成。"""
+    with pytest.raises(ValueError, match=message):
+        await scraper.run(params=params)
+
+
+@pytest.mark.asyncio
+async def test_run_uses_source_code_for_url_and_theme_code_for_database():
+    """来源代码用于请求，本地代码用于关联题材。"""
+    middleware = MagicMock()
+    middleware.get = AsyncMock(
+        return_value=httpx.Response(
+            200,
+            text="<html>产业链</html>",
+            request=httpx.Request(
+                "GET", "http://q.10jqka.com.cn/thshy/detail/code/881121"
+            ),
+        )
+    )
+    scraper = TongHuaShunScraper(middleware=middleware)
+    chains = [{"level": "upstream", "name": "原材料"}]
+    scraper.parse = MagicMock(return_value=chains)
+    scraper.save = AsyncMock(return_value=1)
+
+    theme = MagicMock(id=42)
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = theme
+    session = AsyncMock()
+    session.execute.return_value = result
+
+    with patch("app.scrapers.ths.AsyncSessionLocal") as session_factory:
+        session_factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+        data, saved_count = await scraper.run(
+            params={"theme_code": "BK1632", "source_code": "881121"}
+        )
+
+    middleware.get.assert_awaited_once_with(
+        "http://q.10jqka.com.cn/thshy/detail/code/881121"
+    )
+    statement = session.execute.await_args.args[0]
+    assert "themes.code = :code_1" in str(statement)
+    assert statement.compile().params["code_1"] == "BK1632"
+    assert data[0]["theme_id"] == 42
+    assert saved_count == 1
+
+
+@pytest.mark.asyncio
+async def test_run_rejects_redirected_detail_page():
+    """无效来源代码重定向到行业首页时不得解析和保存。"""
+    middleware = MagicMock()
+    middleware.get = AsyncMock(
+        return_value=httpx.Response(
+            200,
+            text="<html>行业首页</html>",
+            request=httpx.Request("GET", "http://q.10jqka.com.cn/thshy/"),
+        )
+    )
+    scraper = TongHuaShunScraper(middleware=middleware)
+    scraper.parse = MagicMock()
+
+    with pytest.raises(ValueError, match="同花顺代码无效或页面已重定向"):
+        await scraper.run(
+            params={"theme_code": "BK1632", "source_code": "invalid"}
+        )
+
+    scraper.parse.assert_not_called()

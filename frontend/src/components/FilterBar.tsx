@@ -85,7 +85,7 @@ export const FilterBar = memo(function FilterBar({
           value={selectedCategory || ''}
           onChange={(e) => onCategoryChange(e.target.value || undefined)}
           className={cn(
-            'rounded-md border border-input bg-background px-3 py-1.5 text-sm',
+            'rounded-xl border border-input bg-background px-3 py-1.5 text-sm',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           )}
           aria-label="按分类筛选"
@@ -111,7 +111,7 @@ export const FilterBar = memo(function FilterBar({
               onKeyDown={handleTagKeyDown}
               onBlur={addTagFromInput}
               className={cn(
-                'w-24 rounded-md border border-input bg-background px-2 py-1 text-xs',
+                'w-24 rounded-xl border border-input bg-background px-2 py-1 text-xs',
                 'placeholder:text-muted-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               )}
@@ -121,7 +121,7 @@ export const FilterBar = memo(function FilterBar({
           {tagInput.trim() && (
             <button
               onClick={addTagFromInput}
-              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20 transition-colors"
+              className="inline-flex items-center gap-1 rounded-xl bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20 transition-colors"
             >
               <Plus className="h-3 w-3" />
             </button>

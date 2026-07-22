@@ -3,34 +3,40 @@
 从东方财富 API 获取题材概念列表和关联股票数据。
 """
 
-from decimal import Decimal
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
+from app.core.logging import get_logger
+from app.models.stock import Stock
 from app.models.theme import Theme
 from app.models.theme_stock import ThemeStock
-from app.models.stock import Stock
-from app.scrapers.base import BaseScraper
-from app.core.logging import get_logger
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.base import BaseScraper
+from app.services.theme_market import ThemeMarketService
 
 logger = get_logger(__name__)
 
 # 东方财富 API 基础配置
-EASTMONEY_API_BASE = "http://push2.eastmoney.com/api/qt/clist/get"
+EASTMONEY_API_BASE = "https://push2.eastmoney.com/api/qt/clist/get"
+EASTMONEY_API_FALLBACK_BASE = "https://push2delay.eastmoney.com/api/qt/clist/get"
+EASTMONEY_API_BASES = (EASTMONEY_API_BASE, EASTMONEY_API_FALLBACK_BASE)
 
 # 默认请求参数
 DEFAULT_PARAMS = {
     "fid": "f3",
+    "pn": "1",
     "po": "1",
-    "pz": "500",  # 每页数量
+    "pz": "100",  # 东方财富接口单页最多稳定返回 100 条
     "np": "1",
     "fltt": "2",
     "invt": "2",
-    "ut": "bd1d9ddb04089700cf9c27f6f7426281",
+    "ut": "7eea3edcaed734bea9cbfc24409ed989",
+    "fields": "f2,f3,f8,f12,f14,f20,f100,f104,f124",
 }
 
 # 题材板块前缀
@@ -64,6 +70,7 @@ class EastMoneyScraper(BaseScraper):
             middleware: 反爬虫中间件实例
         """
         super().__init__(middleware)
+        self._active_api_base = EASTMONEY_API_BASE
 
     async def fetch_json(self, url: str, params: dict[str, Any] | None = None) -> dict:
         """获取 JSON API 数据
@@ -75,10 +82,81 @@ class EastMoneyScraper(BaseScraper):
         Returns:
             解析后的 JSON 数据
         """
-        logger.info(f"[{self.source_name}] 正在请求 API: {url}")
-        response = await self.middleware.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
+        candidate_urls = [url]
+        if url in EASTMONEY_API_BASES:
+            candidate_urls = [
+                self._active_api_base,
+                *[
+                    api_url
+                    for api_url in EASTMONEY_API_BASES
+                    if api_url != self._active_api_base
+                ],
+            ]
+
+        last_error: Exception | None = None
+        for candidate_url in candidate_urls:
+            try:
+                logger.info(f"[{self.source_name}] 正在请求 API: {candidate_url}")
+                response = await self.middleware.get(candidate_url, params=params)
+                response.raise_for_status()
+                if candidate_url in EASTMONEY_API_BASES:
+                    self._active_api_base = candidate_url
+                return response.json()
+            except Exception as exc:
+                last_error = exc
+                if candidate_url == candidate_urls[-1]:
+                    break
+                logger.warning(
+                    f"[{self.source_name}] API {candidate_url} 请求失败，切换备用域名: {exc}"
+                )
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("东方财富 API 请求失败")
+
+    async def fetch_all_pages(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+        """按接口总数分页抓取全部数据"""
+        page = 1
+        page_size = int(params.get("pz", DEFAULT_PARAMS["pz"]))
+        total: int | None = None
+        items: list[dict[str, Any]] = []
+        seen_codes: set[str] = set()
+
+        while True:
+            page_params = {**params, "pn": str(page)}
+            payload = await self.fetch_json(url, page_params)
+            data = payload.get("data") or {}
+            page_items = data.get("diff") or []
+
+            if total is None:
+                try:
+                    total = int(data.get("total", 0))
+                except (TypeError, ValueError):
+                    total = 0
+
+            for item in page_items:
+                code = str(item.get("f12", ""))
+                if code and code in seen_codes:
+                    continue
+                if code:
+                    seen_codes.add(code)
+                items.append(item)
+
+            if (
+                not page_items
+                or (total > 0 and len(items) >= total)
+                or len(page_items) < page_size
+            ):
+                break
+
+            page += 1
+
+        return {
+            "data": {
+                "total": total or len(items),
+                "diff": items,
+            }
+        }
 
     def parse_theme_list(self, data: dict) -> list[dict[str, Any]]:
         """解析题材列表数据
@@ -90,7 +168,7 @@ class EastMoneyScraper(BaseScraper):
             题材数据列表
         """
         themes = []
-        diff = data.get("data", {}).get("diff", [])
+        diff = (data.get("data") or {}).get("diff", [])
 
         if not diff:
             logger.warning(f"[{self.source_name}] 未获取到题材数据")
@@ -107,9 +185,9 @@ class EastMoneyScraper(BaseScraper):
                 theme = {
                     "name": item.get("f14", ""),  # 题材名称
                     "code": code,  # 题材代码
-                    "heat_index": Decimal(str(item.get("f8", 0))),  # 热度指数
-                    "rise_fall_pct": Decimal(str(item.get("f3", 0))),  # 涨跌幅
-                    "stock_count": int(item.get("f104", 0)),  # 关联股票数量
+                    "heat_index": self._to_optional_decimal(item.get("f8")),
+                    "rise_fall_pct": self._to_optional_decimal(item.get("f3")),
+                    "stock_count": self._to_optional_int(item.get("f104")),
                     "category": self._extract_category(item.get("f14", "")),  # 分类
                     "source": self.source_name,
                 }
@@ -121,7 +199,9 @@ class EastMoneyScraper(BaseScraper):
                     logger.warning(f"[{self.source_name}] 跳过无效题材数据: {item}")
 
             except (ValueError, TypeError) as e:
-                logger.warning(f"[{self.source_name}] 解析题材数据失败: {e}, 数据: {item}")
+                logger.warning(
+                    f"[{self.source_name}] 解析题材数据失败: {e}, 数据: {item}"
+                )
                 continue
 
         logger.info(f"[{self.source_name}] 解析到 {len(themes)} 个题材")
@@ -138,7 +218,7 @@ class EastMoneyScraper(BaseScraper):
             股票数据列表
         """
         stocks = []
-        diff = data.get("data", {}).get("diff", [])
+        diff = (data.get("data") or {}).get("diff", [])
 
         if not diff:
             logger.info(f"[{self.source_name}] 题材 {theme_code} 无关联股票")
@@ -149,9 +229,15 @@ class EastMoneyScraper(BaseScraper):
                 stock = {
                     "code": str(item.get("f12", "")),  # 股票代码
                     "name": item.get("f14", ""),  # 股票名称
-                    "rise_fall_pct": Decimal(str(item.get("f3", 0))),  # 涨跌幅
-                    "current_price": Decimal(str(item.get("f2", 0))),  # 当前价格
+                    "rise_fall_pct": self._to_optional_decimal(item.get("f3")),
+                    "current_price": self._to_optional_decimal(item.get("f2")),
                 }
+                market_cap = self._to_optional_decimal(item.get("f20"))
+                industry = str(item.get("f100") or "").strip()
+                if market_cap is not None:
+                    stock["market_cap"] = market_cap
+                if industry:
+                    stock["industry"] = industry
 
                 # 验证必填字段
                 if stock["code"] and stock["name"]:
@@ -160,11 +246,65 @@ class EastMoneyScraper(BaseScraper):
                     logger.warning(f"[{self.source_name}] 跳过无效股票数据: {item}")
 
             except (ValueError, TypeError) as e:
-                logger.warning(f"[{self.source_name}] 解析股票数据失败: {e}, 数据: {item}")
+                logger.warning(
+                    f"[{self.source_name}] 解析股票数据失败: {e}, 数据: {item}"
+                )
                 continue
 
-        logger.info(f"[{self.source_name}] 题材 {theme_code} 解析到 {len(stocks)} 只股票")
+        logger.info(
+            f"[{self.source_name}] 题材 {theme_code} 解析到 {len(stocks)} 只股票"
+        )
         return stocks
+
+    @staticmethod
+    def _to_decimal(value: Any) -> Decimal:
+        """将东方财富的数值字段转换为 Decimal，缺失行情按 0 处理。"""
+        if value in (None, "", "-"):
+            return Decimal("0")
+
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return Decimal("0")
+
+    @staticmethod
+    def _to_optional_decimal(value: Any) -> Decimal | None:
+        """转换可选数值；来源缺失时保留 None，供增量更新判断。"""
+        if value in (None, "", "-"):
+            return None
+
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _to_optional_int(value: Any) -> int | None:
+        """转换可选整数；无效来源值不应被解释为零。"""
+        if value in (None, "", "-"):
+            return None
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _extract_trade_date(data: dict[str, Any]) -> date | None:
+        """从行情更新时间提取最近有效交易日，避免用服务器日历日期造快照。"""
+        trade_dates: list[date] = []
+        for item in (data.get("data") or {}).get("diff", []):
+            raw_timestamp = item.get("f124")
+            try:
+                timestamp = int(raw_timestamp)
+                if timestamp <= 0:
+                    continue
+                trade_dates.append(
+                    datetime.fromtimestamp(timestamp, ZoneInfo("Asia/Shanghai")).date()
+                )
+            except (OSError, OverflowError, TypeError, ValueError):
+                continue
+        return max(trade_dates, default=None)
 
     def _extract_category(self, name: str) -> str:
         """从题材名称提取分类
@@ -219,47 +359,57 @@ class EastMoneyScraper(BaseScraper):
         saved_count = 0
 
         async with AsyncSessionLocal() as session:
-            # 批量查询现有题材（避免 N+1 查询）
-            theme_names = [t["name"] for t in themes if t.get("name")]
+            # 题材代码是唯一且稳定的标识，名称可能随来源调整
+            theme_codes = [t["code"] for t in themes if t.get("code")]
             existing_result = await session.execute(
                 select(Theme).where(
-                    Theme.name.in_(theme_names),
+                    Theme.code.in_(theme_codes),
                     Theme.deleted_at.is_(None),
                 )
             )
-            existing_map = {t.name: t for t in existing_result.scalars().all()}
+            existing_map = {t.code: t for t in existing_result.scalars().all()}
 
             for theme_data in themes:
                 try:
-                    theme = existing_map.get(theme_data["name"])
+                    theme = existing_map.get(theme_data["code"])
 
                     if theme:
                         # 更新现有题材
+                        theme.name = theme_data["name"]
                         theme.code = theme_data["code"]
-                        theme.heat_index = theme_data["heat_index"]
-                        theme.rise_fall_pct = theme_data["rise_fall_pct"]
-                        theme.stock_count = theme_data["stock_count"]
+                        if theme_data["heat_index"] is not None:
+                            theme.heat_index = theme_data["heat_index"]
+                        if theme_data["rise_fall_pct"] is not None:
+                            theme.rise_fall_pct = theme_data["rise_fall_pct"]
+                        if theme_data["stock_count"] is not None:
+                            theme.stock_count = theme_data["stock_count"]
                         theme.category = theme_data["category"]
                         theme.source = theme_data["source"]
-                        logger.debug(f"[{self.source_name}] 更新题材: {theme_data['name']}")
+                        logger.debug(
+                            f"[{self.source_name}] 更新题材: {theme_data['name']}"
+                        )
                     else:
                         # 创建新题材
                         theme = Theme(
                             name=theme_data["name"],
                             code=theme_data["code"],
-                            heat_index=theme_data["heat_index"],
-                            rise_fall_pct=theme_data["rise_fall_pct"],
-                            stock_count=theme_data["stock_count"],
+                            heat_index=theme_data["heat_index"] or Decimal("0"),
+                            rise_fall_pct=theme_data["rise_fall_pct"] or Decimal("0"),
+                            stock_count=theme_data["stock_count"] or 0,
                             category=theme_data["category"],
                             source=theme_data["source"],
                         )
                         session.add(theme)
-                        logger.debug(f"[{self.source_name}] 创建题材: {theme_data['name']}")
+                        logger.debug(
+                            f"[{self.source_name}] 创建题材: {theme_data['name']}"
+                        )
 
                     saved_count += 1
 
                 except Exception as e:
-                    logger.error(f"[{self.source_name}] 保存题材失败: {e}, 数据: {theme_data}")
+                    logger.error(
+                        f"[{self.source_name}] 保存题材失败: {e}, 数据: {theme_data}"
+                    )
                     continue
 
             await session.commit()
@@ -284,13 +434,18 @@ class EastMoneyScraper(BaseScraper):
         async with AsyncSessionLocal() as session:
             # 获取题材
             theme_result = await session.execute(
-                select(Theme).where(Theme.code == theme_code, Theme.deleted_at.is_(None))
+                select(Theme).where(
+                    Theme.code == theme_code, Theme.deleted_at.is_(None)
+                )
             )
             theme = theme_result.scalar_one_or_none()
 
             if not theme:
                 logger.warning(f"[{self.source_name}] 未找到题材: {theme_code}")
                 return 0
+
+            # 以实际抓取结果为准，避免源列表统计口径与成分股详情不一致
+            theme.stock_count = len(stocks)
 
             # 批量查询现有股票（避免 N+1 查询）
             stock_codes = [s["code"] for s in stocks if s.get("code")]
@@ -308,7 +463,9 @@ class EastMoneyScraper(BaseScraper):
                         ThemeStock.stock_id.in_([s.id for s in existing_stock_ids]),
                     )
                 )
-                theme_stock_map = {ts.stock_id: ts for ts in theme_stock_result.scalars().all()}
+                theme_stock_map = {
+                    ts.stock_id: ts for ts in theme_stock_result.scalars().all()
+                }
             else:
                 theme_stock_map = {}
 
@@ -319,6 +476,8 @@ class EastMoneyScraper(BaseScraper):
                     if not stock:
                         # 创建新股票
                         stock = Stock(
+                            market_cap=stock_data.get("market_cap"),
+                            industry=stock_data.get("industry"),
                             code=stock_data["code"],
                             name=stock_data["name"],
                             current_price=stock_data.get("current_price"),
@@ -327,6 +486,14 @@ class EastMoneyScraper(BaseScraper):
                         session.add(stock)
                         await session.flush()  # 获取 stock.id
                         stock_map[stock_data["code"]] = stock
+                    else:
+                        stock.name = stock_data["name"]
+                        stock.current_price = stock_data.get("current_price")
+                        stock.rise_fall_pct = stock_data.get("rise_fall_pct")
+                        if stock_data.get("market_cap") is not None:
+                            stock.market_cap = stock_data["market_cap"]
+                        if stock_data.get("industry"):
+                            stock.industry = stock_data["industry"]
 
                     # 创建或更新关联关系
                     theme_stock = theme_stock_map.get(stock.id)
@@ -350,7 +517,9 @@ class EastMoneyScraper(BaseScraper):
 
             await session.commit()
 
-        logger.info(f"[{self.source_name}] 题材 {theme_code} 保存了 {saved_count} 只股票")
+        logger.info(
+            f"[{self.source_name}] 题材 {theme_code} 保存了 {saved_count} 只股票"
+        )
         return saved_count
 
     async def run(
@@ -368,12 +537,16 @@ class EastMoneyScraper(BaseScraper):
         logger.info(f"[{self.source_name}] 开始爬取任务")
 
         # Step 1: 获取题材列表
-        theme_params = {**DEFAULT_PARAMS, "fs": f"b:{THEME_BOARD_PREFIX}"}
+        theme_params = {
+            **DEFAULT_PARAMS,
+            "fid": "f12",
+            "fs": "m:90+t:3+f:!50",
+        }
         if params:
             theme_params.update(params)
 
         try:
-            theme_data = await self.fetch_json(EASTMONEY_API_BASE, theme_params)
+            theme_data = await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
         except Exception as e:
             logger.error(f"[{self.source_name}] 获取题材列表失败: {e}")
             raise
@@ -391,16 +564,25 @@ class EastMoneyScraper(BaseScraper):
 
         # Step 4: 获取并保存每个题材的关联股票
         total_stocks = 0
+        latest_trade_date: date | None = None
         for theme in themes:
             try:
                 # 构建题材股票请求参数
                 stock_params = {
                     **DEFAULT_PARAMS,
+                    "fid": "f12",
                     "fs": f"b:{theme['code']}",
                 }
 
                 # 获取题材股票
-                stock_data = await self.fetch_json(EASTMONEY_API_BASE, stock_params)
+                stock_data = await self.fetch_all_pages(
+                    EASTMONEY_API_BASE, stock_params
+                )
+                stock_trade_date = self._extract_trade_date(stock_data)
+                if stock_trade_date is not None and (
+                    latest_trade_date is None or stock_trade_date > latest_trade_date
+                ):
+                    latest_trade_date = stock_trade_date
 
                 # 解析股票列表
                 stocks = self.parse_theme_stocks(stock_data, theme["code"])
@@ -420,8 +602,22 @@ class EastMoneyScraper(BaseScraper):
             f"保存 {saved_themes} 个题材, {total_stocks} 只股票"
         )
 
+        if latest_trade_date is None:
+            logger.warning(
+                f"[{self.source_name}] 行情缺少有效交易时间，跳过市场快照刷新"
+            )
+        else:
+            try:
+                await self._refresh_market_snapshots(latest_trade_date)
+            except Exception as exc:
+                logger.warning(f"[{self.source_name}] 题材市场快照刷新失败: {exc}")
+
         return themes, saved_themes + total_stocks
 
     async def close(self) -> None:
         """关闭爬虫资源"""
         await self.middleware.close()
+
+    async def _refresh_market_snapshots(self, trade_date: date) -> int:
+        async with AsyncSessionLocal() as session:
+            return await ThemeMarketService(session).refresh_all(trade_date)

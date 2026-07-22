@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.concept_node_stock import ConceptNodeStock
     from app.models.event import Event
     from app.models.theme_stock import ThemeStock
 
@@ -39,6 +40,7 @@ class Stock(Base, TimestampMixin):
     # 关系定义
     themes: Mapped[list["ThemeStock"]] = relationship(back_populates="stock", cascade="all, delete-orphan")
     events: Mapped[list["Event"]] = relationship(back_populates="stock")
+    concept_node_links: Mapped[list["ConceptNodeStock"]] = relationship(back_populates="stock", cascade="all, delete-orphan")
 
     # 表级配置：索引
     # 注意：code 字段有 UNIQUE 约束，MySQL 会自动创建索引，无需额外定义

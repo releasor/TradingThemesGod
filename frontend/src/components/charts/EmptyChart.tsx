@@ -19,7 +19,7 @@ export const EmptyChart = memo(function EmptyChart({ message = '暂无数据', c
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 bg-muted/30',
+        'flex flex-col items-center justify-center rounded-xl border border-dashed border-muted-foreground/25 bg-muted/30',
         className
       )}
     >

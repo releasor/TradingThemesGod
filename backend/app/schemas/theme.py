@@ -6,7 +6,15 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.concept_graph import ConceptGraphResponse
+from app.schemas.theme_insight import (
+    ThemeDriverEventResponse,
+    ThemeMarketSnapshotResponse,
+    ThemeProfileResponse,
+)
 
 
 class ThemeSearchParams(BaseModel):
@@ -19,19 +27,21 @@ class ThemeSearchParams(BaseModel):
     )
     sort_order: Literal["asc", "desc"] = Field(default="desc", description="排序方向")
     category: str | None = Field(default=None, max_length=50, description="按分类筛选")
-    tags: str | None = Field(default=None, max_length=200, description="按标签筛选（逗号分隔）")
+    tags: str | None = Field(
+        default=None, max_length=200, description="按标签筛选（逗号分隔）"
+    )
 
-    @field_validator('tags')
+    @field_validator("tags")
     @classmethod
     def validate_tags(cls, v: str | None) -> str | None:
         if v is not None:
             # 验证标签格式
-            tags = [t.strip() for t in v.split(',') if t.strip()]
+            tags = [t.strip() for t in v.split(",") if t.strip()]
             if len(tags) > 10:
-                raise ValueError('最多支持10个标签筛选')
+                raise ValueError("最多支持10个标签筛选")
             for tag in tags:
                 if len(tag) > 20:
-                    raise ValueError('单个标签长度不能超过20个字符')
+                    raise ValueError("单个标签长度不能超过20个字符")
         return v
 
 
@@ -59,7 +69,9 @@ class IndustryChainBrief(BaseModel):
     level: str = Field(description="产业链层级: upstream/midstream/downstream")
     name: str = Field(description="环节名称")
     description: str | None = Field(default=None, description="环节描述")
-    representative_companies: list | dict | None = Field(default=None, description="代表公司列表")
+    representative_companies: list | dict | None = Field(
+        default=None, description="代表公司列表"
+    )
     sort_order: int = Field(description="排序顺序")
 
     model_config = {"from_attributes": True}
@@ -93,6 +105,11 @@ class ThemeDetailResponse(BaseModel):
     industry_chains: dict[str, list[IndustryChainBrief]] = Field(
         description="产业链数据（按层级分组）"
     )
+    chain_stock_counts: dict[str, int] = Field(description="各产业链层级的成分股数量")
+    concept_graph: ConceptGraphResponse = Field(default_factory=ConceptGraphResponse)
+    profile: ThemeProfileResponse | None = None
+    recent_driver_events: list[ThemeDriverEventResponse] = Field(default_factory=list)
+    market_snapshot: ThemeMarketSnapshotResponse | None = None
 
     model_config = {"from_attributes": True}
 

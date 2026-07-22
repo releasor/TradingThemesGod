@@ -1,8 +1,10 @@
 """AKShare 股票数据爬虫单元测试"""
 
-import pytest
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pandas as pd
+import pytest
 
 from app.scrapers.akshare import AKShareScraper
 
@@ -76,6 +78,63 @@ def test_parse_returns_empty_when_no_cache(scraper):
 def test_source_name(scraper):
     """测试数据源名称"""
     assert scraper.source_name == "akshare"
+
+
+def test_parse_tencent_quotes_maps_market_cap(scraper):
+    text = (
+        'v_sh600000="1~浦发银行~600000~8.92~8.89~8.92~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~'
+        '20260716092604~0.03~0.34~0~0~0~0~0~0~0~0~0~0~0~2970.88~2970.88";'
+    )
+
+    result = scraper._parse_tencent_quotes(text)
+
+    assert result["600000"] == Decimal("297088000000")
+
+
+def test_normalize_spot_row_maps_live_fields(scraper):
+    row = {"代码": "sh600000", "名称": "浦发银行", "最新价": 8.92, "涨跌幅": 0.34}
+
+    result = scraper._normalize_spot_row(row)
+
+    assert result == {
+        "code": "600000",
+        "name": "浦发银行",
+        "current_price": Decimal("8.92"),
+        "rise_fall_pct": Decimal("0.34"),
+        "exchange": "SH",
+    }
+
+
+@pytest.mark.asyncio
+async def test_fetch_stock_info_keeps_stocks_missing_from_live_snapshot(scraper):
+    """实时快照缺股时，仍应使用完整股票目录补全基础数据。"""
+    stock_catalog = pd.DataFrame(
+        [
+            {"code": "600000", "name": "浦发银行"},
+            {"code": "600522", "name": "中天科技"},
+        ]
+    )
+    live_snapshot = pd.DataFrame(
+        [{"代码": "sh600000", "名称": "浦发银行", "最新价": 8.92, "涨跌幅": 0.34}]
+    )
+
+    with (
+        patch("app.scrapers.akshare.ak.stock_info_a_code_name", return_value=stock_catalog),
+        patch("app.scrapers.akshare.ak.stock_zh_a_spot", return_value=live_snapshot),
+        patch.object(scraper, "_fetch_sina_industries", return_value=({}, {})),
+        patch.object(
+            scraper,
+            "_fetch_tencent_market_caps",
+            return_value={"600522": Decimal("132525000000")},
+        ),
+    ):
+        result = await scraper.fetch_stock_info()
+
+    by_code = {stock["code"]: stock for stock in result}
+    assert set(by_code) == {"600000", "600522"}
+    assert by_code["600522"]["name"] == "中天科技"
+    assert by_code["600522"]["market_cap"] == Decimal("132525000000")
+    assert by_code["600522"]["current_price"] is None
 
 
 @pytest.mark.asyncio

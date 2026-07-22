@@ -28,6 +28,12 @@ interface IndustryChainPieProps {
     midstream: IndustryChainBrief[]
     downstream: IndustryChainBrief[]
   }
+  /** 各层级的成分股数量 */
+  stockCounts?: {
+    upstream: number
+    midstream: number
+    downstream: number
+  }
   /** 自定义类名 */
   className?: string
 }
@@ -40,18 +46,22 @@ const LEVEL_NAMES: Record<string, string> = {
 }
 
 /** 产业链股票分布饼图组件 */
-export const IndustryChainPie = memo(function IndustryChainPie({ chains, className }: IndustryChainPieProps) {
+export const IndustryChainPie = memo(function IndustryChainPie({
+  chains,
+  stockCounts,
+  className,
+}: IndustryChainPieProps) {
   const { colors, isDark } = useChartTheme()
 
   // 计算各层级的环节数量
   const data = useMemo(
     () =>
       [
-        { name: LEVEL_NAMES.upstream, value: chains.upstream.length, level: 'upstream' },
-        { name: LEVEL_NAMES.midstream, value: chains.midstream.length, level: 'midstream' },
-        { name: LEVEL_NAMES.downstream, value: chains.downstream.length, level: 'downstream' },
+        { name: LEVEL_NAMES.upstream, value: stockCounts?.upstream ?? chains.upstream.length, level: 'upstream' },
+        { name: LEVEL_NAMES.midstream, value: stockCounts?.midstream ?? chains.midstream.length, level: 'midstream' },
+        { name: LEVEL_NAMES.downstream, value: stockCounts?.downstream ?? chains.downstream.length, level: 'downstream' },
       ].filter((d) => d.value > 0),
-    [chains],
+    [chains, stockCounts],
   )
 
   const option = useMemo(() => {

@@ -3,9 +3,7 @@
 提供通用的数据库查询辅助方法，减少重复代码。
 """
 
-import asyncio
-
-from sqlalchemy import Select, func, desc, asc, select
+from sqlalchemy import Select, asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -27,7 +25,7 @@ class BaseRepository:
 
         将 count + sort + offset/limit + execute 封装为一个方法，
         消除各仓储中重复的分页逻辑。
-        count 查询与数据查询并行执行，减少总响应时间。
+        同一个 AsyncSession 不支持并发查询，因此顺序执行 count 和数据查询。
 
         Args:
             query: 基础 SELECT 查询（已包含 WHERE 条件）
@@ -55,11 +53,9 @@ class BaseRepository:
         offset = (page - 1) * page_size
         data_query = data_query.offset(offset).limit(page_size)
 
-        # 并行执行 count 和 data 查询
-        count_result, data_result = await asyncio.gather(
-            self.session.execute(count_query),
-            self.session.execute(data_query),
-        )
+        # 同一会话必须顺序执行，避免 SQLAlchemy 并发状态异常
+        count_result = await self.session.execute(count_query)
+        data_result = await self.session.execute(data_query)
 
         total = count_result.scalar() or 0
         items = list(data_result.scalars().all())

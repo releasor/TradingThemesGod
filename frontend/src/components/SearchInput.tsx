@@ -91,7 +91,7 @@ export const SearchInput = memo(function SearchInput({
       {/* 输入框 */}
       <div
         className={cn(
-          'flex items-center rounded-lg border bg-background px-3 py-2 transition-colors',
+          'flex items-center rounded-xl border bg-background px-3 py-2 transition-colors',
           isFocused ? 'border-primary ring-2 ring-primary/20' : 'border-input'
         )}
       >
@@ -118,7 +118,7 @@ export const SearchInput = memo(function SearchInput({
         {value && (
           <button
             onClick={handleClear}
-            className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="rounded-xl p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label="清除搜索"
           >
             <X className="h-4 w-4" />
@@ -128,7 +128,7 @@ export const SearchInput = memo(function SearchInput({
 
       {/* 下拉框 */}
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-card p-2 shadow-lg" role="listbox" aria-label="搜索历史">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-border bg-card p-2 shadow-lg" role="listbox" aria-label="搜索历史">
           {/* 搜索历史 */}
           {history.length > 0 && (
             <div>
@@ -138,7 +138,7 @@ export const SearchInput = memo(function SearchInput({
                 </span>
                 <button
                   onClick={clearHistory}
-                  className="flex items-center gap-1 rounded px-1 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="flex items-center gap-1 rounded-xl px-1 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                   aria-label="清除搜索历史"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -149,7 +149,7 @@ export const SearchInput = memo(function SearchInput({
                 {history.map((item) => (
                   <div
                     key={item}
-                    className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-accent"
+                    className="flex items-center justify-between rounded-xl px-2 py-1.5 hover:bg-accent"
                   >
                     <button
                       onClick={() => handleSelectHistory(item)}
@@ -164,7 +164,7 @@ export const SearchInput = memo(function SearchInput({
                         e.stopPropagation()
                         removeSearch(item)
                       }}
-                      className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      className="rounded-xl p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       aria-label={`删除搜索记录: ${item}`}
                     >
                       <X className="h-3 w-3" />

@@ -16,12 +16,18 @@ from slowapi.util import get_remote_address
 
 from app.api.errors import router as errors_router
 from app.api.health import router as health_router
+from app.api.model_provider import router as model_provider_router
+from app.api.news import router as news_router
 from app.api.scraper import router as scraper_router
+from app.api.short_term import router as short_term_router
 from app.api.stats import router as stats_router
 from app.api.stock import router as stock_router
 from app.api.theme import router as theme_router
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
+from app.scrapers.registry import register_default_scrapers
+from app.scrapers.scheduler import scraper_scheduler
+from app.services.theme_insight_scheduler import theme_insight_scheduler
 
 # 配置结构化日志
 setup_logging()
@@ -35,10 +41,34 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
+    register_default_scrapers()
+    settings = get_settings()
     logger.info("Starting TradingThemesGod API...")
-    yield
-    # 关闭时执行
-    logger.info("Shutting down TradingThemesGod API...")
+    if settings.SCRAPER_AUTO_ENABLED:
+        scraper_scheduler.start_periodic(
+            "eastmoney",
+            interval_seconds=settings.SCRAPER_INTERVAL_SECONDS,
+        )
+        logger.info(
+            "已启动东方财富自动采集，间隔 %s 秒",
+            settings.SCRAPER_INTERVAL_SECONDS,
+        )
+    if getattr(settings, "THEME_INSIGHT_AUTO_ENABLED", False) is True:
+        theme_insight_scheduler.batch_size = settings.THEME_INSIGHT_BATCH_SIZE
+        theme_insight_scheduler.profile_max_age_days = (
+            settings.THEME_PROFILE_MAX_AGE_DAYS
+        )
+        theme_insight_scheduler.start(settings.THEME_INSIGHT_INTERVAL_SECONDS)
+
+    try:
+        yield
+    finally:
+        # 关闭时执行
+        if settings.SCRAPER_AUTO_ENABLED:
+            await scraper_scheduler.stop_periodic("eastmoney")
+        if getattr(settings, "THEME_INSIGHT_AUTO_ENABLED", False) is True:
+            await theme_insight_scheduler.stop()
+        logger.info("Shutting down TradingThemesGod API...")
 
 
 def create_app() -> FastAPI:
@@ -112,16 +142,21 @@ def create_app() -> FastAPI:
     )
 
     # 跳过日志记录的路径（健康检查和文档）
-    _SKIP_LOG_PATHS = frozenset({
-        "/api/v1/health", "/docs", "/redoc", "/openapi.json",
-    })
+    skip_log_paths = frozenset(
+        {
+            "/api/v1/health",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+        }
+    )
 
     # 请求日志中间件
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         """记录每个请求的方法、路径、状态码和耗时"""
         # 跳过健康检查和文档路径
-        if request.url.path in _SKIP_LOG_PATHS:
+        if request.url.path in skip_log_paths:
             return await call_next(request)
 
         # 生成请求 ID
@@ -159,6 +194,9 @@ def create_app() -> FastAPI:
     app.include_router(stock_router, prefix="/api/v1")
     app.include_router(errors_router, prefix="/api/v1")
     app.include_router(stats_router, prefix="/api/v1")
+    app.include_router(news_router, prefix="/api/v1")
+    app.include_router(model_provider_router, prefix="/api/v1")
+    app.include_router(short_term_router, prefix="/api/v1")
 
     # 全局异常处理器
     @app.exception_handler(Exception)

@@ -1,8 +1,9 @@
 """新浪财经事件爬虫单元测试"""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.scrapers.sina import SinaFinanceScraper
 
@@ -107,6 +108,13 @@ def test_source_name(scraper):
     assert scraper.source_name == "sina"
 
 
+def test_normalize_stock_symbol(scraper):
+    assert scraper._normalize_stock_symbol("600000") == "sh600000"
+    assert scraper._normalize_stock_symbol("000001") == "sz000001"
+    assert scraper._normalize_stock_symbol("920000") == "bj920000"
+    assert scraper._normalize_stock_symbol("sh600000") == "sh600000"
+
+
 @pytest.mark.asyncio
 async def test_save_with_valid_data(scraper):
     """测试保存有效数据"""
@@ -123,7 +131,7 @@ async def test_save_with_valid_data(scraper):
                 "content": "事件内容",
                 "source": "新浪财经",
                 "event_type": "news",
-                "published_at": datetime(2024, 1, 15, tzinfo=timezone.utc),
+                "published_at": datetime(2024, 1, 15, tzinfo=UTC),
                 "stock_id": 1,
             }
         ]
@@ -143,6 +151,35 @@ async def test_save_with_empty_data(scraper):
 
         result = await scraper.save([])
         assert result == 0
+
+
+@pytest.mark.asyncio
+async def test_save_deduplicates_events_per_stock(scraper):
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+    )
+
+    with patch("app.scrapers.sina.AsyncSessionLocal") as mock_local:
+        mock_local.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        await scraper.save(
+            [
+                {
+                    "title": "同一条市场新闻",
+                    "published_at": datetime(2026, 7, 16, tzinfo=UTC),
+                    "stock_id": 100,
+                },
+                {
+                    "title": "同一条市场新闻",
+                    "published_at": datetime(2026, 7, 16, tzinfo=UTC),
+                    "stock_id": 200,
+                },
+            ]
+        )
+
+    query = mock_session.execute.await_args.args[0]
+    assert "events.stock_id" in str(query)
 
 
 def test_extract_news_items(scraper, sample_html):

@@ -1,10 +1,10 @@
 /** 自动刷新按钮组件
 
-提供自动刷新功能的按钮和设置。
+提供轻量刷新、全量更新和自动刷新设置。
 */
 
 import { memo } from 'react'
-import { RefreshCw, Clock, Play, Pause } from 'lucide-react'
+import { RefreshCw, Clock, Play, Pause, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /** 刷新间隔选项 */
@@ -17,8 +17,10 @@ const REFRESH_INTERVALS = [
 
 /** 自动刷新按钮属性 */
 interface AutoRefreshButtonProps {
-  /** 是否正在刷新 */
+  /** 是否正在轻量刷新 */
   isRefreshing?: boolean
+  /** 是否正在全量更新（爬虫） */
+  isUpdating?: boolean
   /** 是否启用自动刷新 */
   isAutoRefresh: boolean
   /** 切换自动刷新 */
@@ -27,8 +29,10 @@ interface AutoRefreshButtonProps {
   refreshInterval: number
   /** 设置刷新间隔 */
   onSetRefreshInterval: (interval: number) => void
-  /** 手动刷新 */
+  /** 轻量刷新：仅重新拉取看板接口 */
   onRefresh: () => void
+  /** 全量更新：触发东方财富采集（可选） */
+  onFullUpdate?: () => void
   /** 自定义类名 */
   className?: string
 }
@@ -40,40 +44,63 @@ interface AutoRefreshButtonProps {
  * ```tsx
  * <AutoRefreshButton
  *   isRefreshing={isFetching}
+ *   isUpdating={isUpdating}
  *   isAutoRefresh={isAutoRefresh}
  *   onToggleAutoRefresh={toggleAutoRefresh}
  *   refreshInterval={refreshInterval}
  *   onSetRefreshInterval={setRefreshInterval}
- *   onRefresh={() => refetch()}
+ *   onRefresh={() => void refreshDashboard()}
+ *   onFullUpdate={() => void updateDashboard()}
  * />
  * ```
  */
 export const AutoRefreshButton = memo(function AutoRefreshButton({
   isRefreshing = false,
+  isUpdating = false,
   isAutoRefresh,
   onToggleAutoRefresh,
   refreshInterval,
   onSetRefreshInterval,
   onRefresh,
+  onFullUpdate,
   className,
 }: AutoRefreshButtonProps) {
+  const busy = isRefreshing || isUpdating
+
   return (
-    <div className={cn('flex items-center gap-2', className)}>
-      {/* 手动刷新按钮 */}
+    <div className={cn('flex flex-wrap items-center gap-2', className)}>
+      {/* 轻量刷新 */}
       <button
+        type="button"
         onClick={onRefresh}
-        disabled={isRefreshing}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
+        disabled={busy}
+        title="仅重新拉取看板数据，不触发全量采集"
+        className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
       >
         <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
         刷新
       </button>
 
+      {/* 全量更新（爬虫） */}
+      {onFullUpdate && (
+        <button
+          type="button"
+          onClick={onFullUpdate}
+          disabled={busy}
+          title="从东方财富全量采集，通常需要较长时间"
+          className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
+        >
+          <Database className={cn('h-4 w-4', isUpdating && 'animate-pulse')} />
+          {isUpdating ? '全量更新中…' : '全量更新'}
+        </button>
+      )}
+
       {/* 自动刷新切换 */}
       <button
+        type="button"
         onClick={onToggleAutoRefresh}
         className={cn(
-          'inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+          'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors',
           isAutoRefresh
             ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
             : 'border-border bg-card text-card-foreground hover:bg-accent'
@@ -95,7 +122,7 @@ export const AutoRefreshButton = memo(function AutoRefreshButton({
           <select
             value={refreshInterval}
             onChange={(e) => onSetRefreshInterval(Number(e.target.value))}
-            className="rounded border border-input bg-background px-2 py-1 text-sm"
+            className="rounded-xl border border-input bg-background px-2 py-1 text-sm"
           >
             {REFRESH_INTERVALS.map((option) => (
               <option key={option.value} value={option.value}>

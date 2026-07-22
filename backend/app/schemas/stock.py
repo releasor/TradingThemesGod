@@ -5,8 +5,8 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
-from pydantic import BaseModel, Field, field_validator
+
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class StockBrief(BaseModel):
@@ -22,6 +22,11 @@ class StockBrief(BaseModel):
     exchange: str | None = Field(default=None, description="交易所(SH/SZ/BJ)")
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("market_cap", "current_price", "rise_fall_pct", when_used="json")
+    def serialize_decimal_fields(self, value: Decimal | None) -> float | None:
+        """将 Decimal 数值序列化为前端可直接使用的 JSON number。"""
+        return float(value) if value is not None else None
 
 
 class EventBrief(BaseModel):
@@ -75,6 +80,11 @@ class StockDetailResponse(BaseModel):
     recent_events: list[EventListItem] = Field(description="最近事件（最多5条）")
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("market_cap", "current_price", "rise_fall_pct", when_used="json")
+    def serialize_decimal_fields(self, value: Decimal | None) -> float | None:
+        """将 Decimal 数值序列化为前端可直接使用的 JSON number。"""
+        return float(value) if value is not None else None
 
     @field_validator('code')
     @classmethod

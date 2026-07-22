@@ -4,17 +4,21 @@
 """
 
 import asyncio
+import json
+import math
+import re
 from decimal import Decimal
 from typing import Any
 
 import akshare as ak
+import requests
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
-from app.models.stock import Stock
-from app.scrapers.base import BaseScraper
 from app.core.logging import get_logger
+from app.models.stock import Stock
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.base import BaseScraper
 
 logger = get_logger(__name__)
 
@@ -36,6 +40,108 @@ class AKShareScraper(BaseScraper):
         super().__init__(middleware)
         self._stock_data: list[dict[str, Any]] = []
 
+    @staticmethod
+    def _to_decimal(value: Any) -> Decimal | None:
+        """将来源数值转换为 Decimal，无效值保持为空。"""
+        try:
+            result = Decimal(str(value))
+            return result if result.is_finite() else None
+        except Exception:
+            return None
+
+    def _normalize_spot_row(self, row: Any) -> dict[str, Any] | None:
+        """统一新浪 A 股行情字段。"""
+        raw_code = str(row.get("代码", "")).strip().lower()
+        code = re.sub(r"^(sh|sz|bj)", "", raw_code)
+        name = str(row.get("名称", "")).strip()
+        if not code or not name:
+            return None
+        return {
+            "code": code,
+            "name": name,
+            "current_price": self._to_decimal(row.get("最新价")),
+            "rise_fall_pct": self._to_decimal(row.get("涨跌幅")),
+            "exchange": self._detect_exchange(code),
+        }
+
+    def _parse_tencent_quotes(self, text: str) -> dict[str, Decimal]:
+        """解析腾讯批量行情中的总市值，来源单位为亿元。"""
+        market_caps: dict[str, Decimal] = {}
+        for line in text.splitlines():
+            match = re.search(r'="(.*)";', line)
+            if not match:
+                continue
+            fields = match.group(1).split("~")
+            if len(fields) <= 44:
+                continue
+            market_cap_yi = self._to_decimal(fields[44])
+            code = fields[2].strip()
+            if code and market_cap_yi is not None and market_cap_yi > 0:
+                market_caps[code] = market_cap_yi * Decimal("100000000")
+        return market_caps
+
+    def _fetch_tencent_market_caps(self, codes: list[str]) -> dict[str, Decimal]:
+        """分批获取总市值，避免逐股请求。"""
+        result: dict[str, Decimal] = {}
+        headers = {"Referer": "https://gu.qq.com", "User-Agent": "Mozilla/5.0"}
+        for offset in range(0, len(codes), 100):
+            symbols = [
+                f"{self._detect_exchange(code).lower()}{code}"
+                for code in codes[offset : offset + 100]
+            ]
+            response = requests.get(
+                f"https://qt.gtimg.cn/q={','.join(symbols)}",
+                headers=headers,
+                timeout=15,
+            )
+            response.raise_for_status()
+            response.encoding = "gbk"
+            result.update(self._parse_tencent_quotes(response.text))
+        return result
+
+    def _fetch_sina_industries(self) -> tuple[dict[str, str], dict[str, Decimal]]:
+        """批量构建新浪行业归属，并读取接口附带的总市值。"""
+        headers = {
+            "Referer": "https://finance.sina.com.cn",
+            "User-Agent": "Mozilla/5.0",
+        }
+        response = requests.get(
+            "https://vip.stock.finance.sina.com.cn/q/view/newSinaHy.php",
+            headers=headers,
+            timeout=15,
+        )
+        response.raise_for_status()
+        sectors = json.loads(response.text[response.text.find("{") :])
+        industries: dict[str, str] = {}
+        market_caps: dict[str, Decimal] = {}
+        detail_url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+        for sector, summary in sectors.items():
+            values = summary.split(",")
+            industry, total = values[1].strip(), int(values[2])
+            for page in range(1, math.ceil(total / 80) + 1):
+                detail = requests.get(
+                    detail_url,
+                    params={
+                        "page": page,
+                        "num": 80,
+                        "sort": "symbol",
+                        "asc": 1,
+                        "node": sector,
+                    },
+                    headers=headers,
+                    timeout=15,
+                )
+                detail.raise_for_status()
+                for item in detail.json() or []:
+                    code = str(item.get("code", "")).strip()
+                    if not code:
+                        continue
+                    industries.setdefault(code, industry)
+                    market_cap_wan = self._to_decimal(item.get("mktcap"))
+                    if market_cap_wan is not None and market_cap_wan > 0:
+                        market_caps[code] = market_cap_wan * Decimal("10000")
+        return industries, market_caps
+
     async def fetch_stock_info(self) -> list[dict[str, Any]]:
         """获取股票基本信息
 
@@ -45,32 +151,69 @@ class AKShareScraper(BaseScraper):
         logger.info(f"[{self.source_name}] 开始获取股票信息")
 
         try:
-            # 使用 AKShare 获取 A 股股票列表
-            # ak.stock_info_a_code_name() 返回股票代码和名称
-            # 使用 asyncio.to_thread 避免阻塞事件循环
-            stock_df = await asyncio.to_thread(ak.stock_info_a_code_name)
+            # 完整目录负责股票覆盖，实时快照只负责补充行情字段。
+            # 停牌、除权等股票可能暂时不出现在实时快照中。
+            catalog_df, spot_df = await asyncio.gather(
+                asyncio.to_thread(ak.stock_info_a_code_name),
+                asyncio.to_thread(ak.stock_zh_a_spot),
+            )
 
-            if stock_df is None or stock_df.empty:
+            if catalog_df is None or catalog_df.empty:
                 logger.warning(f"[{self.source_name}] 未获取到股票数据")
                 return []
 
             # 转换为字典列表
-            stocks = []
-            for _, row in stock_df.iterrows():
-                try:
-                    stock = {
-                        "code": str(row.get("code", "")),
-                        "name": str(row.get("name", "")),
-                        "industry": "",
-                        "market_cap": None,
-                        "exchange": self._detect_exchange(str(row.get("code", ""))),
+            industries, sina_market_caps = await asyncio.to_thread(
+                self._fetch_sina_industries
+            )
+            live_by_code: dict[str, dict[str, Any]] = {}
+            if spot_df is not None and not spot_df.empty:
+                normalized_rows = [
+                    self._normalize_spot_row(row) for _, row in spot_df.iterrows()
+                ]
+                live_by_code = {
+                    row["code"]: row for row in normalized_rows if row is not None
+                }
+
+            valid_rows: list[dict[str, Any]] = []
+            for _, row in catalog_df.iterrows():
+                code = re.sub(r"^(sh|sz|bj)", "", str(row.get("code", "")).strip().lower())
+                name = str(row.get("name", "")).strip()
+                if not code or not name:
+                    continue
+                live = live_by_code.get(code, {})
+                valid_rows.append(
+                    {
+                        "code": code,
+                        "name": name,
+                        "current_price": live.get("current_price"),
+                        "rise_fall_pct": live.get("rise_fall_pct"),
+                        "exchange": self._detect_exchange(code),
                     }
+                )
+            try:
+                tencent_market_caps = await asyncio.to_thread(
+                    self._fetch_tencent_market_caps,
+                    [row["code"] for row in valid_rows],
+                )
+            except Exception as exc:
+                logger.warning(f"[{self.source_name}] 腾讯市值补充失败: {exc}")
+                tencent_market_caps = {}
+
+            stocks = []
+            for stock in valid_rows:
+                try:
+                    code = stock["code"]
+                    stock["industry"] = industries.get(code)
+                    stock["market_cap"] = (
+                        sina_market_caps.get(code) or tencent_market_caps.get(code)
+                    )
 
                     # 验证必填字段
                     if stock["code"] and stock["name"]:
                         stocks.append(stock)
                     else:
-                        logger.warning(f"[{self.source_name}] 跳过无效股票数据: {row}")
+                        logger.warning(f"[{self.source_name}] 跳过无效股票数据: {stock}")
 
                 except Exception as e:
                     logger.warning(f"[{self.source_name}] 解析股票数据失败: {e}")
@@ -135,15 +278,19 @@ class AKShareScraper(BaseScraper):
         async with AsyncSessionLocal() as session:
             # 批量查询现有股票（避免 N+1 查询）
             stock_codes = [s["code"] for s in data if s.get("code")]
-            if stock_codes:
-                existing_result = await session.execute(
-                    select(Stock).where(Stock.code.in_(stock_codes))
-                )
-                existing_map = {
-                    s.code: s for s in existing_result.scalars().all()
-                }
-            else:
-                existing_map = {}
+            try:
+                if stock_codes:
+                    existing_result = await session.execute(
+                        select(Stock).where(Stock.code.in_(stock_codes))
+                    )
+                    existing_map = {
+                        s.code: s for s in existing_result.scalars().all()
+                    }
+                else:
+                    existing_map = {}
+            except Exception as exc:
+                logger.error(f"[{self.source_name}] 查询现有股票失败: {exc}")
+                return 0
 
             for stock_data in data:
                 try:
@@ -158,6 +305,10 @@ class AKShareScraper(BaseScraper):
                             stock.market_cap = stock_data["market_cap"]
                         if stock_data.get("exchange"):
                             stock.exchange = stock_data["exchange"]
+                        if stock_data.get("current_price") is not None:
+                            stock.current_price = stock_data["current_price"]
+                        if stock_data.get("rise_fall_pct") is not None:
+                            stock.rise_fall_pct = stock_data["rise_fall_pct"]
                         logger.debug(
                             f"[{self.source_name}] 更新股票: {stock_data['code']} {stock_data['name']}"
                         )
@@ -169,6 +320,8 @@ class AKShareScraper(BaseScraper):
                             industry=stock_data.get("industry"),
                             market_cap=stock_data.get("market_cap"),
                             exchange=stock_data.get("exchange"),
+                            current_price=stock_data.get("current_price"),
+                            rise_fall_pct=stock_data.get("rise_fall_pct"),
                         )
                         session.add(stock)
                         logger.debug(

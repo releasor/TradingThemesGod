@@ -13,7 +13,7 @@ export const StockListSkeleton = memo(function StockListSkeleton() {
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center justify-between rounded-md px-2 py-1.5"
+          className="flex items-center justify-between rounded-xl px-2 py-1.5"
         >
           <div className="flex items-center gap-2">
             <Skeleton className="h-3.5 w-12" />

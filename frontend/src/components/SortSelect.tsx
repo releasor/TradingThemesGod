@@ -47,7 +47,7 @@ export const SortSelect = memo(function SortSelect({ sortBy, sortOrder, onSortCh
         value={sortBy}
         onChange={handleSortByChange}
         className={cn(
-          'rounded-md border border-input bg-background px-2 py-1.5 text-sm',
+          'rounded-xl border border-input bg-background px-2 py-1.5 text-sm',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
@@ -60,7 +60,7 @@ export const SortSelect = memo(function SortSelect({ sortBy, sortOrder, onSortCh
       <button
         onClick={toggleOrder}
         className={cn(
-          'inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1.5 text-sm',
+          'inline-flex items-center gap-1 rounded-xl border border-input bg-background px-2 py-1.5 text-sm',
           'hover:bg-accent transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         )}
