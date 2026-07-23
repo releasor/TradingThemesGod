@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { apiClient } from '@/api/client'
 import {
+  analyzeShortTermFromDatabase,
   fetchFirstToSecondCandidates,
   fetchShortTermOverview,
   refreshFirstToSecondCandidates,
+  refreshShortTermData,
 } from './short-term'
 
 vi.mock('@/api/client', () => ({
@@ -168,6 +170,84 @@ describe('short-term api', () => {
 
     expect(apiClient.post).toHaveBeenCalledWith('/short-term/first-to-second/refresh', null, {
       params: { trade_date: '2026-07-21' },
+      timeout: 300_000,
+    })
+  })
+
+  it('refreshes strategy card market data', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: {
+        trade_date: '2026-07-21',
+        period: 'today',
+        period_label: '当日',
+        start_date: '2026-07-21',
+        end_date: '2026-07-21',
+        degraded: false,
+        missing_sources: [],
+        market_emotion: '情绪强',
+        short_term_outlook: '当前更适合连板接力。',
+        operation_advice: '做连板',
+        tracking_focus: ['连板梯队'],
+        core_conclusion: '连板接力。',
+        risk_signals: [],
+        sector_count: 3,
+        candidate_count: 0,
+        strategy_card: {
+          title: '指数情绪策略卡 · 当日',
+          index_strength: 'strong',
+          emotion_strength: 'strong',
+          primary_strategy: '连板接力',
+          secondary_strategy: '主升分歧接力',
+          operation_advice: '指数强、情绪强，做连板。',
+          focus_targets: ['连板梯队'],
+          rationale: ['指数强度 0.80'],
+        },
+      },
+    })
+
+    await refreshShortTermData({ period: 'today' })
+
+    expect(apiClient.post).toHaveBeenCalledWith('/short-term/overview/refresh-data', null, {
+      params: { period: 'today' },
+      timeout: 300_000,
+    })
+  })
+
+  it('analyzes strategy card from database', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: {
+        trade_date: '2026-07-21',
+        period: 'today',
+        period_label: '当日',
+        start_date: '2026-07-21',
+        end_date: '2026-07-21',
+        degraded: false,
+        missing_sources: [],
+        market_emotion: '情绪弱',
+        short_term_outlook: '当前更适合补涨趋势与切换。',
+        operation_advice: '做补涨',
+        tracking_focus: ['低位补涨'],
+        core_conclusion: '补涨趋势与切换。',
+        risk_signals: ['短线情绪不足'],
+        sector_count: 3,
+        candidate_count: 0,
+        strategy_card: {
+          title: '指数情绪策略卡 · 当日',
+          index_strength: 'strong',
+          emotion_strength: 'weak',
+          primary_strategy: '补涨趋势与切换',
+          secondary_strategy: '轮动低吸',
+          operation_advice: '指数强但情绪弱，做补涨。',
+          focus_targets: ['低位补涨'],
+          rationale: ['指数强度 0.39'],
+        },
+      },
+    })
+
+    await analyzeShortTermFromDatabase({ period: 'today' })
+
+    expect(apiClient.post).toHaveBeenCalledWith('/short-term/overview/analyze', null, {
+      params: { period: 'today' },
       timeout: 300_000,
     })
   })

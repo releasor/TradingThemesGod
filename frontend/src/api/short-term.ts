@@ -12,21 +12,55 @@ interface FetchShortTermOverviewParams {
   endDate?: string
 }
 
-export async function fetchShortTermOverview({
+function buildShortTermOverviewParams({
   tradeDate,
   period = 'today',
   startDate,
   endDate,
-}: FetchShortTermOverviewParams = {}): Promise<ShortTermOverviewResponse> {
+}: FetchShortTermOverviewParams = {}) {
+  return {
+    ...(tradeDate ? { trade_date: tradeDate } : {}),
+    period,
+    ...(startDate ? { start_date: startDate } : {}),
+    ...(endDate ? { end_date: endDate } : {}),
+  }
+}
+
+export async function fetchShortTermOverview(
+  params: FetchShortTermOverviewParams = {}
+): Promise<ShortTermOverviewResponse> {
   const { data } = await apiClient.get<ShortTermOverviewResponse>('/short-term/overview', {
-    params: {
-      ...(tradeDate ? { trade_date: tradeDate } : {}),
-      period,
-      ...(startDate ? { start_date: startDate } : {}),
-      ...(endDate ? { end_date: endDate } : {}),
-    },
+    params: buildShortTermOverviewParams(params),
     timeout: 300_000,
   })
+  return data
+}
+
+export async function refreshShortTermData(
+  params: FetchShortTermOverviewParams = {}
+): Promise<ShortTermOverviewResponse> {
+  const { data } = await apiClient.post<ShortTermOverviewResponse>(
+    '/short-term/overview/refresh-data',
+    null,
+    {
+      params: buildShortTermOverviewParams(params),
+      timeout: 300_000,
+    }
+  )
+  return data
+}
+
+export async function analyzeShortTermFromDatabase(
+  params: FetchShortTermOverviewParams = {}
+): Promise<ShortTermOverviewResponse> {
+  const { data } = await apiClient.post<ShortTermOverviewResponse>(
+    '/short-term/overview/analyze',
+    null,
+    {
+      params: buildShortTermOverviewParams(params),
+      timeout: 300_000,
+    }
+  )
   return data
 }
 

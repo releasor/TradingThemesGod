@@ -100,6 +100,37 @@ describe('MarketStrategyCard', () => {
     expect(onPeriodChange).not.toHaveBeenCalled()
   })
 
+  it('shows refresh and database analyze actions', async () => {
+    const onRefreshData = vi.fn()
+    const onAnalyzeDatabase = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MarketStrategyCard
+        card={{
+          title: '指数情绪策略卡',
+          index_strength: 'strong',
+          emotion_strength: 'weak',
+          primary_strategy: '补涨趋势与切换',
+          secondary_strategy: '轮动低吸',
+          operation_advice: '指数强但情绪弱，做补涨、趋势和高低切换。',
+          focus_targets: ['低位补涨'],
+          rationale: ['指数强度 0.39'],
+        }}
+        period="today"
+        periodLabel="当日"
+        onRefreshData={onRefreshData}
+        onAnalyzeDatabase={onAnalyzeDatabase}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: '刷新行情' }))
+    await user.click(screen.getByRole('button', { name: '数据库分析' }))
+
+    expect(onRefreshData).toHaveBeenCalledTimes(1)
+    expect(onAnalyzeDatabase).toHaveBeenCalledTimes(1)
+  })
+
   it('shows period refresh progress and result inside the card', () => {
     const { rerender } = render(
       <MarketStrategyCard

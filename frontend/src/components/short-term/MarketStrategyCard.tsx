@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Crosshair, Gauge, GitBranch, Target } from 'lucide-react'
+import { Activity, AlertTriangle, Crosshair, Database, Gauge, GitBranch, RefreshCw, Target } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GlowCard } from '@/components/GlowCard'
 import type {
@@ -19,6 +19,10 @@ interface MarketStrategyCardProps {
   periodStatus?: ShortTermPeriodStatus | null
   degraded?: boolean
   missingSources?: string[]
+  isRefreshingData?: boolean
+  isAnalyzingDatabase?: boolean
+  onRefreshData?: () => void
+  onAnalyzeDatabase?: () => void
 }
 
 const PERIOD_OPTIONS: Array<{ value: ShortTermPeriod; label: string }> = [
@@ -51,6 +55,10 @@ export function MarketStrategyCard({
   periodStatus,
   degraded = false,
   missingSources = [],
+  isRefreshingData = false,
+  isAnalyzingDatabase = false,
+  onRefreshData,
+  onAnalyzeDatabase,
 }: MarketStrategyCardProps) {
   return (
     <GlowCard>
@@ -72,6 +80,28 @@ export function MarketStrategyCard({
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              title="快速拉取东方财富题材涨跌幅并更新当日市场快照，通常需 1-3 分钟"
+              onClick={onRefreshData}
+              disabled={!onRefreshData || isRefreshingData || isAnalyzingDatabase}
+              className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshingData && 'animate-spin')} />
+              刷新行情
+            </button>
+            <button
+              type="button"
+              title="仅使用数据库已有数据重新计算策略，不访问外部接口"
+              onClick={onAnalyzeDatabase}
+              disabled={!onAnalyzeDatabase || isRefreshingData || isAnalyzingDatabase}
+              className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Database className={cn('h-3.5 w-3.5', isAnalyzingDatabase && 'animate-pulse')} />
+              数据库分析
+            </button>
+          </div>
           <div className="flex flex-wrap items-center gap-1 rounded-xl bg-muted/60 p-1">
             {PERIOD_OPTIONS.map((option) => (
               <button
