@@ -118,7 +118,7 @@ class FirstToSecondService:
     ):
         self.session = session
         self.provider = provider or FirstToSecondProvider()
-        self.model_service = model_service or ModelProviderService(session)
+        self.model_service = model_service
 
     async def get_candidates(
         self, trade_date: date | None = None, *, force_refresh: bool = False

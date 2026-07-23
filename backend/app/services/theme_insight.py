@@ -38,7 +38,7 @@ class ThemeInsightRefreshService:
     ):
         self.session = session
         self.research = research or WebResearchService()
-        self.providers = providers or ModelProviderService(session)
+        self.providers = providers
         self.news = news or NewsRepository(session)
         self.insights = insights or ThemeInsightRepository(session)
 
@@ -71,6 +71,8 @@ class ThemeInsightRefreshService:
     async def _extract(
         self, theme: Theme, sources: list[ResearchSource]
     ) -> ExtractedThemeInsights:
+        if self.providers is None:
+            raise HTTPException(409, "请先在模型设置中配置并启用默认模型")
         provider = await self.providers.get_default()
         text = await self.providers.adapter(provider).complete(
             SYSTEM_PROMPT, self._prompt(theme, sources), reasoning=False

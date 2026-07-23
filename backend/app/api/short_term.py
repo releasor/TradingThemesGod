@@ -5,13 +5,16 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
+from app.models.user import User
 from app.schemas.short_term import (
     FirstToSecondCandidateResponse,
     ShortTermOverviewResponse,
     ShortTermPeriod,
 )
 from app.services.first_to_second import FirstToSecondService
+from app.services.model_provider import ModelProviderService
 from app.services.short_term import ShortTermService
 
 router = APIRouter(prefix="/short-term", tags=["short-term"])
@@ -37,11 +40,12 @@ async def get_short_term_overview(
 async def get_first_to_second_candidates(
     trade_date: date | None = Query(default=None, description="交易日"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """获取一进二打板候选。"""
-    return await FirstToSecondService(db).get_candidates(
-        trade_date, force_refresh=False
-    )
+    return await FirstToSecondService(
+        db, model_service=ModelProviderService(db, current_user.id)
+    ).get_candidates(trade_date, force_refresh=False)
 
 
 @router.post(
@@ -50,8 +54,9 @@ async def get_first_to_second_candidates(
 async def refresh_first_to_second_candidates(
     trade_date: date | None = Query(default=None, description="交易日"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """实时刷新一进二打板候选。"""
-    return await FirstToSecondService(db).get_candidates(
-        trade_date, force_refresh=True
-    )
+    return await FirstToSecondService(
+        db, model_service=ModelProviderService(db, current_user.id)
+    ).get_candidates(trade_date, force_refresh=True)

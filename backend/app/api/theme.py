@@ -10,7 +10,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
+from app.models.user import User
 from app.models.theme import Theme
 from app.schemas.concept_refresh import (
     ConceptGraphBatchItem,
@@ -27,23 +29,39 @@ from app.schemas.theme import (
 )
 from app.schemas.theme_insight import ThemeInsightRefreshResponse
 from app.services.concept_graph_refresh import ConceptGraphRefreshService
+from app.services.model_provider import ModelProviderService
 from app.services.theme import ThemeService
 from app.services.theme_insight import ThemeInsightRefreshService
 
 router = APIRouter(prefix="/themes", tags=["themes"])
 
 
+def _concept_service(
+    db: AsyncSession, current_user: User
+) -> ConceptGraphRefreshService:
+    return ConceptGraphRefreshService(
+        db, providers=ModelProviderService(db, current_user.id)
+    )
+
+
+def _insight_service(db: AsyncSession, current_user: User) -> ThemeInsightRefreshService:
+    return ThemeInsightRefreshService(
+        db, providers=ModelProviderService(db, current_user.id)
+    )
+
+
 @router.post("/concept-graphs/refresh", response_model=ConceptGraphBatchResponse)
 async def refresh_concept_graphs(
     payload: ConceptGraphBatchRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """有限批量更新题材图谱，逐个处理并返回每项结果。"""
     query = select(Theme.id).where(Theme.deleted_at.is_(None)).order_by(Theme.id)
     if payload.theme_ids:
         query = query.where(Theme.id.in_(payload.theme_ids))
     theme_ids = list((await db.execute(query.limit(payload.limit))).scalars())
-    service = ConceptGraphRefreshService(db)
+    service = _concept_service(db, current_user)
     items: list[ConceptGraphBatchItem] = []
     for theme_id in theme_ids:
         try:
@@ -157,9 +175,10 @@ async def get_indicator_signals(
 async def refresh_concept_graph(
     theme_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """抓取公开资料并使用默认模型增量刷新单个题材图谱。"""
-    return await ConceptGraphRefreshService(db).refresh(theme_id)
+    return await _concept_service(db, current_user).refresh(theme_id)
 
 
 @router.post(
@@ -169,9 +188,10 @@ async def refresh_concept_graph(
 async def refresh_theme_insights(
     theme_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """抓取公开资料并增量刷新单个题材的介绍和驱动事件。"""
-    service = ThemeInsightRefreshService(db)
+    service = _insight_service(db, current_user)
     try:
         return await service.refresh(theme_id)
     finally:

@@ -39,8 +39,14 @@ def model_http_error_message(exc: httpx.HTTPError) -> str:
 
 
 class ModelProviderService:
-    def __init__(self, session: AsyncSession, secrets: SecretStore | None = None):
+    def __init__(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        secrets: SecretStore | None = None,
+    ):
         self.session = session
+        self.user_id = user_id
         self.secrets = secrets or SecretStore()
 
     def _response(self, item: ModelProvider) -> ModelProviderResponse:
@@ -75,23 +81,29 @@ class ModelProviderService:
 
     async def list(self) -> list[ModelProviderResponse]:
         result = await self.session.execute(
-            select(ModelProvider).order_by(
-                ModelProvider.is_default.desc(), ModelProvider.id
-            )
+            select(ModelProvider)
+            .where(ModelProvider.user_id == self.user_id)
+            .order_by(ModelProvider.is_default.desc(), ModelProvider.id)
         )
         return [self._response(item) for item in result.scalars()]
+
+    async def _get_owned(self, provider_id: int) -> ModelProvider:
+        item = await self.session.get(ModelProvider, provider_id)
+        if item is None or item.user_id != self.user_id:
+            raise HTTPException(404, "模型配置不存在")
+        return item
 
     async def save(
         self, payload: ModelProviderUpsert, provider_id: int | None = None
     ) -> ModelProviderResponse:
-        item = (
-            await self.session.get(ModelProvider, provider_id) if provider_id else None
-        )
-        if provider_id and item is None:
-            raise HTTPException(404, "模型配置不存在")
-        item = item or ModelProvider()
+        item = await self._get_owned(provider_id) if provider_id else None
+        item = item or ModelProvider(user_id=self.user_id)
         if payload.is_default:
-            await self.session.execute(update(ModelProvider).values(is_default=False))
+            await self.session.execute(
+                update(ModelProvider)
+                .where(ModelProvider.user_id == self.user_id)
+                .values(is_default=False)
+            )
         for field in (
             "name",
             "protocol",
@@ -116,16 +128,16 @@ class ModelProviderService:
         return self._response(item)
 
     async def delete(self, provider_id: int) -> None:
-        item = await self.session.get(ModelProvider, provider_id)
-        if item is None:
-            raise HTTPException(404, "模型配置不存在")
+        item = await self._get_owned(provider_id)
         await self.session.delete(item)
         await self.session.commit()
 
     async def get_default(self) -> ModelProvider:
         item = await self.session.scalar(
             select(ModelProvider).where(
-                ModelProvider.enabled.is_(True), ModelProvider.is_default.is_(True)
+                ModelProvider.user_id == self.user_id,
+                ModelProvider.enabled.is_(True),
+                ModelProvider.is_default.is_(True),
             )
         )
         if item is None:
@@ -145,9 +157,7 @@ class ModelProviderService:
         )
 
     async def test(self, provider_id: int) -> tuple[str, int]:
-        item = await self.session.get(ModelProvider, provider_id)
-        if item is None:
-            raise HTTPException(404, "模型配置不存在")
+        item = await self._get_owned(provider_id)
         started = time.monotonic()
         try:
             text = await self.adapter(item).test_connection()
@@ -161,9 +171,7 @@ class ModelProviderService:
         return text, int((time.monotonic() - started) * 1000)
 
     async def list_available_models(self, provider_id: int) -> list[str]:
-        item = await self.session.get(ModelProvider, provider_id)
-        if item is None:
-            raise HTTPException(404, "模型配置不存在")
+        item = await self._get_owned(provider_id)
         try:
             return await self.adapter(item).list_models()
         except httpx.HTTPError as exc:

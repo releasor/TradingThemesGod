@@ -129,7 +129,9 @@ class ConceptGraphRefreshService:
     ):
         self.session = session
         self.research = research or WebResearchService()
-        self.providers = providers or ModelProviderService(session)
+        if providers is None:
+            raise ValueError("ModelProviderService is required")
+        self.providers = providers
 
     async def _theme_context(self, theme_id: int) -> tuple[Theme, dict[str, Stock]]:
         theme = await self.session.get(Theme, theme_id)

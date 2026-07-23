@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from sqlalchemy import JSON, BigInteger, Boolean, Integer, Numeric, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -12,6 +12,9 @@ class ModelProvider(Base, TimestampMixin):
     __tablename__ = "model_providers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     protocol: Mapped[str] = mapped_column(String(30), nullable=False)
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)

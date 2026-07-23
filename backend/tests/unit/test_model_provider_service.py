@@ -45,6 +45,7 @@ def test_list_tolerates_undecryptable_custom_headers(tmp_path):
     current = SecretStore(key_file=tmp_path / "current.key")
     item = SimpleNamespace(
         id=1,
+        user_id=1,
         name="broken-headers",
         protocol="openai_compatible",
         base_url="https://example.com",
@@ -60,7 +61,7 @@ def test_list_tolerates_undecryptable_custom_headers(tmp_path):
         updated_at=datetime.now(timezone.utc),
     )
 
-    response = ModelProviderService(session=None, secrets=current)._response(item)
+    response = ModelProviderService(session=None, user_id=1, secrets=current)._response(item)
 
     assert response.custom_header_names == []
     assert response.has_api_key is False
