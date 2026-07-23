@@ -32,6 +32,8 @@ services:
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost"]}'
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRE_DAYS: ${JWT_EXPIRE_DAYS:-7}
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
