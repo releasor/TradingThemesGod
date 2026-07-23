@@ -23,6 +23,18 @@ const errorListeners: Array<(event: ApiErrorEvent) => void> = []
 const NETWORK_ERROR_COOLDOWN_MS = 8_000
 let lastNetworkErrorNoticeAt = 0
 
+function networkErrorMessage(): string {
+  const { hostname, port } = window.location
+  const isLocalDev =
+    hostname === 'localhost' || hostname === '127.0.0.1' || port === '5173'
+
+  if (isLocalDev) {
+    return '无法连接后端服务，请在 backend 目录启动：uvicorn app.main:app --reload --port 8000'
+  }
+
+  return '无法连接后端服务，请稍后重试或联系管理员'
+}
+
 /** 注册 API 错误监听器，返回取消注册函数 */
 export function onApiError(listener: (event: ApiErrorEvent) => void): () => void {
   errorListeners.push(listener)
@@ -42,7 +54,7 @@ function notifyError(event: ApiErrorEvent): void {
     lastNetworkErrorNoticeAt = now
     event = {
       ...event,
-      message: '无法连接后端服务，请确认 backend 已在 localhost:8000 启动',
+      message: networkErrorMessage(),
     }
   }
 
