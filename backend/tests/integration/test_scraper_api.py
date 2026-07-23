@@ -47,6 +47,29 @@ def sample_scraper_run_list(sample_scraper_run):
 class TestScraperAPI:
     """Scraper API 测试"""
 
+    def test_list_scraper_sources(self, client):
+        """测试列出爬虫数据源"""
+        response = client.get("/api/v1/scraper/sources")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 2
+        source_ids = {item["id"] for item in data["sources"]}
+        assert "eastmoney" in source_ids
+        assert "akshare" in source_ids
+        eastmoney = next(item for item in data["sources"] if item["id"] == "eastmoney")
+        assert eastmoney["dashboard_selectable"] is True
+        assert eastmoney["is_default"] is True
+
+    def test_list_dashboard_scraper_sources_only(self, client):
+        """测试仅返回看板可选数据源"""
+        response = client.get("/api/v1/scraper/sources?dashboard_only=true")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 2
+        assert {item["id"] for item in data["sources"]} == {"eastmoney", "akshare"}
+
     @patch("app.api.scraper.scraper_scheduler")
     @patch("app.api.scraper.ScraperRunRepository")
     def test_run_scraper_success(

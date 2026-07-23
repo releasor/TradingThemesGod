@@ -9,11 +9,14 @@ from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.domain.scraper_sources import list_registered_scraper_sources
 from app.repositories.scraper_run import ScraperRunRepository
 from app.schemas.scraper import (
     ScraperRunRequest,
     ScraperRunResponse,
     ScraperRunListResponse,
+    ScraperSourceListResponse,
+    ScraperSourceResponse,
 )
 from app.scrapers.scheduler import scraper_scheduler
 
@@ -21,6 +24,25 @@ from app.scrapers.scheduler import scraper_scheduler
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/scraper", tags=["scraper"])
+
+
+@router.get("/sources", response_model=ScraperSourceListResponse)
+async def list_scraper_sources(
+    dashboard_only: bool = Query(default=False, description="仅返回看板可选数据源"),
+):
+    """列出已注册的爬虫数据源及说明。"""
+    sources = list_registered_scraper_sources(dashboard_only=dashboard_only)
+    payload = [
+        ScraperSourceResponse(
+            id=item.id,
+            label=item.label,
+            description=item.description,
+            dashboard_selectable=item.dashboard_selectable,
+            is_default=item.is_default,
+        )
+        for item in sources
+    ]
+    return ScraperSourceListResponse(sources=payload, count=len(payload))
 
 
 @router.post("/run/{source}", response_model=ScraperRunResponse)

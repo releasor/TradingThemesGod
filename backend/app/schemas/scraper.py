@@ -49,3 +49,20 @@ class ScraperRunListResponse(BaseModel):
 
     runs: list[ScraperRunResponse] = Field(description="运行记录列表")
     count: int = Field(description="返回记录数")
+
+
+class ScraperSourceResponse(BaseModel):
+    """爬虫数据源说明。"""
+
+    id: str = Field(description="数据源标识")
+    label: str = Field(description="展示名称")
+    description: str = Field(description="数据源说明")
+    dashboard_selectable: bool = Field(description="是否可在看板全量更新中选择")
+    is_default: bool = Field(default=False, description="是否为看板默认数据源")
+
+
+class ScraperSourceListResponse(BaseModel):
+    """爬虫数据源列表响应。"""
+
+    sources: list[ScraperSourceResponse] = Field(description="数据源列表")
+    count: int = Field(description="返回数量")
