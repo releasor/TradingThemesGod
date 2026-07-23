@@ -6,6 +6,10 @@
 
 import axios, { type AxiosRequestConfig } from 'axios'
 
+import { getAuthToken, useAuthStore } from '@/stores/auth'
+
+const AUTH_EXEMPT_PATHS = ['/auth/login', '/auth/register']
+
 /** API 错误事件 */
 export interface ApiErrorEvent {
   status: number
@@ -60,6 +64,14 @@ export const apiClient = axios.create({
   timeout: 10_000,
 })
 
+apiClient.interceptors.request.use((config) => {
+  const token = getAuthToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 // 响应拦截器：统一错误处理
 apiClient.interceptors.response.use(
   (response) => response,
@@ -69,7 +81,21 @@ apiClient.interceptors.response.use(
     // 统一处理网络错误和服务器错误
     if (error.response) {
       const { status, data } = error.response
-      const message = data?.message || '请求失败'
+      const message = data?.message || data?.detail || '请求失败'
+      const requestUrl = String(url || '')
+
+      if (
+        status === 401 &&
+        !AUTH_EXEMPT_PATHS.some((path) => requestUrl.includes(path))
+      ) {
+        useAuthStore.getState().clearAuth()
+        const currentPath = window.location.pathname
+        if (!currentPath.startsWith('/login') && !currentPath.startsWith('/register')) {
+          const redirect = encodeURIComponent(currentPath)
+          window.location.assign(`/login?from=${redirect}`)
+          return Promise.reject(error)
+        }
+      }
 
       notifyError({
         status,

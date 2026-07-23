@@ -8,6 +8,7 @@ import { ToastContainer, useToast, type Toast, type ToastType } from '@/componen
 import { onApiError } from '@/api/client'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GlobalSideRaysBackground } from '@/components/GlobalSideRaysBackground'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 // 路由级懒加载 - 实现代码分割
 const ThemeDashboard = lazy(() =>
@@ -27,6 +28,12 @@ const ThemeDetail = lazy(() =>
 )
 const ModelSettings = lazy(() =>
   import('@/features/settings/ModelSettings').then((m) => ({ default: m.ModelSettings }))
+)
+const LoginPage = lazy(() =>
+  import('@/features/auth/LoginPage').then((m) => ({ default: m.LoginPage }))
+)
+const RegisterPage = lazy(() =>
+  import('@/features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage }))
 )
 
 // Toast 上下文
@@ -125,10 +132,28 @@ function App() {
                   }
                 />
                 <Route
+                  path="/login"
+                  element={
+                    <ErrorBoundary>
+                      <LoginPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/register"
+                  element={
+                    <ErrorBoundary>
+                      <RegisterPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
                   path="/settings/models"
                   element={
                     <ErrorBoundary>
-                      <ModelSettings />
+                      <ProtectedRoute>
+                        <ModelSettings />
+                      </ProtectedRoute>
                     </ErrorBoundary>
                   }
                 />
