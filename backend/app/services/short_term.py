@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
+from fastapi import HTTPException
 from sqlalchemy import desc, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.domain.theme_classification import exclude_market_signals
 from app.models.theme import Theme
 from app.models.theme_market_snapshot import ThemeMarketSnapshot
@@ -15,6 +17,8 @@ from app.schemas.short_term import (
     ShortTermOverviewResponse,
     ShortTermPeriod,
 )
+from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.eastmoney import EastMoneyScraper
 from app.services.short_term_rules import MarketStrengthInput, ShortTermRuleEngine
 from app.services.theme_market import ThemeMarketService
 
@@ -50,6 +54,7 @@ class ShortTermService:
         *,
         start_date: date | None = None,
         end_date: date | None = None,
+        ensure_snapshots: bool = True,
     ) -> ShortTermOverviewResponse:
         """获取短线概览和指数情绪策略卡。"""
         resolved_end_date = end_date or trade_date or date.today()
@@ -60,7 +65,61 @@ class ShortTermService:
             msg = "自定义开始日期不能晚于结束日期"
             raise ValueError(msg)
 
-        await self._ensure_period_snapshots(resolved_start_date, resolved_end_date)
+        if ensure_snapshots:
+            await self._ensure_period_snapshots(resolved_start_date, resolved_end_date)
+        return await self._build_overview(
+            resolved_start_date, resolved_end_date, period, period_label
+        )
+
+    async def analyze_from_database(
+        self,
+        trade_date: date | None = None,
+        period: ShortTermPeriod = "today",
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> ShortTermOverviewResponse:
+        """仅依据数据库已有数据重新分析策略卡，不触发外部拉取。"""
+        return await self.get_overview(
+            trade_date,
+            period,
+            start_date=start_date,
+            end_date=end_date,
+            ensure_snapshots=False,
+        )
+
+    async def refresh_data_and_get_overview(
+        self,
+        trade_date: date | None = None,
+        period: ShortTermPeriod = "today",
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> ShortTermOverviewResponse:
+        """拉取最新行情并重建周期快照后返回策略卡。"""
+        resolved_end_date = end_date or trade_date or date.today()
+        resolved_start_date, period_label = self._resolve_period(
+            resolved_end_date, period, start_date
+        )
+        if resolved_start_date > resolved_end_date:
+            msg = "自定义开始日期不能晚于结束日期"
+            raise ValueError(msg)
+
+        await self._refresh_strategy_quotes()
+        await self._ensure_period_snapshots(
+            resolved_end_date, resolved_end_date, force=True
+        )
+        return await self._build_overview(
+            resolved_start_date, resolved_end_date, period, period_label
+        )
+
+    async def _build_overview(
+        self,
+        resolved_start_date: date,
+        resolved_end_date: date,
+        period: ShortTermPeriod,
+        period_label: str,
+    ) -> ShortTermOverviewResponse:
         index_signals = await self._list_themes_by_codes(INDEX_SIGNAL_CODES)
         emotion_signals = await self._list_themes_by_codes(EMOTION_SIGNAL_CODES)
         leading_themes = await self._list_leading_themes()
@@ -136,25 +195,55 @@ class ShortTermService:
         )
         return list(result.scalars().all())
 
-    async def _ensure_period_snapshots(self, start_date: date, end_date: date) -> None:
+    async def _ensure_period_snapshots(
+        self, start_date: date, end_date: date, *, force: bool = False
+    ) -> None:
         """补齐周期内工作日市场快照，让切换周期时数据随周期变化。"""
         target_dates = self._period_trade_dates(start_date, end_date)
         if not target_dates:
             return
 
-        result = await self.session.execute(
-            select(distinct(ThemeMarketSnapshot.trade_date)).where(
-                ThemeMarketSnapshot.trade_date.in_(target_dates)
+        if force:
+            missing_dates = target_dates
+        else:
+            result = await self.session.execute(
+                select(distinct(ThemeMarketSnapshot.trade_date)).where(
+                    ThemeMarketSnapshot.trade_date.in_(target_dates)
+                )
             )
-        )
-        existing_dates = set(result.scalars().all())
-        missing_dates = [day for day in target_dates if day not in existing_dates]
+            existing_dates = set(result.scalars().all())
+            missing_dates = [day for day in target_dates if day not in existing_dates]
         if not missing_dates:
             return
 
         market_service = ThemeMarketService(self.session)
         for day in missing_dates:
             await market_service.refresh_all(day)
+
+    async def _refresh_strategy_quotes(self) -> None:
+        """快速刷新题材涨跌幅，并避免与全量采集任务冲突。"""
+        from app.scrapers.scheduler import scraper_scheduler
+
+        if scraper_scheduler.is_running("eastmoney"):
+            raise HTTPException(
+                409,
+                "全量采集正在进行中，请稍后再试，或先使用「数据库分析」",
+            )
+
+        settings = get_settings()
+        middleware = AntiScrapingMiddleware(
+            proxy_url=settings.PROXY_URL if settings.PROXY_ENABLED else None,
+        )
+        scraper = EastMoneyScraper(middleware=middleware)
+        try:
+            trade_date = await scraper.refresh_theme_quotes()
+        except Exception as exc:
+            raise HTTPException(502, f"题材行情刷新失败：{exc}") from exc
+        finally:
+            await scraper.close()
+
+        if trade_date is None:
+            raise HTTPException(502, "题材行情刷新失败：未获取到有效数据")
 
     async def _list_period_snapshot_metrics(
         self, start_date: date, end_date: date

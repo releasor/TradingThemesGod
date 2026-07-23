@@ -59,6 +59,89 @@ def test_short_term_overview_returns_strategy_card():
     )
 
 
+def test_short_term_refresh_data_triggers_live_refresh():
+    service_response = ShortTermOverviewResponse(
+        trade_date=date(2026, 7, 21),
+        period="today",
+        period_label="当日",
+        start_date=date(2026, 7, 21),
+        end_date=date(2026, 7, 21),
+        degraded=False,
+        missing_sources=[],
+        market_emotion="情绪强",
+        short_term_outlook="当前更适合连板接力。",
+        operation_advice="做连板",
+        tracking_focus=["连板梯队"],
+        core_conclusion="连板接力。",
+        risk_signals=[],
+        sector_count=3,
+        candidate_count=0,
+        strategy_card=MarketStrategyCardResponse(
+            title="指数情绪策略卡 · 当日",
+            index_strength="strong",
+            emotion_strength="strong",
+            primary_strategy="连板接力",
+            secondary_strategy="主升分歧接力",
+            operation_advice="指数强、情绪强，做连板。",
+            focus_targets=["连板梯队"],
+            rationale=["指数强度 0.80"],
+        ),
+    )
+
+    with patch("app.api.short_term.ShortTermService") as service_class:
+        service = service_class.return_value
+        service.refresh_data_and_get_overview = AsyncMock(return_value=service_response)
+
+        response = TestClient(app).post("/api/v1/short-term/overview/refresh-data")
+
+    assert response.status_code == 200
+    service.refresh_data_and_get_overview.assert_awaited_once_with(
+        None, "today", start_date=None, end_date=None
+    )
+
+
+def test_short_term_analyze_uses_database_only():
+    service_response = ShortTermOverviewResponse(
+        trade_date=date(2026, 7, 21),
+        period="today",
+        period_label="当日",
+        start_date=date(2026, 7, 21),
+        end_date=date(2026, 7, 21),
+        degraded=False,
+        missing_sources=[],
+        market_emotion="情绪弱",
+        short_term_outlook="当前更适合补涨趋势与切换。",
+        operation_advice="做补涨",
+        tracking_focus=["低位补涨"],
+        core_conclusion="补涨趋势与切换。",
+        risk_signals=["短线情绪不足"],
+        sector_count=3,
+        candidate_count=0,
+        strategy_card=MarketStrategyCardResponse(
+            title="指数情绪策略卡 · 当日",
+            index_strength="strong",
+            emotion_strength="weak",
+            primary_strategy="补涨趋势与切换",
+            secondary_strategy="轮动低吸",
+            operation_advice="指数强但情绪弱，做补涨。",
+            focus_targets=["低位补涨"],
+            rationale=["指数强度 0.39"],
+        ),
+    )
+
+    with patch("app.api.short_term.ShortTermService") as service_class:
+        service = service_class.return_value
+        service.analyze_from_database = AsyncMock(return_value=service_response)
+
+        response = TestClient(app).post("/api/v1/short-term/overview/analyze")
+
+    assert response.status_code == 200
+    assert response.json()["strategy_card"]["primary_strategy"] == "补涨趋势与切换"
+    service.analyze_from_database.assert_awaited_once_with(
+        None, "today", start_date=None, end_date=None
+    )
+
+
 def test_short_term_overview_accepts_custom_date_range():
     service_response = ShortTermOverviewResponse(
         trade_date=date(2026, 7, 17),

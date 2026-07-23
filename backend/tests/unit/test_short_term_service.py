@@ -164,3 +164,34 @@ async def test_custom_period_uses_supplied_date_range():
     service._ensure_period_snapshots.assert_awaited_once_with(
         date(2026, 7, 3), date(2026, 7, 17)
     )
+
+
+@pytest.mark.asyncio
+async def test_analyze_from_database_skips_external_snapshot_refresh():
+    service = ShortTermService(AsyncMock())
+    service._build_overview = AsyncMock(  # type: ignore[method-assign]
+        return_value=SimpleNamespace(strategy_card=SimpleNamespace())
+    )
+    service._ensure_period_snapshots = AsyncMock()  # type: ignore[method-assign]
+
+    await service.analyze_from_database(date(2026, 7, 21), "today")
+
+    service._ensure_period_snapshots.assert_not_awaited()
+    service._build_overview.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_refresh_data_uses_lightweight_quote_refresh_for_latest_day():
+    service = ShortTermService(AsyncMock())
+    service._refresh_strategy_quotes = AsyncMock()  # type: ignore[method-assign]
+    service._ensure_period_snapshots = AsyncMock()  # type: ignore[method-assign]
+    service._build_overview = AsyncMock(  # type: ignore[method-assign]
+        return_value=SimpleNamespace(strategy_card=SimpleNamespace())
+    )
+
+    await service.refresh_data_and_get_overview(date(2026, 7, 21), "current_month")
+
+    service._refresh_strategy_quotes.assert_awaited_once()
+    service._ensure_period_snapshots.assert_awaited_once_with(
+        date(2026, 7, 21), date(2026, 7, 21), force=True
+    )

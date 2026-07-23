@@ -614,6 +614,27 @@ class EastMoneyScraper(BaseScraper):
 
         return themes, saved_themes + total_stocks
 
+    async def refresh_theme_quotes(self) -> date | None:
+        """仅刷新题材列表行情，不抓取成分股，供策略卡快速更新使用。"""
+        logger.info(f"[{self.source_name}] 开始快速刷新题材行情")
+        theme_params = {
+            **DEFAULT_PARAMS,
+            "fid": "f12",
+            "fs": "m:90+t:3+f:!50",
+        }
+        theme_data = await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
+        themes = self.parse_theme_list(theme_data)
+        if not themes:
+            logger.warning(f"[{self.source_name}] 未获取到题材行情")
+            return None
+
+        await self._save_themes(themes)
+        trade_date = self._extract_trade_date(theme_data) or date.today()
+        logger.info(
+            f"[{self.source_name}] 题材行情刷新完成: {len(themes)} 个题材, 交易日 {trade_date}"
+        )
+        return trade_date
+
     async def close(self) -> None:
         """关闭爬虫资源"""
         await self.middleware.close()
