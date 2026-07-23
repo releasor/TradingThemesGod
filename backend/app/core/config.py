@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # 雪球公开信息访问配置（可选）
     XUEQIU_COOKIE: str = ""
 
+    # JWT 认证
+    JWT_SECRET: str = "change-me-in-production"
+    JWT_EXPIRE_DAYS: int = 7
+
     @property
     def database_url(self) -> str:
         """构建数据库连接 URL"""

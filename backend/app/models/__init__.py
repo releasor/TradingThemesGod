@@ -5,6 +5,7 @@ from app.models.concept_node_stock import ConceptNodeStock
 from app.models.event import Event
 from app.models.industry_chain import IndustryChain
 from app.models.model_provider import ModelProvider
+from app.models.user import User
 from app.models.news_article import NewsArticle
 from app.models.scraper_run import ScraperRun
 from app.models.stock import Stock
@@ -25,6 +26,7 @@ __all__ = [
     "ConceptNode",
     "ConceptNodeStock",
     "ModelProvider",
+    "User",
     "ThemeProfile",
     "ThemeDriverEvent",
     "ThemeMarketSnapshot",

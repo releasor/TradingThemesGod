@@ -14,6 +14,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from app.api.auth import router as auth_router
 from app.api.errors import router as errors_router
 from app.api.health import router as health_router
 from app.api.model_provider import router as model_provider_router
@@ -189,6 +190,7 @@ def create_app() -> FastAPI:
 
     # 注册路由
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(auth_router, prefix="/api/v1")
     app.include_router(scraper_router, prefix="/api/v1")
     app.include_router(theme_router, prefix="/api/v1")
     app.include_router(stock_router, prefix="/api/v1")
