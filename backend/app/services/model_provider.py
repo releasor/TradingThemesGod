@@ -49,15 +49,26 @@ class ModelProviderService:
         self.user_id = user_id
         self.secrets = secrets or SecretStore()
 
+    def _decrypt_api_key(self, item: ModelProvider) -> str:
+        if not item.api_key_encrypted:
+            return ""
+        try:
+            return self.secrets.decrypt(item.api_key_encrypted)
+        except ValueError:
+            return ""
+
     def _response(self, item: ModelProvider) -> ModelProviderResponse:
         headers = self._decrypt_headers(item, required=False)
+        api_key = self._decrypt_api_key(item)
         return ModelProviderResponse(
             id=item.id,
             name=item.name,
             protocol=item.protocol,
             base_url=item.base_url,
             model=item.model,
-            has_api_key=bool(item.api_key_encrypted),
+            api_key=api_key,
+            has_api_key=bool(api_key),
+            custom_headers=headers,
             custom_header_names=sorted(headers),
             timeout_seconds=item.timeout_seconds,
             temperature=float(item.temperature),

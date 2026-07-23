@@ -50,7 +50,7 @@ def test_list_tolerates_undecryptable_custom_headers(tmp_path):
         protocol="openai_compatible",
         base_url="https://example.com",
         model="demo",
-        api_key_encrypted="",
+        api_key_encrypted=current.encrypt("sk-demo"),
         custom_headers_encrypted=other.encrypt('{"X-Demo":"1"}'),
         timeout_seconds=60,
         temperature=0.1,
@@ -64,7 +64,8 @@ def test_list_tolerates_undecryptable_custom_headers(tmp_path):
     response = ModelProviderService(session=None, user_id=1, secrets=current)._response(item)
 
     assert response.custom_header_names == []
-    assert response.has_api_key is False
+    assert response.api_key == "sk-demo"
+    assert response.has_api_key is True
 
 
 def test_model_http_error_message_includes_provider_detail():

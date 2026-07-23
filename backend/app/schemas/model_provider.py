@@ -28,7 +28,9 @@ class ModelProviderResponse(BaseModel):
     protocol: ModelProtocol
     base_url: str
     model: str
+    api_key: str = ""
     has_api_key: bool
+    custom_headers: dict[str, str] = Field(default_factory=dict)
     custom_header_names: list[str]
     timeout_seconds: int
     temperature: float
