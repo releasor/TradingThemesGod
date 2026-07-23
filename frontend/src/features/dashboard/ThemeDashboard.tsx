@@ -3,7 +3,7 @@
  * 展示热门题材排名，支持加载、错误和空状态。
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -15,11 +15,13 @@ import {
   fetchThemes,
 } from '@/api/theme'
 import {
+  analyzeShortTermFromDatabase,
   fetchFirstToSecondCandidates,
   fetchShortTermOverview,
   refreshFirstToSecondCandidates,
+  refreshShortTermData,
 } from '@/api/short-term'
-import { fetchLatestSuccessfulRun, runScraperAndWait } from '@/api/scraper'
+import { fetchLatestSuccessfulRun, fetchDashboardScraperSources, runScraperAndWait } from '@/api/scraper'
 import { useDashboardStore } from '@/stores/dashboard'
 import { ThemeCard } from '@/components/ThemeCard'
 import { ThemeCardSkeleton } from '@/components/ThemeCardSkeleton'
@@ -41,7 +43,7 @@ import { BoardUpgradeReference } from '@/components/BoardUpgradeReference'
 import { NewsTimeline } from '@/components/NewsTimeline'
 import { MarketStrategyCard } from '@/components/short-term/MarketStrategyCard'
 import { GlowCard } from '@/components/GlowCard'
-import type { ShortTermPeriod, ShortTermPeriodStatus } from '@/types/short-term'
+import type { ShortTermOverviewResponse, ShortTermPeriod, ShortTermPeriodStatus } from '@/types/short-term'
 
 function formatServerTime(value: string): string {
   const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)
@@ -53,7 +55,8 @@ type UpdateResult = {
   message: string
 } | null
 
-const LATEST_SCRAPER_RUN_QUERY_KEY = ['latest-successful-scraper-run', 'eastmoney'] as const
+const latestScraperRunQueryKey = (source: string) =>
+  ['latest-successful-scraper-run', source] as const
 const SHORT_TERM_PERIOD_LABELS: Record<ShortTermPeriod, string> = {
   today: '当日',
   current_week: '本周',
@@ -64,6 +67,14 @@ const SHORT_TERM_PERIOD_LABELS: Record<ShortTermPeriod, string> = {
 
 function defaultCustomStartDate(endDate: string): string {
   return dayjs(endDate).subtract(14, 'day').format('YYYY-MM-DD')
+}
+
+function shortTermErrorMessage(error: unknown): string {
+  const value = error as {
+    response?: { data?: { detail?: string } }
+    message?: string
+  }
+  return value.response?.data?.detail || value.message || '操作失败'
 }
 
 export function ThemeDashboard() {
@@ -80,6 +91,7 @@ export function ThemeDashboard() {
   const [customStartDate, setCustomStartDate] = useState<string | null>(null)
   const [customEndDate, setCustomEndDate] = useState<string | null>(null)
   const [isFirstToSecondRefreshing, setIsFirstToSecondRefreshing] = useState(false)
+  const [selectedScraperSource, setSelectedScraperSource] = useState('eastmoney')
 
   const handleThemeClick = useCallback(
     (themeId: number) => navigate(`/themes/${themeId}`, { state: { from: '/' } }),
@@ -163,6 +175,73 @@ export function ThemeDashboard() {
     placeholderData: (previousData) => previousData,
     staleTime: 2 * 60 * 1000,
   })
+  const shortTermQueryParams = useMemo(
+    () => ({
+      period: shortTermPeriod,
+      ...(shortTermPeriod === 'custom' && customStartDate && customEndDate
+        ? { startDate: customStartDate, endDate: customEndDate }
+        : {}),
+    }),
+    [shortTermPeriod, customStartDate, customEndDate]
+  )
+  const shortTermQueryKey = useMemo(
+    () => ['short-term-overview', shortTermPeriod, customStartDate, customEndDate] as const,
+    [shortTermPeriod, customStartDate, customEndDate]
+  )
+  const applyShortTermOverview = useCallback(
+    (data: ShortTermOverviewResponse) => {
+      queryClient.setQueryData(shortTermQueryKey, data)
+    },
+    [queryClient, shortTermQueryKey]
+  )
+  const refreshStrategyDataMutation = useMutation({
+    mutationFn: () => refreshShortTermData(shortTermQueryParams),
+    onMutate: () => {
+      setPeriodStatus({ type: 'progress', message: '正在快速刷新题材行情并更新当日快照...' })
+    },
+    onSuccess: async (data) => {
+      applyShortTermOverview(data)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['theme-ranking'] }),
+        queryClient.invalidateQueries({ queryKey: ['theme-rise-ranking'] }),
+        queryClient.invalidateQueries({ queryKey: ['market-signals'] }),
+        queryClient.invalidateQueries({ queryKey: ['indicator-signals'] }),
+        queryClient.invalidateQueries({ queryKey: latestScraperRunQueryKey(selectedScraperSource) }),
+      ])
+      setPeriodStatus({
+        type: 'success',
+        message: `${SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}行情已刷新，策略卡已更新`,
+      })
+    },
+    onError: (error) => {
+      setPeriodStatus({
+        type: 'error',
+        message: `行情刷新失败：${shortTermErrorMessage(error)}`,
+      })
+    },
+  })
+  const analyzeStrategyMutation = useMutation({
+    mutationFn: () => analyzeShortTermFromDatabase(shortTermQueryParams),
+    onMutate: () => {
+      setPeriodStatus({
+        type: 'progress',
+        message: `正在依据数据库重新分析${SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}策略...`,
+      })
+    },
+    onSuccess: (data) => {
+      applyShortTermOverview(data)
+      setPeriodStatus({
+        type: 'success',
+        message: `${SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}策略已按数据库数据重新分析`,
+      })
+    },
+    onError: (error) => {
+      setPeriodStatus({
+        type: 'error',
+        message: `数据库分析失败：${shortTermErrorMessage(error)}`,
+      })
+    },
+  })
   const {
     data: firstToSecondCandidates,
     isLoading: isFirstToSecondLoading,
@@ -174,9 +253,32 @@ export function ThemeDashboard() {
     staleTime: 60 * 1000,
   })
 
+  const { data: dashboardScraperSources = [] } = useQuery({
+    queryKey: ['dashboard-scraper-sources'],
+    queryFn: fetchDashboardScraperSources,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  useEffect(() => {
+    if (dashboardScraperSources.length === 0) return
+    const defaultSource =
+      dashboardScraperSources.find((item) => item.is_default)?.id ?? dashboardScraperSources[0].id
+    setSelectedScraperSource((current) =>
+      dashboardScraperSources.some((item) => item.id === current) ? current : defaultSource
+    )
+  }, [dashboardScraperSources])
+
+  const selectedScraperSourceLabel = useMemo(
+    () =>
+      dashboardScraperSources.find((item) => item.id === selectedScraperSource)?.label ??
+      selectedScraperSource,
+    [dashboardScraperSources, selectedScraperSource]
+  )
+
   const { data: latestSuccessfulUpdate, refetch: refetchLatestSuccessfulUpdate } = useQuery({
-    queryKey: LATEST_SCRAPER_RUN_QUERY_KEY,
-    queryFn: async () => (await fetchLatestSuccessfulRun('eastmoney'))?.finished_at ?? null,
+    queryKey: latestScraperRunQueryKey(selectedScraperSource),
+    queryFn: async () =>
+      (await fetchLatestSuccessfulRun(selectedScraperSource))?.finished_at ?? null,
     staleTime: 2 * 60 * 1000,
   })
 
@@ -212,9 +314,12 @@ export function ThemeDashboard() {
 
   const updateDashboard = useCallback(async () => {
     setIsUpdating(true)
-    setUpdateResult({ type: 'progress', message: '正在全量更新，通常需要较长时间...' })
+    setUpdateResult({
+      type: 'progress',
+      message: `正在通过${selectedScraperSourceLabel}全量更新，通常需要较长时间...`,
+    })
     try {
-      const run = await runScraperAndWait('eastmoney')
+      const run = await runScraperAndWait(selectedScraperSource)
       if (run.status === 'failed') {
         const message = `全量更新失败：${run.error_message || '未知错误'}`
         setUpdateResult({ type: 'error', message })
@@ -226,13 +331,13 @@ export function ThemeDashboard() {
       // finished_at 偶发为空时用本地时间兜底，避免更新时间停在旧值
       const finishedAt = run.finished_at ?? new Date().toISOString()
       setLastUpdate(finishedAt)
-      queryClient.setQueryData(LATEST_SCRAPER_RUN_QUERY_KEY, finishedAt)
+      queryClient.setQueryData(latestScraperRunQueryKey(selectedScraperSource), finishedAt)
       await refetchLatestSuccessfulUpdate()
       setUpdateResult({
         type: 'success',
-        message: `全量更新成功，共更新 ${run.items_scraped} 条数据`,
+        message: `${selectedScraperSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据`,
       })
-      toast.success(`全量更新成功，共更新 ${run.items_scraped} 条数据`)
+      toast.success(`${selectedScraperSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误'
       setUpdateResult({ type: 'error', message: `全量更新失败：${message}` })
@@ -240,7 +345,14 @@ export function ThemeDashboard() {
     } finally {
       setIsUpdating(false)
     }
-  }, [queryClient, refreshDashboard, refetchLatestSuccessfulUpdate, toast])
+  }, [
+    queryClient,
+    refreshDashboard,
+    refetchLatestSuccessfulUpdate,
+    selectedScraperSource,
+    selectedScraperSourceLabel,
+    toast,
+  ])
 
   // 自动刷新
   const { isAutoRefresh, toggleAutoRefresh, refreshInterval, setRefreshInterval } = useAutoRefresh({
@@ -350,7 +462,6 @@ export function ThemeDashboard() {
   }, [
     isShortTermError,
     isShortTermFetching,
-    periodStatus,
     shortTermError,
     shortTermOverview,
     shortTermPeriod,
@@ -451,6 +562,9 @@ export function ThemeDashboard() {
                 onSetRefreshInterval={setRefreshInterval}
                 onRefresh={() => void handleLightRefresh()}
                 onFullUpdate={() => void updateDashboard()}
+                scraperSources={dashboardScraperSources}
+                selectedScraperSource={selectedScraperSource}
+                onScraperSourceChange={setSelectedScraperSource}
               />
               {updateResult && (
                 <p
@@ -488,6 +602,28 @@ export function ThemeDashboard() {
                   periodStatus={visiblePeriodStatus}
                   degraded={shortTermOverview.degraded}
                   missingSources={shortTermOverview.missing_sources}
+                  isRefreshingData={refreshStrategyDataMutation.isPending}
+                  isAnalyzingDatabase={analyzeStrategyMutation.isPending}
+                  onRefreshData={() => {
+                    if (shortTermPeriod === 'custom' && (!customStartDate || !customEndDate)) {
+                      setPeriodStatus({
+                        type: 'error',
+                        message: '请先选择自定义日期范围',
+                      })
+                      return
+                    }
+                    refreshStrategyDataMutation.mutate()
+                  }}
+                  onAnalyzeDatabase={() => {
+                    if (shortTermPeriod === 'custom' && (!customStartDate || !customEndDate)) {
+                      setPeriodStatus({
+                        type: 'error',
+                        message: '请先选择自定义日期范围',
+                      })
+                      return
+                    }
+                    analyzeStrategyMutation.mutate()
+                  }}
                 />
               </div>
             )}

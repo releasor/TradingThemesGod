@@ -65,9 +65,10 @@ export function ModelSettings() {
   })
 
   useEffect(() => {
-    if (!editingId && providers.length > 0) selectProvider(providers[0])
+    if (editingId !== undefined || providers.length === 0) return
+    selectProvider(providers[0])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providers])
+  }, [editingId, providers])
 
   const saveMutation = useMutation({
     mutationFn: () =>

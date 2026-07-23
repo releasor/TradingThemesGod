@@ -118,6 +118,52 @@ describe('AutoRefreshButton', () => {
     expect(container.firstChild).toHaveClass('my-class')
   })
 
+  it('shows source selector when multiple sources are available', () => {
+    render(
+      <AutoRefreshButton
+        {...defaultProps}
+        scraperSources={[
+          { id: 'eastmoney', label: '东方财富', description: '题材列表' },
+          { id: 'akshare', label: 'AKShare', description: 'A 股行情' },
+        ]}
+        selectedScraperSource="eastmoney"
+        onScraperSourceChange={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('全量更新数据源')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '东方财富' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'AKShare' })).toBeInTheDocument()
+  })
+
+  it('calls onScraperSourceChange when source is changed', () => {
+    const onScraperSourceChange = vi.fn()
+    render(
+      <AutoRefreshButton
+        {...defaultProps}
+        scraperSources={[
+          { id: 'eastmoney', label: '东方财富', description: '题材列表' },
+          { id: 'akshare', label: 'AKShare', description: 'A 股行情' },
+        ]}
+        selectedScraperSource="eastmoney"
+        onScraperSourceChange={onScraperSourceChange}
+      />
+    )
+    fireEvent.change(screen.getByLabelText('全量更新数据源'), { target: { value: 'akshare' } })
+    expect(onScraperSourceChange).toHaveBeenCalledWith('akshare')
+  })
+
+  it('hides source selector when only one source is available', () => {
+    render(
+      <AutoRefreshButton
+        {...defaultProps}
+        scraperSources={[{ id: 'eastmoney', label: '东方财富', description: '题材列表' }]}
+        selectedScraperSource="eastmoney"
+        onScraperSourceChange={vi.fn()}
+      />
+    )
+    expect(screen.queryByLabelText('全量更新数据源')).not.toBeInTheDocument()
+  })
+
   it('has correct current interval value selected', () => {
     render(
       <AutoRefreshButton {...defaultProps} isAutoRefresh={true} refreshInterval={60000} />

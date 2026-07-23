@@ -96,7 +96,7 @@ function App() {
     })
 
     return unsubscribe
-  }, [toast])
+  }, [toast.error, toast.warning])
 
   return (
     <ErrorBoundary>

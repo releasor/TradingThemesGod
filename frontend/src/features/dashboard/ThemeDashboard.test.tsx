@@ -16,6 +16,7 @@ vi.mock('@/api/theme', () => ({
 
 vi.mock('@/api/scraper', () => ({
   fetchLatestSuccessfulRun: vi.fn(),
+  fetchDashboardScraperSources: vi.fn(),
   runScraperAndWait: vi.fn(),
 }))
 
@@ -48,7 +49,7 @@ import {
   fetchThemeRanking,
   fetchThemes,
 } from '@/api/theme'
-import { fetchLatestSuccessfulRun, runScraperAndWait } from '@/api/scraper'
+import { fetchDashboardScraperSources, fetchLatestSuccessfulRun, runScraperAndWait } from '@/api/scraper'
 import {
   fetchFirstToSecondCandidates,
   fetchShortTermOverview,
@@ -183,6 +184,22 @@ describe('ThemeDashboard', () => {
       items: mockIndicatorSignals,
       limit: mockIndicatorSignals.length,
     })
+    vi.mocked(fetchDashboardScraperSources).mockResolvedValue([
+      {
+        id: 'eastmoney',
+        label: '东方财富',
+        description: '题材列表、涨跌幅、成分股与市场快照',
+        dashboard_selectable: true,
+        is_default: true,
+      },
+      {
+        id: 'akshare',
+        label: 'AKShare',
+        description: 'A 股实时行情、涨跌幅与市值数据',
+        dashboard_selectable: true,
+        is_default: false,
+      },
+    ])
     vi.mocked(fetchLatestSuccessfulRun).mockResolvedValue({
       run_id: 9,
       source: 'eastmoney',
@@ -359,7 +376,7 @@ describe('ThemeDashboard', () => {
     await user.click(screen.getByRole('button', { name: '全量更新' }))
 
     const successControls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
-    expect(await within(successControls).findByText('全量更新成功，共更新 126 条数据')).toBeInTheDocument()
+    expect(await within(successControls).findByText('东方财富全量更新成功，共更新 126 条数据')).toBeInTheDocument()
     expect(runScraperAndWait).toHaveBeenCalledWith('eastmoney')
     expect(fetchThemeRanking).toHaveBeenCalledTimes(2)
     expect(fetchMarketSignals).toHaveBeenCalledTimes(2)
@@ -408,7 +425,7 @@ describe('ThemeDashboard', () => {
       'dashboard-data-controls'
     )
     await user.click(screen.getByRole('button', { name: '全量更新' }))
-    expect(within(controls).getByText('正在全量更新，通常需要较长时间...')).toBeInTheDocument()
+    expect(within(controls).getByText('正在通过东方财富全量更新，通常需要较长时间...')).toBeInTheDocument()
 
     resolveRun({
       run_id: 10,
@@ -420,7 +437,29 @@ describe('ThemeDashboard', () => {
       error_message: null,
     })
 
-    expect(await within(controls).findByText('全量更新成功，共更新 126 条数据')).toBeInTheDocument()
+    expect(await within(controls).findByText('东方财富全量更新成功，共更新 126 条数据')).toBeInTheDocument()
+  })
+
+  it('uses selected scraper source for full update', async () => {
+    const user = userEvent.setup()
+    vi.mocked(runScraperAndWait).mockResolvedValue({
+      run_id: 12,
+      source: 'akshare',
+      status: 'completed',
+      started_at: '2026-07-16T02:00:00Z',
+      finished_at: '2026-07-16T02:03:04Z',
+      items_scraped: 88,
+      error_message: null,
+    })
+    renderDashboard()
+    await screen.findByLabelText('全量更新数据源')
+
+    await user.selectOptions(screen.getByLabelText('全量更新数据源'), 'akshare')
+    await user.click(screen.getByRole('button', { name: '全量更新' }))
+
+    expect(runScraperAndWait).toHaveBeenCalledWith('akshare')
+    const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
+    expect(await within(controls).findByText('AKShare全量更新成功，共更新 88 条数据')).toBeInTheDocument()
   })
 
   it('单独按涨跌幅降序获取涨幅榜', async () => {

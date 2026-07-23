@@ -14,8 +14,21 @@ export interface ScraperRun {
   error_message: string | null
 }
 
+export interface ScraperSource {
+  id: string
+  label: string
+  description: string
+  dashboard_selectable: boolean
+  is_default: boolean
+}
+
 interface ScraperRunListResponse {
   runs: ScraperRun[]
+  count: number
+}
+
+interface ScraperSourceListResponse {
+  sources: ScraperSource[]
   count: number
 }
 
@@ -25,6 +38,14 @@ interface WaitOptions {
 }
 
 const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
+
+/** 获取看板可选的爬虫数据源列表。 */
+export async function fetchDashboardScraperSources(): Promise<ScraperSource[]> {
+  const { data } = await apiClient.get<ScraperSourceListResponse>('/scraper/sources', {
+    params: { dashboard_only: true },
+  })
+  return data.sources
+}
 
 /** 获取指定数据源最近一次成功完成的采集记录。 */
 export async function fetchLatestSuccessfulRun(source: string): Promise<ScraperRun | null> {

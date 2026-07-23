@@ -10,11 +10,43 @@ vi.mock('@/api/client', () => ({
   },
 }))
 
-const { fetchLatestSuccessfulRun, runScraperAndWait } = await import('./scraper')
+const { fetchLatestSuccessfulRun, fetchDashboardScraperSources, runScraperAndWait } = await import('./scraper')
 
 describe('scraper API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('returns dashboard scraper sources', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        sources: [
+          {
+            id: 'eastmoney',
+            label: '东方财富',
+            description: '题材列表',
+            dashboard_selectable: true,
+            is_default: true,
+          },
+          {
+            id: 'akshare',
+            label: 'AKShare',
+            description: 'A 股行情',
+            dashboard_selectable: true,
+            is_default: false,
+          },
+        ],
+        count: 2,
+      },
+    })
+
+    const result = await fetchDashboardScraperSources()
+
+    expect(mockGet).toHaveBeenCalledWith('/scraper/sources', {
+      params: { dashboard_only: true },
+    })
+    expect(result).toHaveLength(2)
+    expect(result[0].id).toBe('eastmoney')
   })
 
   it('returns the latest successful run for a source', async () => {

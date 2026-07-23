@@ -31,10 +31,22 @@ interface AutoRefreshButtonProps {
   onSetRefreshInterval: (interval: number) => void
   /** 轻量刷新：仅重新拉取看板接口 */
   onRefresh: () => void
-  /** 全量更新：触发东方财富采集（可选） */
+  /** 全量更新：触发爬虫采集（可选） */
   onFullUpdate?: () => void
+  /** 看板可选数据源 */
+  scraperSources?: ScraperSourceOption[]
+  /** 当前选中的数据源 */
+  selectedScraperSource?: string
+  /** 切换数据源 */
+  onScraperSourceChange?: (source: string) => void
   /** 自定义类名 */
   className?: string
+}
+
+export interface ScraperSourceOption {
+  id: string
+  label: string
+  description: string
 }
 
 /**
@@ -63,9 +75,17 @@ export const AutoRefreshButton = memo(function AutoRefreshButton({
   onSetRefreshInterval,
   onRefresh,
   onFullUpdate,
+  scraperSources = [],
+  selectedScraperSource,
+  onScraperSourceChange,
   className,
 }: AutoRefreshButtonProps) {
   const busy = isRefreshing || isUpdating
+  const showSourceSelector =
+    Boolean(onFullUpdate) && scraperSources.length > 1 && selectedScraperSource && onScraperSourceChange
+  const selectedSourceMeta = scraperSources.find((item) => item.id === selectedScraperSource)
+  const fullUpdateTitle =
+    selectedSourceMeta?.description ?? '从数据源全量采集，通常需要较长时间'
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
@@ -83,16 +103,34 @@ export const AutoRefreshButton = memo(function AutoRefreshButton({
 
       {/* 全量更新（爬虫） */}
       {onFullUpdate && (
-        <button
-          type="button"
-          onClick={onFullUpdate}
-          disabled={busy}
-          title="从东方财富全量采集，通常需要较长时间"
-          className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
-        >
-          <Database className={cn('h-4 w-4', isUpdating && 'animate-pulse')} />
-          {isUpdating ? '全量更新中…' : '全量更新'}
-        </button>
+        <>
+          {showSourceSelector && (
+            <select
+              value={selectedScraperSource}
+              onChange={(event) => onScraperSourceChange?.(event.target.value)}
+              disabled={busy}
+              title={selectedSourceMeta?.description}
+              aria-label="全量更新数据源"
+              className="max-w-[9rem] rounded-xl border border-input bg-background px-2 py-2 text-sm"
+            >
+              {scraperSources.map((source) => (
+                <option key={source.id} value={source.id} title={source.description}>
+                  {source.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            onClick={onFullUpdate}
+            disabled={busy}
+            title={fullUpdateTitle}
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
+          >
+            <Database className={cn('h-4 w-4', isUpdating && 'animate-pulse')} />
+            {isUpdating ? '全量更新中…' : '全量更新'}
+          </button>
+        </>
       )}
 
       {/* 自动刷新切换 */}
