@@ -12,11 +12,13 @@ import { fetchThemes, fetchCategories, refreshConceptGraph } from '@/api/theme'
 import type { ConceptGraphRefreshResponse } from '@/types/theme'
 import { useThemeFilters } from '@/hooks/useThemeFilters'
 import { FilterBar } from '@/components/FilterBar'
+import { AuthNav } from '@/components/AuthNav'
 import { SortSelect } from '@/components/SortSelect'
 import { ExportButton } from '@/components/ExportButton'
 import { ThemeTableRow } from '@/components/ThemeTableRow'
 import { ThemeTableSkeleton } from '@/components/ThemeTableSkeleton'
 import { Pagination } from '@/components/Pagination'
+import { useNavigateToSettings } from '@/hooks/useNavigateToSettings'
 
 interface BatchProgressItem {
   themeId: number
@@ -45,6 +47,7 @@ function getPreservedGraphMessage(message: string): string {
 
 export function ThemeLibrary() {
   const navigate = useNavigate()
+  const navigateToSettings = useNavigateToSettings()
   const location = useLocation()
   const [batchItems, setBatchItems] = useState<BatchProgressItem[]>([])
   const [currentBatchIndex, setCurrentBatchIndex] = useState<number | null>(null)
@@ -163,12 +166,13 @@ export function ThemeLibrary() {
           </div>
           <div className="flex min-w-0 items-center justify-between gap-2 sm:justify-end sm:gap-3">
             <button
-              onClick={() => navigate('/settings/models')}
+              onClick={navigateToSettings}
               className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
             >
               <Settings className="h-4 w-4" />
               <span>模型设置</span>
             </button>
+            <AuthNav />
             <button
               onClick={() => navigate('/')}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -247,7 +251,7 @@ export function ThemeLibrary() {
                   <span className="text-muted-foreground">模型或接口异常时可检查连接配置</span>
                   <button
                     type="button"
-                    onClick={() => navigate('/settings/models')}
+                    onClick={navigateToSettings}
                     className="font-medium text-primary hover:underline"
                   >
                     检查模型设置

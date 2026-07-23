@@ -30,8 +30,10 @@ import { LoadingBar } from '@/components/LoadingBar'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorDisplay } from '@/components/ErrorDisplay'
 import { AutoRefreshButton } from '@/components/AutoRefreshButton'
+import { AuthNav } from '@/components/AuthNav'
 import { KeyboardShortcutsButton } from '@/components/KeyboardShortcutsPanel'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { useNavigateToSettings } from '@/hooks/useNavigateToSettings'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ToastContainer, useToast } from '@/components/Toast'
 import { MarketSignalSection } from '@/components/MarketSignalSection'
@@ -66,6 +68,7 @@ function defaultCustomStartDate(endDate: string): string {
 
 export function ThemeDashboard() {
   const navigate = useNavigate()
+  const navigateToSettings = useNavigateToSettings()
   const queryClient = useQueryClient()
   const limit = useDashboardStore((s) => s.limit)
   const toast = useToast()
@@ -406,13 +409,14 @@ export function ThemeDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/settings/models')}
+              onClick={navigateToSettings}
               className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent"
             >
               <Settings className="h-4 w-4" />
               <span>模型设置</span>
             </button>
             <KeyboardShortcutsButton />
+            <AuthNav />
             <ThemeToggle />
           </div>
         </div>

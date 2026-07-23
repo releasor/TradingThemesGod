@@ -32,6 +32,8 @@ import { ThemeMarketBreadth } from '@/components/ThemeMarketBreadth'
 import { ThemeProfileSection } from '@/components/ThemeProfileSection'
 import { ThemeDriverEvents } from '@/components/ThemeDriverEvents'
 import { GlowCard } from '@/components/GlowCard'
+import { AuthNav } from '@/components/AuthNav'
+import { useNavigateToSettings } from '@/hooks/useNavigateToSettings'
 
 /**
  * 生成模拟热度趋势数据
@@ -63,6 +65,7 @@ function generateMockHeatTrend(currentHeat: number): HeatTrendDataPoint[] {
 export function ThemeDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const navigateToSettings = useNavigateToSettings()
   const location = useLocation()
   const themeId = Number(id)
   const returnPath =
@@ -208,7 +211,8 @@ export function ThemeDetail() {
             </button>
             <h1 className="min-w-0 break-words text-xl font-bold text-foreground">{theme.name}</h1>
           </div>
-          <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+          <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
+            <AuthNav />
             <button
               onClick={() => insightRefresh.mutate()}
               disabled={isFetching || insightRefresh.isPending}
@@ -252,14 +256,21 @@ export function ThemeDetail() {
                 refreshError.message ||
                 '图谱刷新失败，原图谱已保留'}
             </span>
-            {refreshError.response?.status === 409 && (
+            {refreshError.response?.status === 401 ? (
               <button
-                onClick={() => navigate('/settings/models')}
+                onClick={() => navigate('/login', { state: { from: location.pathname } })}
+                className="rounded-xl border border-current px-3 py-1.5 font-medium"
+              >
+                去登录
+              </button>
+            ) : refreshError.response?.status === 409 ? (
+              <button
+                onClick={navigateToSettings}
                 className="rounded-xl border border-current px-3 py-1.5 font-medium"
               >
                 前往模型设置
               </button>
-            )}
+            ) : null}
           </div>
         )}
         {/* 题材头部信息 */}

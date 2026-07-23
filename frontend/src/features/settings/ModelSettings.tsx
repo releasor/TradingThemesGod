@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Loader2, Plus, Save, Settings, Trash2, Wifi } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { AuthNav } from '@/components/AuthNav'
 import {
   deleteModelProvider,
   fetchModelProviders,
@@ -117,19 +118,22 @@ export function ModelSettings() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 sm:px-6">
-          <button
-            aria-label="返回首页"
-            onClick={() => navigate('/')}
-            className="rounded-xl p-2 hover:bg-accent"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <Settings className="h-5 w-5 text-primary" />
-          <div>
-            <h1 className="text-xl font-semibold">模型设置</h1>
-            <p className="text-sm text-muted-foreground">配置图谱分析使用的模型服务</p>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              aria-label="返回首页"
+              onClick={() => navigate('/')}
+              className="rounded-xl p-2 hover:bg-accent"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <Settings className="h-5 w-5 text-primary" />
+            <div>
+              <h1 className="text-xl font-semibold">模型设置</h1>
+              <p className="text-sm text-muted-foreground">配置图谱分析使用的模型服务</p>
+            </div>
           </div>
+          <AuthNav />
         </div>
       </header>
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[260px_1fr]">
