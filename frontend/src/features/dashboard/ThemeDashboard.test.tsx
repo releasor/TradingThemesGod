@@ -24,6 +24,8 @@ vi.mock('@/api/short-term', () => ({
   fetchShortTermOverview: vi.fn(),
   fetchFirstToSecondCandidates: vi.fn(),
   refreshFirstToSecondCandidates: vi.fn(),
+  refreshShortTermData: vi.fn(),
+  analyzeShortTermFromDatabase: vi.fn(),
 }))
 
 vi.mock('@/components/NewsTimeline', () => ({
@@ -357,6 +359,10 @@ describe('ThemeDashboard', () => {
       expect(runScraperAndWait).not.toHaveBeenCalled()
     })
     expect(await screen.findByText('看板已刷新')).toBeInTheDocument()
+    const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
+    expect(
+      within(controls).getByText('看板数据已刷新（题材排名、市场信号、策略卡数据库视图）')
+    ).toBeInTheDocument()
   })
 
   it('点击全量更新时触发爬虫并刷新看板', async () => {

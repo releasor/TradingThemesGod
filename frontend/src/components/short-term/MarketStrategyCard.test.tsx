@@ -172,4 +172,80 @@ describe('MarketStrategyCard', () => {
 
     expect(screen.getByText('本月策略数据已刷新')).toBeInTheDocument()
   })
+
+  it('shows live and database source toggle', async () => {
+    const onDataSourceChange = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <MarketStrategyCard
+        card={{
+          title: '指数情绪策略卡',
+          index_strength: 'strong',
+          emotion_strength: 'weak',
+          primary_strategy: '补涨趋势与切换',
+          secondary_strategy: '轮动低吸',
+          operation_advice: '指数强但情绪弱，做补涨、趋势和高低切换。',
+          focus_targets: ['低位补涨'],
+          rationale: ['指数强度 0.39'],
+        }}
+        period="today"
+        periodLabel="当日"
+        dataSource="database"
+        onDataSourceChange={onDataSourceChange}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: '数据库' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: '实时' }))
+    expect(onDataSourceChange).toHaveBeenCalledWith('live')
+  })
+
+  it('shows live preview banner when realtime data is missing', () => {
+    render(
+      <MarketStrategyCard
+        card={{
+          title: '指数情绪策略卡',
+          index_strength: 'strong',
+          emotion_strength: 'weak',
+          primary_strategy: '补涨趋势与切换',
+          secondary_strategy: '轮动低吸',
+          operation_advice: '指数强但情绪弱，做补涨、趋势和高低切换。',
+          focus_targets: ['低位补涨'],
+          rationale: ['指数强度 0.39'],
+        }}
+        period="today"
+        periodLabel="当日"
+        dataSource="live"
+        isLivePreview
+      />
+    )
+
+    expect(screen.getByText(/当前周期暂无实时数据/)).toBeInTheDocument()
+  })
+
+  it('dims strategy content while period data is loading', () => {
+    const { container } = render(
+      <MarketStrategyCard
+        card={{
+          title: '指数情绪策略卡',
+          index_strength: 'strong',
+          emotion_strength: 'strong',
+          primary_strategy: '连板接力',
+          secondary_strategy: '主升分歧接力',
+          operation_advice: '指数强、情绪强，做连板。',
+          focus_targets: ['连板梯队'],
+          rationale: ['日均连板 28.0'],
+        }}
+        period="custom"
+        periodLabel="自定义"
+        dateRange="2026-07-03 ~ 2026-07-17"
+        isPeriodLoading
+        periodStatus={{ type: 'progress', message: '正在加载2026-07-03 ~ 2026-07-17策略数据...' }}
+      />
+    )
+
+    expect(container.querySelector('.opacity-50')).toBeInTheDocument()
+    expect(screen.getByText('正在加载2026-07-03 ~ 2026-07-17策略数据...')).toBeInTheDocument()
+  })
 })

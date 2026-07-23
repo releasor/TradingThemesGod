@@ -1,6 +1,7 @@
 export type MarketStrength = 'strong' | 'weak'
 export type ShortTermPeriod = 'today' | 'current_week' | 'half_month' | 'current_month' | 'custom'
 export type ShortTermPeriodStatusType = 'progress' | 'success' | 'error'
+export type StrategyCardDataSource = 'database' | 'live'
 
 export interface ShortTermPeriodStatus {
   type: ShortTermPeriodStatusType

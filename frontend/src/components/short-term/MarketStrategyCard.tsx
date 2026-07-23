@@ -5,6 +5,7 @@ import type {
   MarketStrategyCardResponse,
   ShortTermPeriod,
   ShortTermPeriodStatus,
+  StrategyCardDataSource,
 } from '@/types/short-term'
 
 interface MarketStrategyCardProps {
@@ -17,6 +18,10 @@ interface MarketStrategyCardProps {
   customEndDate?: string
   onCustomDateRangeChange?: (startDate: string, endDate: string) => void
   periodStatus?: ShortTermPeriodStatus | null
+  isPeriodLoading?: boolean
+  dataSource?: StrategyCardDataSource
+  onDataSourceChange?: (source: StrategyCardDataSource) => void
+  isLivePreview?: boolean
   degraded?: boolean
   missingSources?: string[]
   isRefreshingData?: boolean
@@ -53,6 +58,10 @@ export function MarketStrategyCard({
   customEndDate,
   onCustomDateRangeChange,
   periodStatus,
+  isPeriodLoading = false,
+  dataSource = 'database',
+  onDataSourceChange,
+  isLivePreview = false,
   degraded = false,
   missingSources = [],
   isRefreshingData = false,
@@ -77,13 +86,42 @@ export function MarketStrategyCard({
           <p className="mt-1 text-xs text-muted-foreground">
             指数强弱 + 情绪强弱独立择时
             {dateRange ? ` · ${dateRange}` : ''}
+            {dataSource === 'live' ? ' · 实时专用数据' : ' · 数据库题材数据'}
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="flex flex-wrap items-center justify-end gap-1 rounded-xl bg-muted/60 p-1">
+            <button
+              type="button"
+              aria-pressed={dataSource === 'live'}
+              onClick={() => onDataSourceChange?.('live')}
+              className={cn(
+                'rounded-xl px-2 py-1 text-xs font-medium transition-colors',
+                dataSource === 'live'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              实时
+            </button>
+            <button
+              type="button"
+              aria-pressed={dataSource === 'database'}
+              onClick={() => onDataSourceChange?.('database')}
+              className={cn(
+                'rounded-xl px-2 py-1 text-xs font-medium transition-colors',
+                dataSource === 'database'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              数据库
+            </button>
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              title="快速拉取东方财富题材涨跌幅并更新当日市场快照，通常需 1-3 分钟"
+              title="拉取东方财富指数/情绪题材实时行情，仅更新策略卡专用数据，不影响下方看板"
               onClick={onRefreshData}
               disabled={!onRefreshData || isRefreshingData || isAnalyzingDatabase}
               className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -93,7 +131,7 @@ export function MarketStrategyCard({
             </button>
             <button
               type="button"
-              title="仅使用数据库已有数据重新计算策略，不访问外部接口"
+              title="基于数据库中的题材与快照数据重新计算策略，不访问外部接口"
               onClick={onAnalyzeDatabase}
               disabled={!onAnalyzeDatabase || isRefreshingData || isAnalyzingDatabase}
               className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -169,7 +207,18 @@ export function MarketStrategyCard({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      {isLivePreview && (
+        <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          当前周期暂无实时数据，以下为数据库预览。请点击「刷新行情」获取实时策略。
+        </div>
+      )}
+
+      <div
+        className={cn(
+          'mt-3 grid gap-3 md:grid-cols-2 transition-opacity',
+          isPeriodLoading && 'pointer-events-none opacity-50'
+        )}
+      >
         <div className="rounded-xl bg-muted/40 p-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Target className="h-3.5 w-3.5" />
@@ -185,12 +234,22 @@ export function MarketStrategyCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-start gap-2 rounded-xl border border-border/70 bg-background/50 p-3 text-sm">
+      <div
+        className={cn(
+          'mt-3 flex items-start gap-2 rounded-xl border border-border/70 bg-background/50 p-3 text-sm transition-opacity',
+          isPeriodLoading && 'opacity-50'
+        )}
+      >
         <Crosshair className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
         <p className="leading-6">{card.operation_advice}</p>
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.2fr]">
+      <div
+        className={cn(
+          'mt-3 grid gap-3 lg:grid-cols-[1fr_1.2fr] transition-opacity',
+          isPeriodLoading && 'opacity-50'
+        )}
+      >
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Activity className="h-3.5 w-3.5" />
