@@ -8,7 +8,9 @@ export interface ModelProvider {
   protocol: ModelProtocol
   base_url: string
   model: string
+  api_key: string
   has_api_key: boolean
+  custom_headers: Record<string, string>
   custom_header_names: string[]
   timeout_seconds: number
   temperature: number
