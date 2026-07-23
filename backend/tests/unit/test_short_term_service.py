@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.services.short_term import PeriodThemeMetric, ShortTermService
+from app.services.short_term import PeriodThemeMetric, STRATEGY_QUOTE_CODES, ShortTermService
 
 
 @pytest.mark.asyncio
@@ -195,3 +195,27 @@ async def test_refresh_data_uses_lightweight_quote_refresh_for_latest_day():
     service._ensure_period_snapshots.assert_awaited_once_with(
         date(2026, 7, 21), date(2026, 7, 21), force=True
     )
+
+
+@pytest.mark.asyncio
+async def test_refresh_strategy_quotes_only_updates_strategy_theme_codes(monkeypatch):
+    service = ShortTermService(AsyncMock())
+    captured: dict[str, object] = {}
+
+    class FakeScraper:
+        async def refresh_theme_quotes(self, *, only_codes=None):
+            captured["only_codes"] = only_codes
+            return date(2026, 7, 23)
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "app.scrapers.scheduler.scraper_scheduler",
+        SimpleNamespace(is_running=lambda _source: False),
+    )
+    monkeypatch.setattr("app.services.short_term.EastMoneyScraper", lambda **_: FakeScraper())
+
+    await service._refresh_strategy_quotes()
+
+    assert captured["only_codes"] == STRATEGY_QUOTE_CODES

@@ -24,6 +24,7 @@ from app.services.theme_market import ThemeMarketService
 
 INDEX_SIGNAL_CODES = {"BK0500", "BK0611", "BK0612", "BK0701", "BK0705"}
 EMOTION_SIGNAL_CODES = {"BK0816", "BK1630", "BK1638", "BK1645"}
+STRATEGY_QUOTE_CODES = INDEX_SIGNAL_CODES | EMOTION_SIGNAL_CODES
 
 
 @dataclass(frozen=True)
@@ -236,7 +237,9 @@ class ShortTermService:
         )
         scraper = EastMoneyScraper(middleware=middleware)
         try:
-            trade_date = await scraper.refresh_theme_quotes()
+            trade_date = await scraper.refresh_theme_quotes(
+                only_codes=STRATEGY_QUOTE_CODES
+            )
         except Exception as exc:
             raise HTTPException(502, f"题材行情刷新失败：{exc}") from exc
         finally:
