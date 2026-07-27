@@ -10,7 +10,12 @@ vi.mock('@/api/client', () => ({
   },
 }))
 
-const { fetchLatestSuccessfulRun, fetchDashboardScraperSources, runScraperAndWait } = await import('./scraper')
+const {
+  fetchLatestSuccessfulRun,
+  fetchDashboardScraperSources,
+  runScraperAndWait,
+  runScraperWithFallback,
+} = await import('./scraper')
 
 describe('scraper API', () => {
   beforeEach(() => {
@@ -54,15 +59,6 @@ describe('scraper API', () => {
       data: {
         runs: [
           {
-            run_id: 2,
-            source: 'eastmoney',
-            status: 'failed',
-            started_at: '2026-07-16T01:00:00Z',
-            finished_at: '2026-07-16T01:01:00Z',
-            items_scraped: 0,
-            error_message: '请求失败',
-          },
-          {
             run_id: 1,
             source: 'eastmoney',
             status: 'completed',
@@ -72,14 +68,14 @@ describe('scraper API', () => {
             error_message: null,
           },
         ],
-        count: 2,
+        count: 1,
       },
     })
 
     const result = await fetchLatestSuccessfulRun('eastmoney')
 
     expect(mockGet).toHaveBeenCalledWith('/scraper/runs', {
-      params: { source: 'eastmoney', limit: 20 },
+      params: { source: 'eastmoney', status: 'completed', limit: 5 },
     })
     expect(result?.run_id).toBe(1)
   })
@@ -131,5 +127,40 @@ describe('scraper API', () => {
 
     expect(result.status).toBe('failed')
     expect(result.error_message).toBe('数据源不可用')
+  })
+
+  it('does not fall back to next source after timeout', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        run_id: 5,
+        source: 'eastmoney',
+        status: 'running',
+        started_at: '2026-07-16T02:00:00Z',
+        finished_at: null,
+        items_scraped: 0,
+        error_message: null,
+      },
+    })
+    mockGet.mockResolvedValue({
+      data: {
+        run_id: 5,
+        source: 'eastmoney',
+        status: 'running',
+        started_at: '2026-07-16T02:00:00Z',
+        finished_at: null,
+        items_scraped: 0,
+        error_message: null,
+      },
+    })
+
+    await expect(
+      runScraperWithFallback(['eastmoney', 'akshare'], {
+        pollInterval: 0,
+        timeout: 1,
+      })
+    ).rejects.toThrow(/超时/)
+
+    expect(mockPost).toHaveBeenCalledTimes(1)
+    expect(mockPost).toHaveBeenCalledWith('/scraper/run/eastmoney', { params: {} })
   })
 })

@@ -77,10 +77,15 @@ function defaultCustomStartDate(endDate: string): string {
 
 function shortTermErrorMessage(error: unknown): string {
   const value = error as {
-    response?: { data?: { detail?: string } }
+    response?: { data?: { detail?: string }; status?: number }
     message?: string
   }
   return value.response?.data?.detail || value.message || '操作失败'
+}
+
+function apiErrorStatus(error: unknown): number | undefined {
+  const value = error as { response?: { status?: number } }
+  return value.response?.status
 }
 
 function formatRefreshProgress(done: string[], pending: string | null, elapsed: string): string {
@@ -419,7 +424,18 @@ export function ThemeDashboard() {
     }
 
     try {
-      const quotes = await refreshThemeQuotes()
+      let quotes
+      try {
+        quotes = await refreshThemeQuotes()
+      } catch (quotesError) {
+        if (apiErrorStatus(quotesError) === 409) {
+          throw new Error(
+            shortTermErrorMessage(quotesError) ||
+              '东方财富全量采集进行中，请等全量结束后再点刷新'
+          )
+        }
+        throw quotesError
+      }
       const refreshedAt = quotes.refreshed_at || new Date().toISOString()
       setLastUpdate(refreshedAt)
       done.push(`题材行情 ${quotes.themes_updated} 个`)

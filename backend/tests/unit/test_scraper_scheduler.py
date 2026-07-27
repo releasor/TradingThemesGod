@@ -99,8 +99,19 @@ async def test_scheduler_periodic_collection_skips_overlapping_run(registry):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_run_rejects_when_source_already_running(registry):
-    """手动触发时若同数据源已在运行则拒绝。"""
+async def test_scheduler_run_attaches_when_source_already_running(registry):
+    """手动触发时若同数据源已在运行则复用现有 run_id。"""
+    scheduler = ScraperScheduler(registry=registry)
+    scheduler.is_running = MagicMock(return_value=True)
+    scheduler._running_run_ids["test"] = 42
+
+    run_id = await scheduler.run("test")
+    assert run_id == 42
+
+
+@pytest.mark.asyncio
+async def test_scheduler_run_rejects_when_running_without_run_id(registry):
+    """运行中但缺少 run_id 映射时仍拒绝，避免重复启动。"""
     scheduler = ScraperScheduler(registry=registry)
     scheduler.is_running = MagicMock(return_value=True)
 

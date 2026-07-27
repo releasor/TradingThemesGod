@@ -75,33 +75,38 @@ export async function refreshThemeQuotes(): Promise<ThemeQuotesRefreshResult> {
   return data
 }
 
-/** 触发采集任务并轮询到最终状态。 */
+async function pollScraperRun(
+  runId: number,
+  { pollInterval = 2000, timeout = 10 * 60 * 1000 }: WaitOptions = {}
+): Promise<ScraperRun> {
+  const deadline = Date.now() + timeout
+  while (Date.now() <= deadline) {
+    await sleep(pollInterval)
+    const { data: run } = await apiClient.get<ScraperRun>(`/scraper/status/${runId}`)
+    if (run.status !== 'running') return run
+  }
+  throw new Error(
+    `数据更新超时（任务 #${runId} 可能仍在后台运行）。请稍后再点「刷新」；全量采集结束前轻量刷新会被暂时锁定。`
+  )
+}
+
+/** 触发采集任务并轮询到最终状态。已在运行时后端会返回同一 run，直接附着轮询。 */
 export async function runScraperAndWait(
   source: string,
-  { pollInterval = 2000, timeout = 10 * 60 * 1000 }: WaitOptions = {}
+  { pollInterval = 2000, timeout = 20 * 60 * 1000 }: WaitOptions = {}
 ): Promise<ScraperRun> {
   const { data: startedRun } = await apiClient.post<ScraperRun>(`/scraper/run/${source}`, {
     params: {},
   })
 
   if (startedRun.status !== 'running') return startedRun
-
-  const deadline = Date.now() + timeout
-  while (Date.now() <= deadline) {
-    await sleep(pollInterval)
-    const { data: run } = await apiClient.get<ScraperRun>(
-      `/scraper/status/${startedRun.run_id}`
-    )
-    if (run.status !== 'running') return run
-  }
-
-  throw new Error('数据更新超时，请稍后查看更新结果')
+  return pollScraperRun(startedRun.run_id, { pollInterval, timeout })
 }
 
-/** 按顺序尝试多个数据源，前一个失败或超时后自动切换。 */
+/** 按顺序尝试多个数据源；超时不切源（避免误报成功且后台任务仍锁住轻量刷新）。 */
 export async function runScraperWithFallback(
   sources: string[],
-  { pollInterval = 2000, timeout = 3 * 60 * 1000 }: WaitOptions = {}
+  { pollInterval = 2000, timeout = 20 * 60 * 1000 }: WaitOptions = {}
 ): Promise<ScraperRunWithAttempts> {
   const attemptedSources: string[] = []
   let lastError: Error | null = null
@@ -115,7 +120,12 @@ export async function runScraperWithFallback(
       }
       lastError = new Error(run.error_message || `${source} 全量更新失败`)
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error))
+      const err = error instanceof Error ? error : new Error(String(error))
+      // 超时：该源多半仍在跑，切源会让界面显示成功但 refresh-quotes 继续 409
+      if (err.message.includes('超时')) {
+        throw err
+      }
+      lastError = err
     }
   }
 

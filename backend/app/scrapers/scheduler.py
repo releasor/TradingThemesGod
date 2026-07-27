@@ -26,11 +26,18 @@ class ScraperScheduler:
         self.registry = registry or scraper_registry
         self._execution_tasks: dict[str, asyncio.Task[None]] = {}
         self._periodic_tasks: dict[str, asyncio.Task[None]] = {}
+        self._running_run_ids: dict[str, int] = {}
 
     def is_running(self, source: str) -> bool:
         """判断指定数据源是否正在采集"""
         task = self._execution_tasks.get(source)
         return task is not None and not task.done()
+
+    def get_running_run_id(self, source: str) -> int | None:
+        """返回当前进行中的 run_id（若有）。"""
+        if not self.is_running(source):
+            return None
+        return self._running_run_ids.get(source)
 
     def start_periodic(
         self,
@@ -96,7 +103,14 @@ class ScraperScheduler:
         if scraper_cls is None:
             raise ValueError(f"未注册的数据源: {source}")
 
+        # 已在运行：返回现有 run_id，让前端附着轮询，避免「切源成功」但原任务仍阻塞轻量刷新
         if self.is_running(source):
+            existing_run_id = self._running_run_ids.get(source)
+            if existing_run_id is not None:
+                logger.info(
+                    f"爬虫 {source} 已在运行，复用 run_id={existing_run_id}"
+                )
+                return existing_run_id
             raise ValueError(f"爬虫 {source} 正在运行中，请稍后再试")
 
         # 创建运行记录
@@ -112,6 +126,7 @@ class ScraperScheduler:
             name=f"scraper-execution-{source}-{run_id}",
         )
         self._execution_tasks[source] = task
+        self._running_run_ids[source] = run_id
         task.add_done_callback(
             lambda completed_task: self._handle_execution_done(
                 source,
@@ -129,6 +144,7 @@ class ScraperScheduler:
         """清理已结束任务并记录未处理异常"""
         if self._execution_tasks.get(source) is task:
             self._execution_tasks.pop(source, None)
+            self._running_run_ids.pop(source, None)
 
         if task.cancelled():
             return
