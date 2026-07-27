@@ -1,6 +1,6 @@
 """短线机会雷达规则引擎。"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,8 @@ class MarketStrengthInput:
     consecutive_board_count: float | None = None
     rotation_score: float | None = None
     period_label: str | None = None
+    index_sample_days: int | None = None
+    index_expected_days: int | None = None
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,7 @@ class MarketStrategyCard:
     operation_advice: str
     focus_targets: list[str]
     rationale: list[str]
+    formulas: list[str] = field(default_factory=list)
 
 
 class ShortTermRuleEngine:
@@ -46,6 +49,21 @@ class ShortTermRuleEngine:
         board_count_text = f"{board_count:.1f}"
         rotation_score = strength.rotation_score or 0
         period_label = strength.period_label or "当前周期"
+        index_coverage = ""
+        index_formula_suffix = ""
+        if (
+            strength.index_sample_days is not None
+            and strength.index_expected_days is not None
+            and strength.index_expected_days > 1
+        ):
+            index_coverage = (
+                f"，样本 {strength.index_sample_days}/{strength.index_expected_days} 日"
+            )
+            index_formula_suffix = (
+                f"；本次 {strength.index_sample_days}/{strength.index_expected_days} 日"
+            )
+            if strength.index_sample_days < strength.index_expected_days:
+                index_coverage += "（快照不完整，跨周期可能数值相同）"
 
         index_strength = (
             "strong" if index_score >= self.INDEX_STRONG_THRESHOLD else "weak"
@@ -82,9 +100,30 @@ class ShortTermRuleEngine:
 
         secondary = self._secondary_strategy(emotion_score, rotation_score)
         rationale = [
-            f"指数强度 {index_score:.2f}，判定为{'强' if index_strength == 'strong' else '弱'}。",
+            (
+                f"指数强度 {index_score:.2f}（{period_label}{index_coverage}），"
+                f"判定为{'强' if index_strength == 'strong' else '弱'}。"
+            ),
             f"情绪强度 {emotion_score:.0f}，日均连板 {board_count_text}，判定为{'强' if emotion_strength == 'strong' else '弱'}。",
             f"轮动强度 {rotation_score:.0f}，辅助策略为{secondary}。",
+        ]
+        formulas = [
+            (
+                f"指数板日均涨跌幅均值；"
+                f"≥ {self.INDEX_STRONG_THRESHOLD:g} 判强，否则弱"
+                f"{index_formula_suffix}"
+            ),
+            (
+                f"情绪分 = clamp(30 + 涨停宽度分 + 涨跌广度分, 0, 100)；"
+                f"≥ {self.EMOTION_STRONG_THRESHOLD:g} 判强，"
+                f"≤ {self.EMOTION_ICE_THRESHOLD:g} 为冰点；日均连板作风险参考"
+            ),
+            (
+                f"轮动分 = min(100, 活跃题材数×10 + 均热度/2)；"
+                f"辅策略：情绪≤{self.EMOTION_ICE_THRESHOLD:g}→冰点反核，"
+                f"情绪≥{self.EMOTION_STRONG_THRESHOLD:g}→主升分歧接力，"
+                f"轮动≥{self.ROTATION_ACTIVE_THRESHOLD:g}→轮动低吸，否则等待确认"
+            ),
         ]
 
         return MarketStrategyCard(
@@ -96,6 +135,7 @@ class ShortTermRuleEngine:
             operation_advice=advice,
             focus_targets=focus,
             rationale=rationale,
+            formulas=formulas,
         )
 
     def _secondary_strategy(self, emotion_score: float, rotation_score: float) -> str:

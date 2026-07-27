@@ -93,5 +93,15 @@ class ThemeInsightRefreshResponse(BaseModel):
     successful_sources: list[str] = Field(default_factory=list)
     failed_sources: list[str] = Field(default_factory=list)
     degraded: bool = False
+    elapsed_ms: int = Field(default=0, description="刷新耗时（毫秒）")
     refreshed_at: datetime
     message: str
+    model_name: str | None = Field(default=None, description="实际调用的模型名")
+    model_error: str | None = Field(default=None, description="模型调用/解析失败原因")
+    model_reasoning: str | None = Field(
+        default=None, description="模型思考/推理过程（若厂商返回）"
+    )
+    model_raw_response: str | None = Field(
+        default=None, description="模型原始返回预览（截断）"
+    )
+    source_count: int = Field(default=0, description="成功抓取的来源条数")

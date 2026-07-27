@@ -333,11 +333,39 @@ class ThemeRepository(BaseRepository):
             sort_order="asc",
         )
 
+    async def list_by_codes(self, codes: set[str]) -> list[Theme]:
+        """按题材代码加载题材（不含成分股）。"""
+        if not codes:
+            return []
+        result = await self.session.execute(
+            select(Theme).where(
+                Theme.deleted_at.is_(None),
+                Theme.code.in_(sorted(codes)),
+            )
+        )
+        return list(result.scalars().all())
+
     async def list_with_stock_quotes(self) -> list[Theme]:
         """一次加载全部有效题材及其成分股最新行情。"""
         query = (
             select(Theme)
             .where(Theme.deleted_at.is_(None), exclude_market_signals())
+            .options(selectinload(Theme.stocks).selectinload(ThemeStock.stock))
+            .order_by(Theme.id)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def list_with_stock_quotes_by_codes(self, codes: set[str]) -> list[Theme]:
+        """按题材代码加载成分股行情，供策略卡快照刷新使用。"""
+        if not codes:
+            return []
+        query = (
+            select(Theme)
+            .where(
+                Theme.deleted_at.is_(None),
+                Theme.code.in_(sorted(codes)),
+            )
             .options(selectinload(Theme.stocks).selectinload(ThemeStock.stock))
             .order_by(Theme.id)
         )

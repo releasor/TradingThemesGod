@@ -5,6 +5,7 @@ from sqlalchemy.dialects import mysql
 
 from app.domain.theme_classification import (
     INDICATOR_SIGNAL_CODES,
+    classify_board_kind,
     exclude_market_signals,
     is_indicator_signal,
     is_market_signal,
@@ -128,3 +129,11 @@ def test_indicator_inclusion_condition_compiles_to_in():
     codes = set(next(iter(compiled.params.values())))
     assert INDICATOR_CODES == codes
     assert "BK0815" not in codes
+
+
+def test_classify_board_kind():
+    assert classify_board_kind("BK1645") == "market"
+    assert classify_board_kind("BK1633") == "market"
+    assert classify_board_kind("BK1676") == "indicator"
+    assert classify_board_kind("BK0683") == "theme"
+    assert classify_board_kind(None) == "theme"

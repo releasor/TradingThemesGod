@@ -12,7 +12,6 @@ import akshare as ak
 import httpx
 import pandas as pd
 from fastapi import HTTPException
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.theme_insights import normalize_stock_code
@@ -24,10 +23,9 @@ from app.services.model_provider import ModelProviderService, model_http_error_m
 
 
 def _previous_weekday(value: date) -> date:
-    day = value - timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
+    from app.services.trading_calendar import TradingCalendar
+
+    return TradingCalendar.previous_trade_day(value)
 
 
 def _first_present(row: pd.Series, names: tuple[str, ...]) -> Any:
@@ -123,8 +121,10 @@ class FirstToSecondService:
     async def get_candidates(
         self, trade_date: date | None = None, *, force_refresh: bool = False
     ) -> FirstToSecondCandidateResponse:
-        target_date = trade_date or date.today()
-        previous_date = _previous_weekday(target_date)
+        from app.services.trading_calendar import TradingCalendar
+
+        target_date = TradingCalendar.resolve(trade_date)
+        previous_date = TradingCalendar.previous_trade_day(target_date)
         source_status: dict[str, str] = {}
         missing_sources: list[str] = []
 
@@ -341,6 +341,10 @@ class FirstToSecondService:
         if not candidates:
             source_status["model_catalyst"] = "skipped:no_candidates"
             return
+        if self.model_service is None:
+            source_status["model_catalyst"] = "missing"
+            missing_sources.append("model_catalyst")
+            return
         try:
             provider = await self.model_service.get_default()
             adapter = self.model_service.adapter(provider)
@@ -363,11 +367,15 @@ class FirstToSecondService:
             )
             self._merge_model_catalysts(candidates, text)
             source_status["model_catalyst"] = "success"
-        except (HTTPException, SQLAlchemyError):
+        except HTTPException:
             source_status["model_catalyst"] = "missing"
             missing_sources.append("model_catalyst")
-        except (httpx.HTTPError, KeyError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            detail = model_http_error_message(exc) if isinstance(exc, httpx.HTTPError) else str(exc)[:120]
+        except Exception as exc:  # noqa: BLE001 — 模型失败不得拖垮候选接口
+            detail = (
+                model_http_error_message(exc)
+                if isinstance(exc, httpx.HTTPError)
+                else str(exc)[:120]
+            )
             source_status["model_catalyst"] = f"failed:{detail}"
             missing_sources.append("model_catalyst")
 

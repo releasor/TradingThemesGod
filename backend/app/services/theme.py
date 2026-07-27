@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.theme import ThemeRepository
 from app.repositories.theme_insight import ThemeInsightRepository
+from app.models.short_term_signal import SectorRotationSnapshot
+from sqlalchemy import desc, select
 from app.schemas.common import calculate_total_pages
 from app.schemas.stock import StockBrief, StockListResponse
 from app.schemas.theme import (
@@ -95,7 +97,7 @@ class ThemeService:
         )
 
         return ThemeListResponse(
-            items=[ThemeBrief.model_validate(t) for t in themes],
+            items=await self._briefs_with_lifecycle(themes),
             total=total,
             page=page,
             page_size=page_size,
@@ -135,6 +137,8 @@ class ThemeService:
             theme_id, now=datetime.now(UTC), limit=5
         )
         snapshot = await self.insights.get_latest_snapshot(theme_id)
+        lifecycle = await self._latest_lifecycle_map({theme_id})
+        lc = lifecycle.get(theme_id)
 
         return ThemeDetailResponse(
             id=theme.id,
@@ -161,6 +165,13 @@ class ThemeService:
                 if snapshot
                 else None
             ),
+            lifecycle_stage=lc.lifecycle_stage if lc else None,  # type: ignore[arg-type]
+            strength_score=lc.strength_score if lc else None,
+            lifecycle_confidence=lc.lifecycle_confidence if lc else None,
+            limit_quality_score=lc.limit_quality_score if lc else None,
+            flow_score=lc.flow_score if lc else None,
+            leader_clarity_score=lc.leader_clarity_score if lc else None,
+            breadth_score=lc.breadth_score if lc else None,
         )
 
     async def search_themes(
@@ -186,7 +197,7 @@ class ThemeService:
         )
 
         return ThemeListResponse(
-            items=[ThemeBrief.model_validate(t) for t in themes],
+            items=await self._briefs_with_lifecycle(themes),
             total=total,
             page=page,
             page_size=page_size,
@@ -224,7 +235,7 @@ class ThemeService:
         """
         themes = await self.repo.get_ranking(limit=limit)
         return ThemeRankingResponse(
-            items=[ThemeBrief.model_validate(t) for t in themes],
+            items=await self._briefs_with_lifecycle(themes),
             limit=limit,
         )
 
@@ -326,3 +337,35 @@ class ThemeService:
             page_size=page_size,
             total_pages=calculate_total_pages(total, page_size),
         )
+
+    async def _briefs_with_lifecycle(self, themes: list) -> list[ThemeBrief]:
+        lifecycle = await self._latest_lifecycle_map({t.id for t in themes})
+        items: list[ThemeBrief] = []
+        for theme in themes:
+            brief = ThemeBrief.model_validate(theme)
+            row = lifecycle.get(theme.id)
+            if row is not None:
+                brief.lifecycle_stage = row.lifecycle_stage  # type: ignore[assignment]
+                brief.strength_score = row.strength_score
+                brief.lifecycle_confidence = row.lifecycle_confidence
+            items.append(brief)
+        return items
+
+    async def _latest_lifecycle_map(
+        self, theme_ids: set[int]
+    ) -> dict[int, SectorRotationSnapshot]:
+        if not theme_ids:
+            return {}
+        # 取每个题材最近一条轮动快照（按 trade_date 倒序扫描）
+        rows = (
+            await self.session.scalars(
+                select(SectorRotationSnapshot)
+                .where(SectorRotationSnapshot.theme_id.in_(theme_ids))
+                .order_by(desc(SectorRotationSnapshot.trade_date))
+            )
+        ).all()
+        latest: dict[int, SectorRotationSnapshot] = {}
+        for row in rows:
+            if row.theme_id not in latest:
+                latest[row.theme_id] = row
+        return latest

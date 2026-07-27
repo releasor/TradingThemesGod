@@ -6,12 +6,18 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.auth import get_current_user
+from app.models.user import User
 from app.schemas.short_term import (
     FirstToSecondCandidateItem,
     FirstToSecondCandidateResponse,
     MarketStrategyCardResponse,
     ShortTermOverviewResponse,
 )
+
+
+def _auth_user() -> User:
+    return User(id=1, username="tester", password_hash="x")
 
 
 def test_short_term_overview_returns_strategy_card():
@@ -227,10 +233,13 @@ def test_first_to_second_candidates_api_returns_live_candidates():
     with patch("app.api.short_term.FirstToSecondService") as service_class:
         service = service_class.return_value
         service.get_candidates = AsyncMock(return_value=service_response)
-
-        response = TestClient(app).get(
-            "/api/v1/short-term/first-to-second?trade_date=2026-07-21"
-        )
+        app.dependency_overrides[get_current_user] = _auth_user
+        try:
+            response = TestClient(app).get(
+                "/api/v1/short-term/first-to-second?trade_date=2026-07-21"
+            )
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
 
     assert response.status_code == 200
     assert response.json()["candidates"][0]["code"] == "000001"
@@ -252,10 +261,13 @@ def test_first_to_second_refresh_forces_live_candidate_refresh():
     with patch("app.api.short_term.FirstToSecondService") as service_class:
         service = service_class.return_value
         service.get_candidates = AsyncMock(return_value=service_response)
-
-        response = TestClient(app).post(
-            "/api/v1/short-term/first-to-second/refresh?trade_date=2026-07-21"
-        )
+        app.dependency_overrides[get_current_user] = _auth_user
+        try:
+            response = TestClient(app).post(
+                "/api/v1/short-term/first-to-second/refresh?trade_date=2026-07-21"
+            )
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
 
     assert response.status_code == 200
     assert response.json()["degraded"] is True

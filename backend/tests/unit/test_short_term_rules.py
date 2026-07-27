@@ -56,10 +56,19 @@ def test_market_strategy_context_changes_card_content_by_period_and_score():
             consecutive_board_count=2.6,
             rotation_score=82,
             period_label="本周",
+            index_sample_days=2,
+            index_expected_days=5,
         )
     )
 
     assert card.title == "指数情绪策略卡 · 本周"
+    assert "指数强度 0.80（本周，样本 2/5 日（快照不完整，跨周期可能数值相同））" in (
+        card.rationale[0]
+    )
+    assert "≥ 0.3 判强" in card.formulas[0]
+    assert "本次 2/5 日" in card.formulas[0]
+    assert "情绪分" in card.formulas[1]
+    assert "轮动分" in card.formulas[2]
     assert card.primary_strategy == "冰点反核与切换"
     assert "本周" in card.operation_advice
     assert "日均连板 2.6" in card.operation_advice

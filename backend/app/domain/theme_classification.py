@@ -21,6 +21,7 @@ MARKET_SIGNAL_CODES = frozenset(
         "BK1630",  # 昨日首板
         "BK1631",  # 昨日炸板
         "BK1632",  # 昨日高换手
+        "BK1633",  # 昨日高标
         "BK1635",  # 长期破净
         "BK1636",  # 红利破净股
         "BK1637",  # 东方财富热股
@@ -78,6 +79,15 @@ def is_market_signal(code: str | None) -> bool:
 def is_indicator_signal(code: str | None) -> bool:
     """判断板块代码是否属于行情指标。"""
     return code in INDICATOR_SIGNAL_CODES if code is not None else False
+
+
+def classify_board_kind(code: str | None) -> str:
+    """返回板块种类：theme / market / indicator。"""
+    if is_indicator_signal(code):
+        return "indicator"
+    if is_market_signal(code):
+        return "market"
+    return "theme"
 
 
 def exclude_market_signals() -> ColumnElement[bool]:

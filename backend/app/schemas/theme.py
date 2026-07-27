@@ -58,6 +58,11 @@ class ThemeBrief(BaseModel):
     category: str | None = Field(default=None, description="题材分类")
     tags: list | dict | None = Field(default=None, description="标签列表")
     source: str | None = Field(default=None, description="数据来源")
+    lifecycle_stage: (
+        Literal["germination", "fermentation", "climax", "divergence", "ebb"] | None
+    ) = Field(default=None, description="生命周期阶段")
+    strength_score: int | None = Field(default=None, description="短线强度分")
+    lifecycle_confidence: int | None = Field(default=None, description="阶段置信度")
 
     model_config = {"from_attributes": True}
 
@@ -110,6 +115,15 @@ class ThemeDetailResponse(BaseModel):
     profile: ThemeProfileResponse | None = None
     recent_driver_events: list[ThemeDriverEventResponse] = Field(default_factory=list)
     market_snapshot: ThemeMarketSnapshotResponse | None = None
+    lifecycle_stage: (
+        Literal["germination", "fermentation", "climax", "divergence", "ebb"] | None
+    ) = Field(default=None, description="生命周期阶段")
+    strength_score: int | None = Field(default=None, description="短线强度分")
+    lifecycle_confidence: int | None = Field(default=None, description="阶段置信度")
+    limit_quality_score: int | None = Field(default=None, description="涨停质量")
+    flow_score: int | None = Field(default=None, description="回流")
+    leader_clarity_score: int | None = Field(default=None, description="辨识度龙头")
+    breadth_score: int | None = Field(default=None, description="跟风宽度")
 
     model_config = {"from_attributes": True}
 

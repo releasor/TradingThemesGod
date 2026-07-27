@@ -10,8 +10,11 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.short_term import (
     FirstToSecondCandidateResponse,
+    SectorRotationResponse,
     ShortTermOverviewResponse,
     ShortTermPeriod,
+    ShortTermSignalRefreshResponse,
+    ThemeLifecycleResponse,
 )
 from app.services.first_to_second import FirstToSecondService
 from app.services.model_provider import ModelProviderService
@@ -45,6 +48,35 @@ def _overview_query_params(
     if start_date and end_date and start_date > end_date:
         raise HTTPException(status_code=422, detail="自定义开始日期不能晚于结束日期")
     return trade_date, period, start_date, end_date
+
+
+@router.post("/signals/refresh", response_model=ShortTermSignalRefreshResponse)
+async def refresh_short_term_signals(
+    trade_date: date | None = Query(default=None, description="交易日"),
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """全量采集短线信号并重建轮动/生命周期快照（需登录）。"""
+    return await ShortTermService(db).refresh_signals(trade_date)
+
+
+@router.get("/sectors", response_model=SectorRotationResponse)
+async def list_short_term_sectors(
+    trade_date: date | None = Query(default=None, description="交易日"),
+    db: AsyncSession = Depends(get_db),
+):
+    """主线/轮动题材列表（含生命周期与强度）。"""
+    return await ShortTermService(db).get_sectors(trade_date)
+
+
+@router.get("/themes/{theme_id}/lifecycle", response_model=ThemeLifecycleResponse)
+async def get_theme_lifecycle(
+    theme_id: int,
+    days: int = Query(default=10, ge=1, le=60, description="回溯交易日数"),
+    db: AsyncSession = Depends(get_db),
+):
+    """题材近 N 日生命周期与强度轨迹。"""
+    return await ShortTermService(db).get_theme_lifecycle(theme_id, days=days)
 
 
 @router.post("/overview/refresh-data", response_model=ShortTermOverviewResponse)
