@@ -44,6 +44,11 @@ import { MarketStrategyCard } from '@/components/short-term/MarketStrategyCard'
 import { ShortTermRadarSection } from '@/components/short-term/ShortTermRadarSection'
 import { GlowCard } from '@/components/GlowCard'
 import { strategyCardQueryKey } from '@/features/dashboard/strategyCardQuery'
+import {
+  SECTION_IDS,
+  formatSectionRefreshedAt,
+  readSectionRefreshedAt,
+} from '@/features/dashboard/sectionRefresh'
 import { isCancelledError, refetchIgnoringCancel } from '@/lib/react-query'
 import type {
   ShortTermOverviewResponse,
@@ -114,6 +119,18 @@ export function ThemeDashboard() {
   const [selectedScraperSource, setSelectedScraperSource] = useState('eastmoney')
   const lightRefreshDoneRef = useRef<string[]>([])
   const lightRefreshPendingRef = useRef<string | null>('题材行情')
+
+  // Task 4 placeholder labels; Task 5 will wire live per-section updates
+  const sectionRefreshedAtLabels = useMemo(
+    () => ({
+      heatRanking: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.heatRanking)),
+      riseRanking: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.riseRanking)),
+      strategyCard: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.strategyCard)),
+      shortTermRadar: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.shortTermRadar)),
+      firstToSecond: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.firstToSecond)),
+    }),
+    []
+  )
 
   const handleThemeClick = useCallback(
     (themeId: number) => navigate(`/themes/${themeId}`, { state: { from: '/' } }),
@@ -732,6 +749,8 @@ export function ThemeDashboard() {
       setIsFirstToSecondRefreshing(false)
     }
   }, [refetchFirstToSecondCandidates, toast])
+  // Retained until Task 5 wires this into centralized refresh.
+  void handleFirstToSecondRefresh
 
   useEffect(() => {
     if (isDatabaseStrategyFetching) return
@@ -859,7 +878,7 @@ export function ThemeDashboard() {
         >
           <div className="min-w-0" data-testid="dashboard-main-column">
             <ShortTermRadarSection
-              onFeedback={handleNewsFeedback}
+              refreshedAtLabel={sectionRefreshedAtLabels.shortTermRadar}
               onSelectTheme={handleThemeClick}
             />
 
@@ -879,6 +898,7 @@ export function ThemeDashboard() {
                   isPreview={isStrategyPreview}
                   degraded={strategyOverviewForCard.degraded}
                   missingSources={strategyOverviewForCard.missing_sources}
+                  refreshedAtLabel={sectionRefreshedAtLabels.strategyCard}
                 />
               </div>
             )}
@@ -889,7 +909,12 @@ export function ThemeDashboard() {
               data-testid="dashboard-ranking-grid"
             >
               <section className="min-w-0">
-                <h2 className="mb-4 text-lg font-semibold text-foreground">涨跌幅 Top 20</h2>
+                <div className="mb-4 flex flex-wrap items-baseline gap-2">
+                  <h2 className="text-lg font-semibold text-foreground">涨跌幅 Top 20</h2>
+                  <span className="text-xs text-muted-foreground">
+                    刷新于 {sectionRefreshedAtLabels.riseRanking}
+                  </span>
+                </div>
                 <GlowCard>
                 <div className="p-3">
                   {isLoading || isRiseRankingLoading ? (
@@ -930,10 +955,14 @@ export function ThemeDashboard() {
               data-testid="dashboard-hot-themes-grid"
             >
               <section className="min-w-0">
-                <h2 className="mb-3 text-lg font-semibold text-foreground">
-                  热门题材 Top {limit}
-                </h2>
-
+                <div className="mb-3 flex flex-wrap items-baseline gap-2">
+                  <h2 className="text-lg font-semibold text-foreground">
+                    热门题材 Top {limit}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    刷新于 {sectionRefreshedAtLabels.heatRanking}
+                  </span>
+                </div>
                 {isLoading && (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {Array.from({ length: limit }).map((_, i) => (
@@ -968,8 +997,8 @@ export function ThemeDashboard() {
                 <BoardUpgradeReference
                   data={firstToSecondCandidates}
                   isLoading={isFirstToSecondLoading}
-                  isRefreshing={isFirstToSecondRefreshing || isFirstToSecondFetching}
-                  onRefresh={() => void handleFirstToSecondRefresh()}
+                  refreshedAtLabel={sectionRefreshedAtLabels.firstToSecond}
+                  isSectionRefreshing={isFirstToSecondRefreshing || isFirstToSecondFetching}
                 />
               </aside>
             </div>

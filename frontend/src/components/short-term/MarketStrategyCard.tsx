@@ -21,6 +21,7 @@ interface MarketStrategyCardProps {
   isPreview?: boolean
   degraded?: boolean
   missingSources?: string[]
+  refreshedAtLabel?: string
 }
 
 const PERIOD_OPTIONS: Array<{ value: ShortTermPeriod; label: string }> = [
@@ -55,6 +56,7 @@ export function MarketStrategyCard({
   isPreview = false,
   degraded = false,
   missingSources = [],
+  refreshedAtLabel,
 }: MarketStrategyCardProps) {
   return (
     <GlowCard>
@@ -66,9 +68,14 @@ export function MarketStrategyCard({
       >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <Gauge className="h-4 w-4 text-primary" />
             <h2 id="market-strategy-card-heading">{card.title}</h2>
+            {refreshedAtLabel != null && (
+              <span className="text-xs font-normal text-muted-foreground">
+                刷新于 {refreshedAtLabel}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             指数强弱 + 情绪强弱独立择时

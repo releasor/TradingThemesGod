@@ -40,14 +40,17 @@ const sampleItem = {
   missing_metrics: [] as string[],
 }
 
-function renderRadar() {
+function renderRadar(props?: { refreshedAtLabel?: string; isSectionRefreshing?: boolean }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <ShortTermRadarSection />
+        <ShortTermRadarSection
+          refreshedAtLabel={props?.refreshedAtLabel ?? '暂无'}
+          isSectionRefreshing={props?.isSectionRefreshing}
+        />
       </MemoryRouter>
     </QueryClientProvider>
   )
@@ -65,10 +68,29 @@ describe('ShortTermRadarSection', () => {
   })
 
   it('renders sector cards inside AnimatedList scroll container', async () => {
-    renderRadar()
+    renderRadar({ refreshedAtLabel: '10:32:15' })
     expect(await screen.findByText('存储芯片')).toBeInTheDocument()
+    expect(screen.getByText('刷新于 10:32:15')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '刷新信号' })).not.toBeInTheDocument()
     expect(screen.getByTestId('radar-radar-theme-heading-scroll')).toBeInTheDocument()
     expect(screen.getByTestId('radar-sector-theme-1')).toHaveClass('item')
+  })
+
+  it('shows refreshing indicator near title', async () => {
+    renderRadar({ isSectionRefreshing: true })
+    expect(await screen.findByText('存储芯片')).toBeInTheDocument()
+    expect(screen.getByText('刷新中…')).toBeInTheDocument()
+  })
+
+  it('shows empty state pointing to top refresh', async () => {
+    vi.mocked(fetchShortTermSectors).mockResolvedValue({
+      trade_date: '2026-07-24',
+      items: [],
+      degraded: false,
+      missing_sources: [],
+    })
+    renderRadar()
+    expect(await screen.findByText(/请使用顶部刷新/)).toBeInTheDocument()
   })
 
   it('highlights card on hover like news list', async () => {

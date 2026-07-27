@@ -1,8 +1,7 @@
 /** 一进二打板参考卡测试 */
 
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { BoardUpgradeReference } from './BoardUpgradeReference'
 
 describe('BoardUpgradeReference', () => {
@@ -39,9 +38,12 @@ describe('BoardUpgradeReference', () => {
   }
 
   it('renders live candidates instead of a static checklist', () => {
-    render(<BoardUpgradeReference data={response} isLoading={false} />)
+    render(
+      <BoardUpgradeReference data={response} isLoading={false} refreshedAtLabel="10:30:00" />
+    )
 
     expect(screen.getByRole('heading', { name: '一进二打板参考' })).toBeInTheDocument()
+    expect(screen.getByText('刷新于 10:30:00')).toBeInTheDocument()
     expect(screen.getByText('平安银行')).toBeInTheDocument()
     expect(screen.getByText('000001')).toBeInTheDocument()
     expect(screen.getByText('86')).toBeInTheDocument()
@@ -49,17 +51,20 @@ describe('BoardUpgradeReference', () => {
     expect(screen.getByText('模型催化缺失')).toBeInTheDocument()
     expect(screen.getByText(/数据降级/)).toBeInTheDocument()
     expect(screen.queryByText('参考首板 · 一进二')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '实时刷新' })).not.toBeInTheDocument()
   })
 
-  it('calls refresh when the realtime refresh button is clicked', async () => {
-    const onRefresh = vi.fn()
-    const user = userEvent.setup()
+  it('shows refreshing indicator when section is refreshing', () => {
+    render(
+      <BoardUpgradeReference
+        data={response}
+        isLoading={false}
+        refreshedAtLabel="10:30:00"
+        isSectionRefreshing
+      />
+    )
 
-    render(<BoardUpgradeReference data={response} isLoading={false} onRefresh={onRefresh} />)
-
-    await user.click(screen.getByRole('button', { name: '实时刷新' }))
-
-    expect(onRefresh).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('刷新中…')).toBeInTheDocument()
   })
 
   it('shows an empty state when no candidates are available', () => {
@@ -67,6 +72,7 @@ describe('BoardUpgradeReference', () => {
       <BoardUpgradeReference
         data={{ ...response, candidates: [], excluded_count: 3, degraded: false }}
         isLoading={false}
+        refreshedAtLabel="暂无"
       />
     )
 
@@ -74,7 +80,9 @@ describe('BoardUpgradeReference', () => {
   })
 
   it('renders candidates in an animated scroll list like news cards', () => {
-    render(<BoardUpgradeReference data={response} isLoading={false} />)
+    render(
+      <BoardUpgradeReference data={response} isLoading={false} refreshedAtLabel="10:30:00" />
+    )
 
     expect(screen.getByTestId('board-upgrade-scroll-container')).toBeInTheDocument()
     expect(screen.getByTestId('board-upgrade-item-000001')).toBeInTheDocument()

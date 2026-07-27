@@ -1,7 +1,7 @@
 /** 一进二打板候选卡 */
 
 import { memo } from 'react'
-import { Crosshair, RefreshCw } from 'lucide-react'
+import { Crosshair, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import AnimatedList from '@/components/AnimatedList'
 import { GlowCard } from '@/components/GlowCard'
@@ -10,8 +10,8 @@ import type { FirstToSecondCandidateResponse } from '@/types/short-term'
 interface BoardUpgradeReferenceProps {
   data?: FirstToSecondCandidateResponse
   isLoading?: boolean
-  isRefreshing?: boolean
-  onRefresh?: () => void
+  refreshedAtLabel: string
+  isSectionRefreshing?: boolean
 }
 
 function formatNumber(value: number | null, suffix = '') {
@@ -32,8 +32,8 @@ function badgeClass(kind: 'match' | 'risk' | 'exclude') {
 export const BoardUpgradeReference = memo(function BoardUpgradeReference({
   data,
   isLoading = false,
-  isRefreshing = false,
-  onRefresh,
+  refreshedAtLabel,
+  isSectionRefreshing = false,
 }: BoardUpgradeReferenceProps) {
   const candidates = data?.candidates ?? []
   return (
@@ -42,22 +42,18 @@ export const BoardUpgradeReference = memo(function BoardUpgradeReference({
       aria-labelledby="board-upgrade-reference-heading"
       className="min-w-0"
     >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Crosshair className="h-4 w-4 shrink-0 text-primary" />
-          <h2 id="board-upgrade-reference-heading" className="text-lg font-semibold text-foreground">
-            一进二打板参考
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={isLoading || isRefreshing}
-          className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
-          实时刷新
-        </button>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Crosshair className="h-4 w-4 shrink-0 text-primary" />
+        <h2 id="board-upgrade-reference-heading" className="text-lg font-semibold text-foreground">
+          一进二打板参考
+        </h2>
+        <span className="text-xs text-muted-foreground">刷新于 {refreshedAtLabel}</span>
+        {isSectionRefreshing && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <LoaderCircle className="h-3 w-3 animate-spin" />
+            刷新中…
+          </span>
+        )}
       </div>
 
       <GlowCard>

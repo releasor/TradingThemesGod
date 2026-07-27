@@ -1,22 +1,19 @@
 /** 短线雷达：与下方涨跌幅/行情指标/市场表现同结构的三列分区 */
 
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { LoaderCircle, Radar, RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { LoaderCircle, Radar } from 'lucide-react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchShortTermSectors, refreshShortTermSignals } from '@/api/short-term'
+import { fetchShortTermSectors } from '@/api/short-term'
 import AnimatedList from '@/components/AnimatedList'
 import { ThemeLifecycleBadge } from '@/components/ThemeLifecycleBadge'
 import { GlowCard } from '@/components/GlowCard'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth'
-import type {
-  SectorRotationItem,
-  ShortTermSignalRefreshResponse,
-} from '@/types/short-term'
+import type { SectorRotationItem } from '@/types/short-term'
 
 interface ShortTermRadarSectionProps {
-  onFeedback?: (type: 'success' | 'error' | 'warning', message: string) => void
+  refreshedAtLabel: string
+  isSectionRefreshing?: boolean
   onSelectTheme?: (themeId: number) => void
 }
 
@@ -49,19 +46,6 @@ const BOARD_SECTIONS: {
     limit: 12,
   },
 ]
-
-function formatSignalRefreshSummary(result: ShortTermSignalRefreshResponse): string {
-  const updated = [
-    `涨停池 ${result.signal_count}`,
-    `龙虎榜 ${result.dragon_tiger_count}`,
-    `轮动快照 ${result.sector_count}`,
-  ]
-  const parts = [`已更新：${updated.join(' / ')}（交易日 ${result.trade_date}）`]
-  if (result.missing_sources.length > 0) {
-    parts.push(`源未完成：${result.missing_sources.join('、')}`)
-  }
-  return parts.join('。')
-}
 
 function SectorCardContent({
   item,
@@ -158,16 +142,13 @@ function RadarColumn({
 }
 
 export function ShortTermRadarSection({
-  onFeedback,
+  refreshedAtLabel,
+  isSectionRefreshing = false,
   onSelectTheme,
 }: ShortTermRadarSectionProps) {
-  const queryClient = useQueryClient()
-  const token = useAuthStore((s) => s.token)
   const navigate = useNavigate()
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [lastRefreshNote, setLastRefreshNote] = useState<string | null>(null)
 
-  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['short-term-sectors'],
     queryFn: () => fetchShortTermSectors(),
     staleTime: 30_000,
@@ -191,74 +172,32 @@ export function ShortTermRadarSection({
     navigate(`/themes/${themeId}`, { state: { from: '/' } })
   }
 
-  const handleRefresh = async () => {
-    if (!token) {
-      onFeedback?.('warning', '登录后才能刷新短线信号')
-      navigate('/login')
-      return
-    }
-    setIsRefreshing(true)
-    setLastRefreshNote('正在更新：涨停池 / 龙虎榜 / 轮动快照...')
-    try {
-      const result = await refreshShortTermSignals()
-      await queryClient.invalidateQueries({ queryKey: ['short-term-sectors'] })
-      await queryClient.invalidateQueries({ queryKey: ['short-term-overview'] })
-      await refetch()
-      const summary = formatSignalRefreshSummary(result)
-      setLastRefreshNote(summary)
-      if (result.status === 'failed') {
-        onFeedback?.('error', result.error_message || '短线信号刷新失败')
-      } else if (result.degraded) {
-        onFeedback?.('warning', summary)
-      } else {
-        onFeedback?.('success', summary)
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '刷新失败'
-      setLastRefreshNote(`短线信号刷新失败：${message}`)
-      onFeedback?.('error', message)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
-
   const items = data?.items ?? []
   const hasAny = items.length > 0
   const showColumns = !isError || hasAny
 
   return (
     <section id="short-term-radar" aria-labelledby="short-term-radar-heading" className="mb-6">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Radar className="h-4 w-4 text-primary" />
-          <h2 id="short-term-radar-heading" className="text-lg font-semibold text-foreground">
-            短线机会雷达
-          </h2>
-          {data?.trade_date && (
-            <span className="text-xs text-muted-foreground">交易日 {data.trade_date}</span>
-          )}
-          {(isRefreshing || isFetching) && hasAny && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <LoaderCircle className="h-3 w-3 animate-spin" />
-              更新中
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => void handleRefresh()}
-          disabled={isRefreshing}
-          className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
-        >
-          <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
-          刷新信号
-        </button>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Radar className="h-4 w-4 text-primary" />
+        <h2 id="short-term-radar-heading" className="text-lg font-semibold text-foreground">
+          短线机会雷达
+        </h2>
+        <span className="text-xs text-muted-foreground">刷新于 {refreshedAtLabel}</span>
+        {data?.trade_date && (
+          <span className="text-xs text-muted-foreground">交易日 {data.trade_date}</span>
+        )}
+        {isSectionRefreshing && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <LoaderCircle className="h-3 w-3 animate-spin" />
+            刷新中…
+          </span>
+        )}
       </div>
 
       <p className="mb-3 text-xs text-muted-foreground">
         与下方涨跌幅 / 行情指标 / 市场表现同一分类：题材、指标、市场表现各进各列。不构成投资建议。
       </p>
-      {lastRefreshNote && <p className="mb-3 text-xs text-primary">{lastRefreshNote}</p>}
 
       {isError && !hasAny && (
         <div className="mb-4 flex h-24 flex-col items-center justify-center gap-2 rounded-xl border border-border text-sm text-muted-foreground">
@@ -271,7 +210,7 @@ export function ShortTermRadarSection({
 
       {!isLoading && !isError && !hasAny && (
         <div className="rounded-xl border border-border bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
-          暂无轮动快照，请登录后点击「刷新信号」
+          暂无轮动快照，请使用顶部刷新
         </div>
       )}
 

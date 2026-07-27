@@ -24,10 +24,12 @@ describe('MarketStrategyCard', () => {
         period="today"
         periodLabel="当日"
         dateRange="2026-07-21"
+        refreshedAtLabel="09:15:00"
       />
     )
 
     expect(screen.getByText('指数情绪策略卡')).toBeInTheDocument()
+    expect(screen.getByText('刷新于 09:15:00')).toBeInTheDocument()
     expect(screen.getByText('当日')).toBeInTheDocument()
     expect(screen.getByText(/2026-07-21/)).toBeInTheDocument()
     expect(screen.getByText('补涨趋势与切换')).toBeInTheDocument()
