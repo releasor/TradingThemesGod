@@ -200,3 +200,57 @@ async def test_run_rejects_redirected_detail_page():
         )
 
     scraper.parse.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_collect_full_themes_only_without_saving():
+    """全量竞速：同花顺仅采概念列表，不落库。"""
+    import pandas as pd
+    from datetime import date
+
+    from app.scrapers.draft_types import FullScrapeDraft
+
+    scraper = TongHuaShunScraper()
+    frame = pd.DataFrame(
+        [
+            {"name": "人形机器人", "code": "308614"},
+            {"name": "AI手机", "code": "309120"},
+        ]
+    )
+    scraper._save_themes = AsyncMock(return_value=2)
+
+    with patch("app.scrapers.ths.ak.stock_board_concept_name_ths", return_value=frame):
+        draft = await scraper.collect_full()
+
+    assert isinstance(draft, FullScrapeDraft)
+    assert draft.source == "ths"
+    assert len(draft.themes) == 2
+    assert draft.themes[0]["code"] == "THS308614"
+    assert draft.themes[0]["name"] == "人形机器人"
+    assert draft.stocks_by_code == {}
+    assert isinstance(draft.trade_date, date)
+    scraper._save_themes.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_commit_full_saves_themes_only():
+    from datetime import date
+
+    from app.scrapers.draft_types import FullScrapeDraft
+
+    scraper = TongHuaShunScraper()
+    draft = FullScrapeDraft(
+        source="ths",
+        trade_date=date(2026, 7, 27),
+        themes=[{"name": "人形机器人", "code": "THS308614", "source": "ths"}],
+        stocks_by_code={},
+    )
+    scraper._save_themes = AsyncMock(return_value=1)
+
+    assert await scraper.commit_full(draft) == 1
+    scraper._save_themes.assert_awaited_once_with(draft.themes)
+
+
+def test_normalize_concept_code_prefixes_ths():
+    assert TongHuaShunScraper._normalize_concept_code("308614") == "THS308614"
+    assert TongHuaShunScraper._normalize_concept_code("ths308614") == "THS308614"

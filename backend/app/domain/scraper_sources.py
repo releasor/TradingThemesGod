@@ -33,8 +33,8 @@ SCRAPER_SOURCE_CATALOG: tuple[ScraperSourceMeta, ...] = (
     ScraperSourceMeta(
         id="ths",
         label="同花顺",
-        description="单题材产业链结构（需在题材详情中使用）",
-        dashboard_selectable=False,
+        description="概念板块列表（全量竞速兜底）；题材详情中可拉产业链",
+        dashboard_selectable=True,
     ),
     ScraperSourceMeta(
         id="sina",

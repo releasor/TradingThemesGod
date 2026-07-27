@@ -17,7 +17,7 @@ def test_list_registered_scraper_sources_includes_catalog_entries():
 def test_list_dashboard_scraper_sources_filters_specialized_sources():
     register_default_scrapers()
     sources = list_registered_scraper_sources(dashboard_only=True)
-    assert [item.id for item in sources] == ["eastmoney", "akshare"]
+    assert [item.id for item in sources] == ["eastmoney", "akshare", "ths"]
 
 
 def test_get_default_dashboard_source_prefers_eastmoney():

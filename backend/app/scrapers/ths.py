@@ -1,11 +1,17 @@
-"""同花顺产业链爬虫
+"""同花顺爬虫
 
-从同花顺网站获取产业链结构数据（上游/中游/下游）。
+- run(): 从同花顺网站获取单题材产业链结构（上游/中游/下游）
+- collect_full/commit_full: 概念板块列表（全量竞速兜底，themes-only）
 """
 
+import asyncio
 import re
+from collections.abc import Callable
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
+import akshare as ak
 from sqlalchemy import select, tuple_
 
 from app.core.database import AsyncSessionLocal
@@ -14,6 +20,7 @@ from app.models.industry_chain import IndustryChain
 from app.models.theme import Theme
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.scrapers.base import BaseScraper
+from app.scrapers.draft_types import FullScrapeDraft
 
 logger = get_logger(__name__)
 
@@ -226,6 +233,160 @@ class TongHuaShunScraper(BaseScraper):
 
         logger.info(f"[{self.source_name}] 保存了 {saved_count} 个产业链环节")
         return saved_count
+
+    @staticmethod
+    def _normalize_concept_code(code: Any) -> str:
+        """同花顺概念代码加 THS 前缀，避免与东财 BK / 股票代码冲突。"""
+        value = str(code or "").strip().upper()
+        if not value:
+            return ""
+        if value.startswith("THS"):
+            return value
+        return f"THS{value}"
+
+    def _parse_concept_themes(self, frame: Any) -> list[dict[str, Any]]:
+        """解析同花顺概念板块列表为题材草稿（不含成分股）。"""
+        themes: list[dict[str, Any]] = []
+        if frame is None or getattr(frame, "empty", True):
+            return themes
+
+        columns = set(getattr(frame, "columns", []))
+        code_column = "code" if "code" in columns else ("板块代码" if "板块代码" in columns else None)
+        name_column = "name" if "name" in columns else ("板块名称" if "板块名称" in columns else None)
+        if code_column is None or name_column is None:
+            logger.warning(
+                f"[{self.source_name}] 概念列表缺少 code/name 列: {list(columns)}"
+            )
+            return themes
+
+        for _, row in frame.iterrows():
+            code = self._normalize_concept_code(row.get(code_column))
+            name = str(row.get(name_column, "")).strip()
+            if not code or not name:
+                continue
+            themes.append(
+                {
+                    "name": name,
+                    "code": code,
+                    "heat_index": None,
+                    "rise_fall_pct": None,
+                    "stock_count": None,
+                    "category": None,
+                    "source": self.source_name,
+                }
+            )
+        return themes
+
+    async def collect_full(
+        self,
+        cancel: asyncio.Event | None = None,
+        params: dict[str, Any] | None = None,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> FullScrapeDraft:
+        """采集同花顺概念题材草稿（themes-only），供全量竞速兜底。"""
+        del params
+
+        def report(pct: float) -> None:
+            if on_progress is not None:
+                on_progress(max(0.0, min(100.0, pct)))
+
+        if cancel is not None and cancel.is_set():
+            raise asyncio.CancelledError()
+
+        logger.info(f"[{self.source_name}] 开始全量题材采集（同花顺概念板块，不落库）")
+        report(10.0)
+        last_error: Exception | None = None
+        frame = None
+        for attempt in range(1, 4):
+            if cancel is not None and cancel.is_set():
+                raise asyncio.CancelledError()
+            try:
+                frame = await asyncio.to_thread(ak.stock_board_concept_name_ths)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"[{self.source_name}] 获取概念板块失败（第 {attempt}/3 次）: {e}"
+                )
+                if attempt < 3:
+                    await asyncio.sleep(1.5 * attempt)
+
+        if last_error is not None or frame is None:
+            logger.error(f"[{self.source_name}] 获取概念板块失败: {last_error}")
+            raise last_error or RuntimeError("获取同花顺概念板块失败")
+
+        if cancel is not None and cancel.is_set():
+            raise asyncio.CancelledError()
+
+        report(80.0)
+        themes = self._parse_concept_themes(frame)
+        logger.info(f"[{self.source_name}] 解析到 {len(themes)} 个概念题材")
+        report(100.0)
+        return FullScrapeDraft(
+            source=self.source_name,
+            trade_date=date.today() if themes else None,
+            themes=themes,
+            stocks_by_code={},
+        )
+
+    async def _save_themes(self, themes: list[dict[str, Any]]) -> int:
+        """幂等保存题材数据。"""
+        saved_count = 0
+        async with AsyncSessionLocal() as session:
+            theme_codes = [t["code"] for t in themes if t.get("code")]
+            existing_result = await session.execute(
+                select(Theme).where(
+                    Theme.code.in_(theme_codes),
+                    Theme.deleted_at.is_(None),
+                )
+            )
+            existing_map = {t.code: t for t in existing_result.scalars().all()}
+
+            for theme_data in themes:
+                try:
+                    theme = existing_map.get(theme_data["code"])
+                    if theme:
+                        theme.name = theme_data["name"]
+                        theme.code = theme_data["code"]
+                        if theme_data.get("heat_index") is not None:
+                            theme.heat_index = theme_data["heat_index"]
+                        if theme_data.get("rise_fall_pct") is not None:
+                            theme.rise_fall_pct = theme_data["rise_fall_pct"]
+                        if theme_data.get("stock_count") is not None:
+                            theme.stock_count = theme_data["stock_count"]
+                        if theme_data.get("category") is not None:
+                            theme.category = theme_data["category"]
+                        theme.source = theme_data.get("source", self.source_name)
+                    else:
+                        theme = Theme(
+                            name=theme_data["name"],
+                            code=theme_data["code"],
+                            heat_index=theme_data.get("heat_index") or Decimal("0"),
+                            rise_fall_pct=theme_data.get("rise_fall_pct")
+                            or Decimal("0"),
+                            stock_count=theme_data.get("stock_count") or 0,
+                            category=theme_data.get("category"),
+                            source=theme_data.get("source", self.source_name),
+                        )
+                        session.add(theme)
+                    saved_count += 1
+                except Exception as e:
+                    logger.error(
+                        f"[{self.source_name}] 保存题材失败: {e}, 数据: {theme_data}"
+                    )
+                    continue
+
+            await session.commit()
+
+        logger.info(f"[{self.source_name}] 保存了 {saved_count} 个题材")
+        return saved_count
+
+    async def commit_full(self, draft: FullScrapeDraft) -> int:
+        """落库全量题材草稿（当前无成分股）。"""
+        if not draft.themes:
+            return 0
+        return await self._save_themes(draft.themes)
 
     async def run(
         self, url: str = "", params: dict[str, Any] | None = None
