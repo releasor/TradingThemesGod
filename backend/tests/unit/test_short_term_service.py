@@ -474,10 +474,6 @@ async def test_refresh_strategy_quotes_only_updates_strategy_theme_codes(monkeyp
         )
 
     monkeypatch.setattr(
-        "app.scrapers.scheduler.scraper_scheduler",
-        SimpleNamespace(is_running=lambda _source: False),
-    )
-    monkeypatch.setattr(
         "app.services.short_term.refresh_strategy_quotes",
         fake_refresh,
     )

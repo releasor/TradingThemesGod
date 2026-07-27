@@ -837,15 +837,10 @@ class ShortTermService:
         await market_service.refresh_for_theme_codes(codes, trade_date)
 
     async def _refresh_strategy_quotes(self) -> StrategyQuoteRefreshResult:
-        """快速刷新题材涨跌幅，东方财富超时后自动切换 AKShare。"""
-        from app.scrapers.scheduler import scraper_scheduler
+        """快速刷新题材涨跌幅，东方财富超时后自动切换 AKShare。
 
-        if scraper_scheduler.is_running("eastmoney"):
-            raise HTTPException(
-                409,
-                "全量采集正在进行中，请稍后再试，或先使用「数据库分析」",
-            )
-
+        与全量采集解耦，避免策略卡刷新被长时间全量任务锁死。
+        """
         try:
             result = await refresh_strategy_quotes(STRATEGY_QUOTE_CODES)
         except RuntimeError as exc:

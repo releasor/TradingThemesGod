@@ -72,7 +72,7 @@ class ScraperRunRepository(BaseRepository):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def fail_stale_running(self, *, older_than_hours: int = 2) -> int:
+    async def fail_stale_running(self, *, older_than_hours: float = 2) -> int:
         """将长时间未结束的 running 记录标记为失败，避免僵尸任务干扰。"""
         cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
         result = await self.session.execute(
@@ -86,6 +86,23 @@ class ScraperRunRepository(BaseRepository):
                 status="failed",
                 finished_at=datetime.now(timezone.utc),
                 error_message="进程中断后的僵尸任务，已自动清理",
+            )
+        )
+        await self.session.flush()
+        return int(result.rowcount or 0)
+
+    async def fail_all_running(self, *, reason: str = "采集已中断并清理") -> int:
+        """将全部 running 记录标记为失败（用于进程重启后清理）。"""
+        result = await self.session.execute(
+            update(ScraperRun)
+            .where(
+                ScraperRun.status == "running",
+                ScraperRun.finished_at.is_(None),
+            )
+            .values(
+                status="failed",
+                finished_at=datetime.now(timezone.utc),
+                error_message=reason,
             )
         )
         await self.session.flush()

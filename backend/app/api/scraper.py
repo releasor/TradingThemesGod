@@ -134,17 +134,23 @@ async def list_scraper_runs(
 @router.post("/refresh-quotes", response_model=ThemeQuotesRefreshResponse)
 @limiter.limit("10/minute")
 async def refresh_theme_quotes(request: Request):
-    """仅刷新题材列表涨跌幅/热度，不抓取成分股。"""
-    if scraper_scheduler.is_running("eastmoney"):
-        raise HTTPException(status_code=409, detail="东方财富全量采集进行中，请稍后再试")
+    """仅刷新题材列表涨跌幅/热度，不抓取成分股。
 
-    scraper = EastMoneyScraper()
-    try:
-        trade_date, themes_updated = await scraper.refresh_theme_quotes()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"题材行情刷新失败：{exc}") from exc
-    finally:
-        await scraper.close()
+    与全量 eastmoney 采集解耦：全量进行中仍可刷新行情。
+    """
+    if scraper_scheduler.is_quotes_refresh_running():
+        raise HTTPException(status_code=409, detail="行情刷新进行中，请稍后再试")
+
+    async with scraper_scheduler.quotes_refresh_lock:
+        scraper = EastMoneyScraper()
+        try:
+            trade_date, themes_updated = await scraper.refresh_theme_quotes()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502, detail=f"题材行情刷新失败：{exc}"
+            ) from exc
+        finally:
+            await scraper.close()
 
     return ThemeQuotesRefreshResponse(
         trade_date=trade_date,

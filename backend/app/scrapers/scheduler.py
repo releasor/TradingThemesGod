@@ -27,11 +27,17 @@ class ScraperScheduler:
         self._execution_tasks: dict[str, asyncio.Task[None]] = {}
         self._periodic_tasks: dict[str, asyncio.Task[None]] = {}
         self._running_run_ids: dict[str, int] = {}
+        # 轻量行情刷新锁：与全量采集互不阻塞
+        self.quotes_refresh_lock = asyncio.Lock()
 
     def is_running(self, source: str) -> bool:
         """判断指定数据源是否正在采集"""
         task = self._execution_tasks.get(source)
         return task is not None and not task.done()
+
+    def is_quotes_refresh_running(self) -> bool:
+        """是否有轻量行情刷新正在进行"""
+        return self.quotes_refresh_lock.locked()
 
     def get_running_run_id(self, source: str) -> int | None:
         """返回当前进行中的 run_id（若有）。"""

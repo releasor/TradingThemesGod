@@ -254,3 +254,17 @@ class TestScraperRunRepository:
         runs = await repo.list_by_source(source="nonexistent")
 
         assert len(runs) == 0
+
+    @pytest.mark.asyncio
+    async def test_fail_all_running(self, mock_session):
+        """进程重启时应能一次性清掉全部 running。"""
+        repo = ScraperRunRepository(mock_session)
+        mock_result = MagicMock()
+        mock_result.rowcount = 3
+        mock_session.execute.return_value = mock_result
+
+        cleaned = await repo.fail_all_running(reason="服务重启，中断的采集已清理")
+
+        assert cleaned == 3
+        mock_session.execute.assert_awaited()
+        mock_session.flush.assert_awaited()

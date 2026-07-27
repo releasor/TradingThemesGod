@@ -405,14 +405,17 @@ export function ThemeDashboard() {
     lightRefreshDoneRef.current = []
     lightRefreshPendingRef.current = '题材行情'
     setIsDashboardRefreshing(true)
-    setUpdateResult({
-      type: 'progress',
-      message: formatRefreshProgress(done, '题材行情', '0 秒'),
-    })
+    if (!options?.silent) {
+      setUpdateResult({
+        type: 'progress',
+        message: formatRefreshProgress(done, '题材行情', '0 秒'),
+      })
+    }
 
     const publishProgress = (pending: string | null) => {
       lightRefreshDoneRef.current = [...done]
       lightRefreshPendingRef.current = pending
+      if (options?.silent) return
       setUpdateResult({
         type: 'progress',
         message: formatRefreshProgress(
@@ -429,9 +432,15 @@ export function ThemeDashboard() {
         quotes = await refreshThemeQuotes()
       } catch (quotesError) {
         if (apiErrorStatus(quotesError) === 409) {
+          // 另一路行情刷新进行中：自动刷新静默跳过，避免控制台与界面刷 409
+          if (options?.silent) {
+            setIsDashboardRefreshing(false)
+            lightRefreshPendingRef.current = null
+            return
+          }
           throw new Error(
             shortTermErrorMessage(quotesError) ||
-              '东方财富全量采集进行中，请等全量结束后再点刷新'
+              '行情刷新进行中，请稍后再试'
           )
         }
         throw quotesError
@@ -630,9 +639,8 @@ export function ThemeDashboard() {
     interval: 30000, // 默认 30 秒
     onRefresh: () => {
       void handleLightRefresh({ silent: true }).catch((error) => {
-        if (!isCancelledError(error)) {
-          console.error('自动刷新失败', error)
-        }
+        if (isCancelledError(error) || apiErrorStatus(error) === 409) return
+        console.error('自动刷新失败', error)
       })
     },
   })

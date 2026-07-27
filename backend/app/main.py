@@ -50,6 +50,22 @@ async def lifespan(app: FastAPI):
     register_default_scrapers()
     settings = get_settings()
     logger.info("Starting TradingThemesGod API...")
+
+    # 进程内任务表为空：库里遗留的 running 都是僵尸，先清理再启动周期采集
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.repositories.scraper_run import ScraperRunRepository
+
+        async with AsyncSessionLocal() as session:
+            cleaned = await ScraperRunRepository(session).fail_all_running(
+                reason="服务重启，中断的采集已清理"
+            )
+            await session.commit()
+            if cleaned:
+                logger.info("已清理僵尸采集任务 %s 条", cleaned)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("清理僵尸采集任务失败", error=str(exc))
+
     if settings.SCRAPER_AUTO_ENABLED:
         scraper_scheduler.start_periodic(
             "eastmoney",
