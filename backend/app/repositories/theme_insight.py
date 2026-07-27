@@ -1,6 +1,7 @@
 """题材档案、驱动事件和市场快照的数据访问。"""
 
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from hashlib import sha256
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -144,12 +145,24 @@ class ThemeInsightRepository(BaseRepository):
             .limit(1)
         )
 
+    async def get_snapshot(
+        self, theme_id: int, trade_date: date
+    ) -> ThemeMarketSnapshot | None:
+        return await self.session.scalar(
+            select(ThemeMarketSnapshot).where(
+                ThemeMarketSnapshot.theme_id == theme_id,
+                ThemeMarketSnapshot.trade_date == trade_date,
+            )
+        )
+
     async def upsert_snapshot(
         self,
         theme_id: int,
         trade_date: date,
         counts: MarketCounts,
         calculated_at: datetime,
+        *,
+        rise_fall_pct: Decimal | None = None,
     ) -> ThemeMarketSnapshot:
         snapshot = await self.session.scalar(
             select(ThemeMarketSnapshot).where(
@@ -170,6 +183,8 @@ class ThemeInsightRepository(BaseRepository):
             snapshot.limit_up_count = counts.limit_up_count
         if counts.limit_down_count is not None:
             snapshot.limit_down_count = counts.limit_down_count
+        if rise_fall_pct is not None:
+            snapshot.rise_fall_pct = rise_fall_pct
         snapshot.calculated_at = calculated_at
         self.session.add(snapshot)
         await self.session.flush()

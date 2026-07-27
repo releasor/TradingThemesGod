@@ -1,9 +1,12 @@
 """题材每日市场快照模型。"""
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Index, Integer
+from decimal import Decimal
+
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Index, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -30,6 +33,9 @@ class ThemeMarketSnapshot(Base, TimestampMixin):
     suspended_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     limit_up_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     limit_down_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rise_fall_pct: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True, comment="板块涨跌幅(%)"
+    )
     calculated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
