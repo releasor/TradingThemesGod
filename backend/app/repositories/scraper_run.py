@@ -3,9 +3,11 @@
 提供 ScraperRun 的数据库操作。
 """
 
-from datetime import datetime, timezone
-from sqlalchemy import select, desc
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.scraper_run import ScraperRun
 from app.repositories.base import BaseRepository
 
@@ -54,12 +56,37 @@ class ScraperRunRepository(BaseRepository):
         return run
 
     async def list_by_source(
-        self, source: str | None = None, limit: int = 20
+        self,
+        source: str | None = None,
+        limit: int = 20,
+        *,
+        status: str | None = None,
     ) -> list[ScraperRun]:
         """按数据源列出运行记录"""
         stmt = select(ScraperRun).order_by(desc(ScraperRun.started_at))
         if source:
             stmt = stmt.where(ScraperRun.source == source)
+        if status:
+            stmt = stmt.where(ScraperRun.status == status)
         stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def fail_stale_running(self, *, older_than_hours: int = 2) -> int:
+        """将长时间未结束的 running 记录标记为失败，避免僵尸任务干扰。"""
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
+        result = await self.session.execute(
+            update(ScraperRun)
+            .where(
+                ScraperRun.status == "running",
+                ScraperRun.finished_at.is_(None),
+                ScraperRun.started_at < cutoff,
+            )
+            .values(
+                status="failed",
+                finished_at=datetime.now(timezone.utc),
+                error_message="进程中断后的僵尸任务，已自动清理",
+            )
+        )
+        await self.session.flush()
+        return int(result.rowcount or 0)

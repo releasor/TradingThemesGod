@@ -53,29 +53,34 @@ def _insight_service(db: AsyncSession, current_user: User) -> ThemeInsightRefres
 @router.post("/concept-graphs/refresh", response_model=ConceptGraphBatchResponse)
 async def refresh_concept_graphs(
     payload: ConceptGraphBatchRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """有限批量更新题材图谱，逐个处理并返回每项结果。"""
-    query = select(Theme.id).where(Theme.deleted_at.is_(None)).order_by(Theme.id)
-    if payload.theme_ids:
-        query = query.where(Theme.id.in_(payload.theme_ids))
-    theme_ids = list((await db.execute(query.limit(payload.limit))).scalars())
-    service = _concept_service(db, current_user)
+    from app.core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        query = select(Theme.id).where(Theme.deleted_at.is_(None)).order_by(Theme.id)
+        if payload.theme_ids:
+            query = query.where(Theme.id.in_(payload.theme_ids))
+        theme_ids = list((await db.execute(query.limit(payload.limit))).scalars())
+
+    service = ConceptGraphRefreshService(user_id=current_user.id)
     items: list[ConceptGraphBatchItem] = []
-    for theme_id in theme_ids:
-        try:
-            result = await service.refresh(theme_id)
-            items.append(
-                ConceptGraphBatchItem(theme_id=theme_id, success=True, result=result)
-            )
-        except HTTPException as exc:
-            await db.rollback()
-            items.append(
-                ConceptGraphBatchItem(
-                    theme_id=theme_id, success=False, error=str(exc.detail)
+    try:
+        for theme_id in theme_ids:
+            try:
+                result = await service.refresh(theme_id)
+                items.append(
+                    ConceptGraphBatchItem(theme_id=theme_id, success=True, result=result)
                 )
-            )
+            except HTTPException as exc:
+                items.append(
+                    ConceptGraphBatchItem(
+                        theme_id=theme_id, success=False, error=str(exc.detail)
+                    )
+                )
+    finally:
+        await service.research.middleware.close()
     return ConceptGraphBatchResponse(items=items)
 
 
@@ -174,11 +179,14 @@ async def get_indicator_signals(
 )
 async def refresh_concept_graph(
     theme_id: int,
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """抓取公开资料并使用默认模型增量刷新单个题材图谱。"""
-    return await _concept_service(db, current_user).refresh(theme_id)
+    service = ConceptGraphRefreshService(user_id=current_user.id)
+    try:
+        return await service.refresh(theme_id)
+    finally:
+        await service.research.middleware.close()
 
 
 @router.post(

@@ -16,6 +16,7 @@ from app.services.concept_graph_refresh import (
     MIN_GRAPH_TOKENS,
     SYSTEM_PROMPT,
     ConceptGraphRefreshService,
+    assert_usable_extracted_graph,
     model_error_message,
     parse_model_json,
     validate_extracted_graph,
@@ -93,8 +94,13 @@ async def test_refresh_reports_empty_model_graph_without_validation_details():
         url="https://example.com/source",
         text="资料正文",
     )
-    research = SimpleNamespace(research_theme=AsyncMock(return_value=[source]))
-    service = ConceptGraphRefreshService(AsyncMock(), research=research)
+    research = SimpleNamespace(
+        research_theme=AsyncMock(return_value=[source]),
+        research_concept_graph=AsyncMock(return_value=[source]),
+    )
+    service = ConceptGraphRefreshService(
+        AsyncMock(), research=research, providers=AsyncMock()
+    )
     theme = SimpleNamespace(id=1, name="机器人")
     service._theme_context = AsyncMock(return_value=(theme, {}))
     service._extract = AsyncMock(
@@ -105,7 +111,47 @@ async def test_refresh_reports_empty_model_graph_without_validation_details():
         await service.refresh(1)
 
     assert exc_info.value.status_code == 502
-    assert exc_info.value.detail == "模型未提取到有效节点，原图谱已保留"
+    assert "未提取到有效概念节点" in str(exc_info.value.detail)
+
+
+def test_assert_usable_rejects_disclaimer_only_graph():
+    graph = ExtractedConceptGraph.model_validate(
+        {
+            "nodes": [
+                {
+                    "name": "汽车芯片",
+                    "description": "输入未触及任何汽车芯片相关实质性信息，无法构建完整图谱",
+                    "sources": ["https://example.com/a"],
+                    "confidence": 0.1,
+                }
+            ]
+        }
+    )
+
+    with pytest.raises(ValueError, match="不足以构建"):
+        assert_usable_extracted_graph(graph)
+
+
+def test_assert_usable_rejects_single_leaf_without_stocks():
+    graph = ExtractedConceptGraph.model_validate(
+        {
+            "nodes": [
+                {
+                    "name": "汽车芯片",
+                    "description": "笼统概述",
+                    "sources": ["https://example.com/a"],
+                }
+            ]
+        }
+    )
+
+    with pytest.raises(ValueError, match="可展开"):
+        assert_usable_extracted_graph(graph)
+
+
+def test_prompt_forbids_disclaimer_nodes():
+    assert '{"nodes":[]}' in SYSTEM_PROMPT or '{{"nodes":[]}}' in SYSTEM_PROMPT
+    assert "说明性节点" in SYSTEM_PROMPT
 
 
 def test_extracted_graph_normalizes_model_score_labels_and_ranges():

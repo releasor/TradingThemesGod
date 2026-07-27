@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
+from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -14,6 +17,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import AsyncSessionLocal
 from app.models.concept_node import ConceptNode
 from app.models.concept_node_stock import ConceptNodeStock
 from app.models.stock import Stock
@@ -37,13 +41,52 @@ chain_level 只能是 upstream、midstream、downstream 或 null。sources 必�
 stocks 中每项必须包含 code、relation_type、rationale、sources；只能使用输入允许的股票代码。
 优先深入拆解技术、材料、设备、零部件、工艺和应用。例如一个部件应继续拆到驱动、传动、传感，再拆到有证据支持的具体技术。
 所有层级合计最多输出 {MAX_GRAPH_NODES} 个节点；描述、市场逻辑、催化剂和风险必须简洁，避免重复来源正文。
-证据不足就省略节点或股票，不得猜测，不得为了形式平均分配上中下游。"""
+证据不足就省略节点或股票，不得猜测，不得为了形式平均分配上中下游。
+若整份输入都无法支撑题材图谱，必须返回 {{"nodes":[]}}，禁止输出「无法构建」「未触及」等说明性节点。"""
 
 
 MAX_RESEARCH_CHARS = 9_000
 MAX_SOURCE_CHARS = 1_500
 MIN_GRAPH_TOKENS = 8_192
 MIN_GRAPH_TIMEOUT_SECONDS = 120
+
+# 模型常把「资料不够」写成单节点说明，应视为失败而非成功写入
+_REFUSAL_MARKERS = (
+    "未触及",
+    "未提供",
+    "无法构建",
+    "无法建立",
+    "不足以",
+    "没有实质",
+    "无实质",
+    "证据不足",
+    "无法从",
+    "未能提取",
+)
+
+
+def _iter_extracted_nodes(nodes: list[ExtractedConceptNode]):
+    for node in nodes:
+        yield node
+        yield from _iter_extracted_nodes(node.children)
+
+
+def assert_usable_extracted_graph(graph: ExtractedConceptGraph) -> None:
+    """拒绝空树或仅含「无法构建」说明的伪节点。"""
+    if not graph.nodes:
+        raise ValueError("模型未提取到有效节点")
+
+    flat = list(_iter_extracted_nodes(graph.nodes))
+    text_blob = " ".join(
+        f"{node.name} {node.description or ''} {node.market_logic or ''}"
+        for node in flat
+    )
+    if any(marker in text_blob for marker in _REFUSAL_MARKERS):
+        raise ValueError("公开资料不足以构建概念树（模型返回了说明性空结果）")
+
+    has_structure = len(flat) >= 2 or any(node.stocks for node in flat)
+    if not has_structure:
+        raise ValueError("模型未提取到可展开的概念结构")
 
 
 def model_error_message(exc: Exception) -> str:
@@ -123,17 +166,22 @@ def _path_segment(name: str) -> str:
 class ConceptGraphRefreshService:
     def __init__(
         self,
-        session: AsyncSession,
+        session: AsyncSession | None = None,
         research: WebResearchService | None = None,
         providers: ModelProviderService | None = None,
+        *,
+        user_id: int | None = None,
     ):
         self.session = session
         self.research = research or WebResearchService()
-        if providers is None:
+        if providers is None and session is not None:
             raise ValueError("ModelProviderService is required")
         self.providers = providers
+        self.user_id = user_id
 
     async def _theme_context(self, theme_id: int) -> tuple[Theme, dict[str, Stock]]:
+        if self.session is None:
+            raise RuntimeError("数据库会话未就绪")
         theme = await self.session.get(Theme, theme_id)
         if theme is None or theme.deleted_at is not None:
             raise HTTPException(404, "题材不存在")
@@ -169,15 +217,23 @@ class ConceptGraphRefreshService:
         )
 
     async def _extract(
-        self, theme: Theme, stocks: dict[str, Stock], sources: list[ResearchSource]
+        self,
+        theme: Theme,
+        stocks: dict[str, Stock],
+        sources: list[ResearchSource],
+        *,
+        adapter: Any | None = None,
     ) -> ExtractedConceptGraph:
-        provider = await self.providers.get_default()
-        try:
+        if adapter is None:
+            if self.providers is None:
+                raise RuntimeError("模型服务未就绪")
+            provider = await self.providers.get_default()
             adapter = self.providers.adapter(provider)
             adapter.max_tokens = max(adapter.max_tokens, MIN_GRAPH_TOKENS)
             adapter.timeout_seconds = max(
                 adapter.timeout_seconds, MIN_GRAPH_TIMEOUT_SECONDS
             )
+        try:
             text = await adapter.complete(
                 SYSTEM_PROMPT,
                 self._user_prompt(theme, stocks, sources),
@@ -185,6 +241,14 @@ class ConceptGraphRefreshService:
             )
             raw = parse_model_json(text)
             graph = ExtractedConceptGraph.model_validate(raw)
+            validated = validate_extracted_graph(
+                graph, {source.url for source in sources}, set(stocks)
+            )
+            try:
+                assert_usable_extracted_graph(validated)
+            except ValueError as exc:
+                raise HTTPException(502, f"{exc}，原图谱已保留") from exc
+            return validated
         except (
             httpx.HTTPError,
             KeyError,
@@ -195,9 +259,6 @@ class ConceptGraphRefreshService:
             raise HTTPException(
                 502, f"模型抽取图谱失败：{model_error_message(exc)}"
             ) from exc
-        return validate_extracted_graph(
-            graph, {source.url for source in sources}, set(stocks)
-        )
 
     async def _merge(
         self,
@@ -206,6 +267,8 @@ class ConceptGraphRefreshService:
         sources: list[ResearchSource],
         graph: ExtractedConceptGraph,
     ) -> tuple[int, int, int]:
+        if self.session is None:
+            raise RuntimeError("数据库会话未就绪")
         existing_result = await self.session.execute(
             select(ConceptNode).where(ConceptNode.theme_id == theme.id)
         )
@@ -275,21 +338,38 @@ class ConceptGraphRefreshService:
         return added, updated, linked
 
     async def refresh(self, theme_id: int) -> ConceptGraphRefreshResponse:
+        """刷新概念树；抓取与模型调用期间不占用数据库连接。"""
+        if self.session is not None and self.providers is not None:
+            return await self._refresh_with_bound_session(theme_id)
+        return await self._refresh_with_short_sessions(theme_id)
+
+    async def _refresh_with_bound_session(
+        self, theme_id: int
+    ) -> ConceptGraphRefreshResponse:
+        """兼容测试注入 session 的路径。"""
+        started = time.monotonic()
         theme, stocks = await self._theme_context(theme_id)
         try:
-            sources = await self.research.research_theme(theme.name)
+            stock_names = [stock.name for stock in stocks.values()]
+            sources = await self.research.research_concept_graph(
+                theme.name, stock_names
+            )
         except httpx.HTTPError as exc:
             raise HTTPException(502, f"公开资料抓取失败：{str(exc)[:300]}") from exc
         if not sources:
             raise HTTPException(502, "未抓取到可验证的公开资料，原图谱已保留")
         graph = await self._extract(theme, stocks, sources)
         if not graph.nodes:
-            raise HTTPException(502, "模型未提取到有效节点，原图谱已保留")
+            raise HTTPException(
+                502,
+                f"已抓取 {len(sources)} 条资料，但模型未提取到有效概念节点；可换模型或稍后重试，原图谱已保留",
+            )
         try:
             added, updated, linked = await self._merge(theme, stocks, sources, graph)
         except Exception:
             await self.session.rollback()
             raise
+        elapsed_ms = int((time.monotonic() - started) * 1000)
         return ConceptGraphRefreshResponse(
             theme_id=theme.id,
             theme_name=theme.name,
@@ -297,5 +377,88 @@ class ConceptGraphRefreshService:
             added_nodes=added,
             updated_nodes=updated,
             stock_links=linked,
+            elapsed_ms=elapsed_ms,
+            refreshed_at=datetime.now(UTC),
+            message="图谱已根据公开资料增量更新",
+        )
+
+    async def _refresh_with_short_sessions(
+        self, theme_id: int
+    ) -> ConceptGraphRefreshResponse:
+        if self.user_id is None:
+            raise RuntimeError("刷新概念树需要 user_id")
+
+        started = time.monotonic()
+        async with AsyncSessionLocal() as session:
+            providers = ModelProviderService(session, self.user_id)
+            self.session = session
+            self.providers = providers
+            try:
+                theme, stocks = await self._theme_context(theme_id)
+                theme_snap = SimpleNamespace(
+                    id=theme.id,
+                    name=theme.name,
+                    description=theme.description,
+                    tags=list(theme.tags or []),
+                )
+                stock_snap = {
+                    code: SimpleNamespace(id=stock.id, code=stock.code, name=stock.name)
+                    for code, stock in stocks.items()
+                }
+                provider = await providers.get_default()
+                adapter = providers.adapter(provider)
+                adapter.max_tokens = max(adapter.max_tokens, MIN_GRAPH_TOKENS)
+                adapter.timeout_seconds = max(
+                    adapter.timeout_seconds, MIN_GRAPH_TIMEOUT_SECONDS
+                )
+            finally:
+                self.session = None
+                self.providers = None
+
+        try:
+            sources = await self.research.research_concept_graph(
+                theme_snap.name,
+                [stock.name for stock in stock_snap.values()],
+            )
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, f"公开资料抓取失败：{str(exc)[:300]}") from exc
+        if not sources:
+            raise HTTPException(502, "未抓取到可验证的公开资料，原图谱已保留")
+
+        graph = await self._extract(
+            theme_snap,  # type: ignore[arg-type]
+            stock_snap,  # type: ignore[arg-type]
+            sources,
+            adapter=adapter,
+        )
+        if not graph.nodes:
+            raise HTTPException(
+                502,
+                f"已抓取 {len(sources)} 条资料，但模型未提取到有效概念节点；可换模型或稍后重试，原图谱已保留",
+            )
+
+        async with AsyncSessionLocal() as session:
+            self.session = session
+            try:
+                theme, stocks = await self._theme_context(theme_id)
+                added, updated, linked = await self._merge(
+                    theme, stocks, sources, graph
+                )
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                self.session = None
+
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        return ConceptGraphRefreshResponse(
+            theme_id=theme_snap.id,
+            theme_name=theme_snap.name,
+            source_count=len(sources),
+            added_nodes=added,
+            updated_nodes=updated,
+            stock_links=linked,
+            elapsed_ms=elapsed_ms,
+            refreshed_at=datetime.now(UTC),
             message="图谱已根据公开资料增量更新",
         )

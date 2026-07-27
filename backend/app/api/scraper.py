@@ -17,8 +17,11 @@ from app.schemas.scraper import (
     ScraperRunListResponse,
     ScraperSourceListResponse,
     ScraperSourceResponse,
+    ThemeQuotesRefreshResponse,
 )
+from app.scrapers.eastmoney import EastMoneyScraper
 from app.scrapers.scheduler import scraper_scheduler
+from datetime import datetime, timezone
 
 # 速率限制器
 limiter = Limiter(key_func=get_remote_address)
@@ -103,6 +106,7 @@ async def get_scraper_status(
 @router.get("/runs", response_model=ScraperRunListResponse)
 async def list_scraper_runs(
     source: str | None = Query(default=None, description="按数据源筛选"),
+    status: str | None = Query(default=None, description="按状态筛选"),
     limit: int = Query(default=20, ge=1, le=100, description="返回数量限制"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -110,15 +114,40 @@ async def list_scraper_runs(
 
     Args:
         source: 按数据源筛选（可选）
+        status: 按状态筛选（可选）
         limit: 返回数量限制
 
     Returns:
         运行记录列表
     """
     repo = ScraperRunRepository(db)
-    runs = await repo.list_by_source(source=source, limit=limit)
+    await repo.fail_stale_running()
+    await db.commit()
+    runs = await repo.list_by_source(source=source, limit=limit, status=status)
 
     return ScraperRunListResponse(
         runs=[ScraperRunResponse.model_validate(r) for r in runs],
         count=len(runs),
+    )
+
+
+@router.post("/refresh-quotes", response_model=ThemeQuotesRefreshResponse)
+@limiter.limit("10/minute")
+async def refresh_theme_quotes(request: Request):
+    """仅刷新题材列表涨跌幅/热度，不抓取成分股。"""
+    if scraper_scheduler.is_running("eastmoney"):
+        raise HTTPException(status_code=409, detail="东方财富全量采集进行中，请稍后再试")
+
+    scraper = EastMoneyScraper()
+    try:
+        trade_date, themes_updated = await scraper.refresh_theme_quotes()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"题材行情刷新失败：{exc}") from exc
+    finally:
+        await scraper.close()
+
+    return ThemeQuotesRefreshResponse(
+        trade_date=trade_date,
+        themes_updated=themes_updated,
+        refreshed_at=datetime.now(timezone.utc),
     )

@@ -3,7 +3,7 @@
 定义 API 请求和响应的数据结构。
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
@@ -66,3 +66,11 @@ class ScraperSourceListResponse(BaseModel):
 
     sources: list[ScraperSourceResponse] = Field(description="数据源列表")
     count: int = Field(description="返回数量")
+
+
+class ThemeQuotesRefreshResponse(BaseModel):
+    """题材列表行情快刷响应。"""
+
+    trade_date: date | None = Field(default=None, description="行情交易日")
+    themes_updated: int = Field(description="更新题材数量")
+    refreshed_at: datetime = Field(description="刷新完成时间")

@@ -192,7 +192,7 @@ class TestScraperAPI:
         response = client.get("/api/v1/scraper/runs?source=sina")
 
         assert response.status_code == 200
-        mock_repo.list_by_source.assert_called_once_with(source="sina", limit=20)
+        mock_repo.list_by_source.assert_called_once_with(source="sina", limit=20, status=None)
 
     @patch("app.api.scraper.ScraperRunRepository")
     def test_list_scraper_runs_with_limit(self, mock_repo_class, client):
@@ -204,4 +204,4 @@ class TestScraperAPI:
         response = client.get("/api/v1/scraper/runs?limit=5")
 
         assert response.status_code == 200
-        mock_repo.list_by_source.assert_called_once_with(source=None, limit=5)
+        mock_repo.list_by_source.assert_called_once_with(source=None, limit=5, status=None)

@@ -3,6 +3,7 @@
 从东方财富 API 获取题材概念列表和关联股票数据。
 """
 
+import asyncio
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -157,6 +158,57 @@ class EastMoneyScraper(BaseScraper):
                 "diff": items,
             }
         }
+
+    async def _fetch_themes_by_codes(self, codes: set[str]) -> list[dict[str, Any]]:
+        """分页扫描题材列表，直到找齐目标代码或达到页数上限。"""
+        normalized = {
+            code if code.startswith(THEME_BOARD_PREFIX) else f"{THEME_BOARD_PREFIX}{code}"
+            for code in codes
+        }
+        found: dict[str, dict[str, Any]] = {}
+        max_pages = 4
+        page_size = 100
+        page_timeout = 8.0
+
+        for page in range(1, max_pages + 1):
+            if len(found) >= len(normalized):
+                break
+            params = {
+                **DEFAULT_PARAMS,
+                "fid": "f12",
+                "fs": "m:90+t:3+f:!50",
+                "pn": str(page),
+                "pz": str(page_size),
+            }
+            try:
+                payload = await asyncio.wait_for(
+                    self.fetch_json(EASTMONEY_API_BASE, params),
+                    timeout=page_timeout,
+                )
+            except TimeoutError:
+                logger.warning(
+                    f"[{self.source_name}] 题材行情第 {page} 页超时（>{page_timeout}s）"
+                )
+                break
+            except Exception as exc:
+                logger.warning(
+                    f"[{self.source_name}] 题材行情第 {page} 页拉取失败: {exc}"
+                )
+                break
+            page_themes = self.parse_theme_list(payload)
+            if not page_themes:
+                break
+            for theme in page_themes:
+                if theme["code"] in normalized:
+                    found[theme["code"]] = theme
+
+        missing = normalized - set(found)
+        if missing:
+            logger.warning(
+                f"[{self.source_name}] 未扫描到全部目标题材，缺失 {len(missing)} 个: "
+                f"{', '.join(sorted(missing)[:5])}"
+            )
+        return list(found.values())
 
     def parse_theme_list(self, data: dict) -> list[dict[str, Any]]:
         """解析题材列表数据
@@ -616,29 +668,31 @@ class EastMoneyScraper(BaseScraper):
 
     async def refresh_theme_quotes(
         self, *, only_codes: set[str] | None = None
-    ) -> date | None:
+    ) -> tuple[date | None, int]:
         """仅刷新题材列表行情，不抓取成分股，供策略卡快速更新使用。"""
         logger.info(f"[{self.source_name}] 开始快速刷新题材行情")
-        theme_params = {
-            **DEFAULT_PARAMS,
-            "fid": "f12",
-            "fs": "m:90+t:3+f:!50",
-        }
-        theme_data = await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
-        themes = self.parse_theme_list(theme_data)
         if only_codes:
-            themes = [theme for theme in themes if theme.get("code") in only_codes]
+            themes = await self._fetch_themes_by_codes(only_codes)
+            trade_date = date.today()
+        else:
+            theme_params = {
+                **DEFAULT_PARAMS,
+                "fid": "f12",
+                "fs": "m:90+t:3+f:!50",
+            }
+            theme_data = await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
+            themes = self.parse_theme_list(theme_data)
+            trade_date = self._extract_trade_date(theme_data) or date.today()
         if not themes:
             logger.warning(f"[{self.source_name}] 未获取到题材行情")
-            return None
+            return None, 0
 
         await self._save_themes(themes)
-        trade_date = self._extract_trade_date(theme_data) or date.today()
         scope = f"{len(only_codes)} 个指定题材" if only_codes else f"{len(themes)} 个题材"
         logger.info(
             f"[{self.source_name}] 题材行情刷新完成: {scope}, 交易日 {trade_date}"
         )
-        return trade_date
+        return trade_date, len(themes)
 
     async def close(self) -> None:
         """关闭爬虫资源"""

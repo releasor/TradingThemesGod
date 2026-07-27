@@ -1,5 +1,6 @@
 """AI 图谱抽取与刷新响应类型。"""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -99,6 +100,8 @@ class ConceptGraphRefreshResponse(BaseModel):
     added_nodes: int
     updated_nodes: int
     stock_links: int
+    elapsed_ms: int = Field(default=0, description="刷新耗时（毫秒）")
+    refreshed_at: datetime
     message: str
 
 
