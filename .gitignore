@@ -58,7 +58,6 @@ pnpm-debug.log*
 # Build output
 frontend/dist/
 frontend/build/
-frontend/vite-output.txt
 
 # Playwright
 .playwright-cli/
@@ -78,6 +77,10 @@ Thumbs.db
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+test-output.json
+full-test-output.json
+frontend/vite.err.log
+frontend/vite-output.txt
 
 # Alembic
 backend/alembic/versions/*.pyc
