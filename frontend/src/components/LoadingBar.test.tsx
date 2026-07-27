@@ -29,9 +29,9 @@ describe('LoadingBar', () => {
     expect(wrapper).toHaveClass('top-0')
   })
 
-  it('applies primary background color to bar', () => {
+  it('applies sky loading color to bar', () => {
     const { container } = render(<LoadingBar isLoading={true} />)
-    const bar = container.querySelector('.bg-primary')
+    const bar = container.querySelector('.bg-sky-500')
     expect(bar).toBeInTheDocument()
   })
 })

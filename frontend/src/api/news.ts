@@ -49,6 +49,10 @@ export async function fetchNewsSources(): Promise<string[]> {
 }
 
 export async function refreshNews(sources?: string[]): Promise<NewsRefreshResponse> {
-  const { data } = await apiClient.post<NewsRefreshResponse>('/news/refresh', { sources })
+  const { data } = await apiClient.post<NewsRefreshResponse>(
+    '/news/refresh',
+    { sources },
+    { timeout: 120_000 }
+  )
   return data
 }

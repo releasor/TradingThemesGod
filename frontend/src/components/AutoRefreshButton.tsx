@@ -41,6 +41,10 @@ interface AutoRefreshButtonProps {
   onScraperSourceChange?: (source: string) => void
   /** 自定义类名 */
   className?: string
+  /** 轻量刷新已耗时文案 */
+  refreshElapsedLabel?: string
+  /** 全量更新已耗时文案 */
+  updateElapsedLabel?: string
 }
 
 export interface ScraperSourceOption {
@@ -79,6 +83,8 @@ export const AutoRefreshButton = memo(function AutoRefreshButton({
   selectedScraperSource,
   onScraperSourceChange,
   className,
+  refreshElapsedLabel,
+  updateElapsedLabel,
 }: AutoRefreshButtonProps) {
   const busy = isRefreshing || isUpdating
   const showSourceSelector =
@@ -94,11 +100,11 @@ export const AutoRefreshButton = memo(function AutoRefreshButton({
         type="button"
         onClick={onRefresh}
         disabled={busy}
-        title="仅重新拉取看板数据，不触发全量采集"
+        title="快刷题材涨跌幅、策略卡与看板，不抓取成分股；成分股全量请用「全量更新」"
         className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
       >
         <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
-        刷新
+        {isRefreshing && refreshElapsedLabel ? `刷新中 ${refreshElapsedLabel}` : '刷新'}
       </button>
 
       {/* 全量更新（爬虫） */}
@@ -128,7 +134,11 @@ export const AutoRefreshButton = memo(function AutoRefreshButton({
             className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
           >
             <Database className={cn('h-4 w-4', isUpdating && 'animate-pulse')} />
-            {isUpdating ? '全量更新中…' : '全量更新'}
+            {isUpdating
+              ? updateElapsedLabel
+                ? `全量更新中 ${updateElapsedLabel}`
+                : '全量更新中…'
+              : '全量更新'}
           </button>
         </>
       )}

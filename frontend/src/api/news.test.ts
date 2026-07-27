@@ -29,8 +29,10 @@ describe('news api', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/news', {
       params: { limit: 50, offset: 50, sources: '新浪财经,财联社' },
     })
-    expect(apiClient.post).toHaveBeenCalledWith('/news/refresh', {
-      sources: ['新浪财经', '财联社'],
-    })
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/news/refresh',
+      { sources: ['新浪财经', '财联社'] },
+      { timeout: 120_000 }
+    )
   })
 })

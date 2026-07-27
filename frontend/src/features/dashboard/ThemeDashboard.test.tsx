@@ -1,10 +1,11 @@
 /** 题材看板主页面测试 */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import dayjs from 'dayjs'
 import { ThemeDashboard } from './ThemeDashboard'
 
 vi.mock('@/api/theme', () => ({
@@ -14,9 +15,15 @@ vi.mock('@/api/theme', () => ({
   fetchIndicatorSignals: vi.fn(),
 }))
 
+vi.mock('@/api/stats', () => ({
+  fetchSystemStats: vi.fn(),
+}))
+
 vi.mock('@/api/scraper', () => ({
   fetchLatestSuccessfulRun: vi.fn(),
   fetchDashboardScraperSources: vi.fn(),
+  refreshThemeQuotes: vi.fn(),
+  runScraperWithFallback: vi.fn(),
   runScraperAndWait: vi.fn(),
 }))
 
@@ -25,7 +32,12 @@ vi.mock('@/api/short-term', () => ({
   fetchFirstToSecondCandidates: vi.fn(),
   refreshFirstToSecondCandidates: vi.fn(),
   refreshShortTermData: vi.fn(),
-  analyzeShortTermFromDatabase: vi.fn(),
+  refreshShortTermSignals: vi.fn(),
+  fetchShortTermSectors: vi.fn(),
+}))
+
+vi.mock('@/components/AppCardNav', () => ({
+  AppCardNav: () => <div data-testid="app-card-nav" />,
 }))
 
 vi.mock('@/components/NewsTimeline', () => ({
@@ -51,11 +63,15 @@ import {
   fetchThemeRanking,
   fetchThemes,
 } from '@/api/theme'
-import { fetchDashboardScraperSources, fetchLatestSuccessfulRun, runScraperAndWait } from '@/api/scraper'
+import { fetchSystemStats } from '@/api/stats'
+import { fetchDashboardScraperSources, fetchLatestSuccessfulRun, refreshThemeQuotes, runScraperWithFallback } from '@/api/scraper'
 import {
   fetchFirstToSecondCandidates,
   fetchShortTermOverview,
+  fetchShortTermSectors,
   refreshFirstToSecondCandidates,
+  refreshShortTermData,
+  refreshShortTermSignals,
 } from '@/api/short-term'
 
 vi.mock('@/components/charts/ThemeRiseFallBar', () => ({
@@ -178,6 +194,13 @@ describe('ThemeDashboard', () => {
       page_size: 20,
       total_pages: 1,
     })
+    vi.mocked(fetchSystemStats).mockResolvedValue({
+      themes: { total: 279, categories: [] },
+      stocks: { total: 5620 },
+      events: { total: 0 },
+      chains: { total: 0 },
+      scraper: { last_run: null },
+    })
     vi.mocked(fetchMarketSignals).mockResolvedValue({
       items: mockMarketSignals,
       limit: mockMarketSignals.length,
@@ -211,6 +234,11 @@ describe('ThemeDashboard', () => {
       items_scraped: 100,
       error_message: null,
     })
+    vi.mocked(refreshThemeQuotes).mockResolvedValue({
+      trade_date: '2026-07-24',
+      themes_updated: 495,
+      refreshed_at: '2026-07-24T03:30:00Z',
+    })
     vi.mocked(fetchShortTermOverview).mockResolvedValue({
       trade_date: '2026-07-21',
       period: 'today',
@@ -236,6 +264,39 @@ describe('ThemeDashboard', () => {
         operation_advice: '指数强、情绪强，做连板。',
         focus_targets: ['连板梯队'],
         rationale: ['日均连板 28.0'],
+      },
+    })
+    vi.mocked(refreshShortTermData).mockResolvedValue({
+      trade_date: '2026-07-21',
+      period: 'today',
+      period_label: '当日',
+      start_date: '2026-07-21',
+      end_date: '2026-07-21',
+      degraded: false,
+      missing_sources: [],
+      market_emotion: '情绪开',
+      short_term_outlook: '指数与情绪共振',
+      operation_advice: '做连板',
+      tracking_focus: ['连板梯队'],
+      core_conclusion: '优先主线前排',
+      risk_signals: [],
+      sector_count: 3,
+      candidate_count: 0,
+      strategy_card: {
+        title: '指数情绪策略卡 · 当日',
+        index_strength: 'strong',
+        emotion_strength: 'strong',
+        primary_strategy: '连板接力',
+        secondary_strategy: '主升分歧接力',
+        operation_advice: '指数强、情绪强，做连板。',
+        focus_targets: ['连板梯队'],
+        rationale: ['指数强度 0.80'],
+      },
+      refresh_meta: {
+        elapsed_ms: 1200,
+        quote_source: 'eastmoney',
+        quote_attempts: ['eastmoney'],
+        quote_message: '',
       },
     })
     vi.mocked(fetchFirstToSecondCandidates).mockResolvedValue({
@@ -268,6 +329,24 @@ describe('ThemeDashboard', () => {
       ],
       excluded_count: 0,
     })
+    vi.mocked(fetchShortTermSectors).mockResolvedValue({
+      trade_date: '2026-07-24',
+      items: [],
+      degraded: false,
+      missing_sources: [],
+    })
+    vi.mocked(refreshShortTermSignals).mockResolvedValue({
+      trade_date: '2026-07-24',
+      status: 'success',
+      signal_count: 107,
+      dragon_tiger_count: 84,
+      sector_count: 173,
+      candidate_count: 0,
+      degraded: false,
+      missing_sources: [],
+      source_status: {},
+      error_message: null,
+    })
     vi.mocked(refreshFirstToSecondCandidates).mockResolvedValue({
       trade_date: '2026-07-21',
       previous_trade_date: '2026-07-20',
@@ -283,6 +362,45 @@ describe('ThemeDashboard', () => {
     renderDashboard()
     expect(await screen.findByRole('heading', { name: '人工智能' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '新能源' })).toBeInTheDocument()
+  })
+
+  it('策略卡随顶部刷新更新，无实时/数据库切换', async () => {
+    const user = userEvent.setup()
+    renderDashboard()
+
+    expect(await screen.findByText('连板接力')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '实时' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '数据库' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '数据库分析' })).not.toBeInTheDocument()
+    expect(refreshShortTermData).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    await waitFor(() => {
+      expect(refreshThemeQuotes).toHaveBeenCalledTimes(1)
+      expect(refreshShortTermData).toHaveBeenCalledWith({ period: 'today' })
+    })
+    expect(await screen.findByText(/策略卡实时数据已更新/)).toBeInTheDocument()
+  })
+
+  it('进入页面不会自动快刷看板，除非打开自动刷新', async () => {
+    renderDashboard()
+
+    expect(await screen.findByRole('heading', { name: '人工智能' })).toBeInTheDocument()
+    expect(refreshThemeQuotes).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '自动刷新' })).toBeInTheDocument()
+  })
+
+  it('手动刷新后显示行情更新时间', async () => {
+    const user = userEvent.setup()
+    const expectedTime = dayjs('2026-07-24T03:30:00Z').format('YYYY-MM-DD HH:mm:ss')
+    renderDashboard()
+
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    const stats = await screen.findByTestId('quick-stats')
+    expect(await within(stats).findByText(expectedTime)).toBeInTheDocument()
+    expect(await screen.findByText(new RegExp(`更新于 ${expectedTime}`))).toBeInTheDocument()
   })
 
   it('独立展示市场表现与真实题材总数', async () => {
@@ -303,8 +421,20 @@ describe('ThemeDashboard', () => {
     const rankingGrid = await screen.findByTestId('dashboard-ranking-grid')
     expect(rankingGrid).toHaveClass('lg:grid-cols-2', 'xl:grid-cols-3')
     expect(rankingGrid).toContainElement(screen.getByRole('heading', { name: '涨跌幅 Top 20' }))
-    expect(rankingGrid).toContainElement(screen.getByRole('heading', { name: '行情指标' }))
-    expect(rankingGrid).toContainElement(screen.getByRole('heading', { name: '市场表现' }))
+    expect(rankingGrid).toContainElement(
+      within(rankingGrid).getByRole('heading', { name: '行情指标' })
+    )
+    expect(rankingGrid).toContainElement(
+      within(rankingGrid).getByRole('heading', { name: '市场表现' })
+    )
+  })
+
+  it('顶部统计使用股票库去重总数而非热门榜加总', async () => {
+    renderDashboard()
+    const stats = await screen.findByTestId('quick-stats')
+    expect(within(stats).getByText('股票总数')).toBeInTheDocument()
+    expect(await within(stats).findByText('5620')).toBeInTheDocument()
+    expect(within(stats).queryByText('80')).not.toBeInTheDocument()
   })
 
   it('超宽屏下资讯在右侧栏', async () => {
@@ -337,7 +467,7 @@ describe('ThemeDashboard', () => {
     expect(screen.getByRole('heading', { name: '人工智能' })).toBeInTheDocument()
   })
 
-  it('点击刷新只重拉看板且不触发爬虫', async () => {
+  it('点击刷新快刷题材行情并重拉看板，不触发全量爬虫', async () => {
     const user = userEvent.setup()
     renderDashboard()
 
@@ -347,27 +477,30 @@ describe('ThemeDashboard', () => {
       expect(fetchMarketSignals).toHaveBeenCalledTimes(1)
       expect(fetchIndicatorSignals).toHaveBeenCalledTimes(1)
     })
+    expect(refreshThemeQuotes).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: '刷新' }))
 
     await waitFor(() => {
-      expect(fetchThemeRanking).toHaveBeenCalledTimes(2)
-      expect(fetchThemes).toHaveBeenCalledTimes(4)
-      expect(fetchMarketSignals).toHaveBeenCalledTimes(2)
-      expect(fetchIndicatorSignals).toHaveBeenCalledTimes(2)
-      expect(fetchShortTermOverview).toHaveBeenCalledTimes(2)
-      expect(runScraperAndWait).not.toHaveBeenCalled()
+      expect(refreshThemeQuotes).toHaveBeenCalledTimes(1)
+      expect(fetchThemeRanking.mock.calls.length).toBeGreaterThan(1)
+      expect(fetchThemes.mock.calls.length).toBeGreaterThan(2)
+      expect(runScraperWithFallback).not.toHaveBeenCalled()
     })
-    expect(await screen.findByText('看板已刷新')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/部分刷新完成：题材行情 495 个；策略卡/)
+    ).toBeInTheDocument()
     const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
     expect(
-      within(controls).getByText('看板数据已刷新（题材排名、市场信号、策略卡数据库视图）')
+      within(controls).getByText(
+        /已更新：题材行情 495 个；策略卡。未完成：短线信号（未登录）。更新于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}，耗时 \d+ 秒/
+      )
     ).toBeInTheDocument()
   })
 
   it('点击全量更新时触发爬虫并刷新看板', async () => {
     const user = userEvent.setup()
-    vi.mocked(runScraperAndWait).mockResolvedValue({
+    vi.mocked(runScraperWithFallback).mockResolvedValue({
       run_id: 10,
       source: 'eastmoney',
       status: 'completed',
@@ -375,38 +508,34 @@ describe('ThemeDashboard', () => {
       finished_at: '2026-07-16T02:03:04Z',
       items_scraped: 126,
       error_message: null,
+      attempted_sources: ['eastmoney'],
     })
     renderDashboard()
     await screen.findByText('2026-07-16 09:02:03')
+    const rankingCallsBeforeUpdate = vi.mocked(fetchThemeRanking).mock.calls.length
 
     await user.click(screen.getByRole('button', { name: '全量更新' }))
 
     const successControls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
-    expect(await within(successControls).findByText('东方财富全量更新成功，共更新 126 条数据')).toBeInTheDocument()
-    expect(runScraperAndWait).toHaveBeenCalledWith('eastmoney')
-    expect(fetchThemeRanking).toHaveBeenCalledTimes(2)
-    expect(fetchMarketSignals).toHaveBeenCalledTimes(2)
-    expect(fetchIndicatorSignals).toHaveBeenCalledTimes(2)
+    expect(await within(successControls).findByText(/东方财富全量更新成功，共更新 126 条数据/)).toBeInTheDocument()
+    expect(runScraperWithFallback).toHaveBeenCalledWith(['eastmoney', 'akshare'])
+    expect(vi.mocked(fetchThemeRanking).mock.calls.length).toBeGreaterThan(rankingCallsBeforeUpdate)
+    expect(vi.mocked(fetchMarketSignals).mock.calls.length).toBeGreaterThan(1)
+    expect(vi.mocked(fetchIndicatorSignals).mock.calls.length).toBeGreaterThan(1)
   })
 
   it('全量更新失败时反馈错误', async () => {
-    vi.mocked(runScraperAndWait).mockResolvedValue({
-      run_id: 11,
-      source: 'eastmoney',
-      status: 'failed',
-      started_at: '2026-07-16T03:00:00Z',
-      finished_at: '2026-07-16T03:00:05Z',
-      items_scraped: 0,
-      error_message: '数据源不可用',
-    })
+    vi.mocked(runScraperWithFallback).mockRejectedValue(new Error('数据源不可用'))
     const user = userEvent.setup()
     renderDashboard()
+    await screen.findByRole('heading', { name: '人工智能' })
+    const rankingCallsBeforeUpdate = vi.mocked(fetchThemeRanking).mock.calls.length
 
     await user.click(await screen.findByRole('button', { name: '全量更新' }))
 
     const failControls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
     expect(await within(failControls).findByText('全量更新失败：数据源不可用')).toBeInTheDocument()
-    expect(fetchThemeRanking).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(fetchThemeRanking).mock.calls.length).toBe(rankingCallsBeforeUpdate)
   })
 
   it('全量更新过程中显示进度文案', async () => {
@@ -418,8 +547,9 @@ describe('ThemeDashboard', () => {
       finished_at: string
       items_scraped: number
       error_message: null
+      attempted_sources: string[]
     }) => void
-    vi.mocked(runScraperAndWait).mockReturnValue(
+    vi.mocked(runScraperWithFallback).mockReturnValue(
       new Promise((resolve) => {
         resolveRun = resolve
       })
@@ -431,7 +561,7 @@ describe('ThemeDashboard', () => {
       'dashboard-data-controls'
     )
     await user.click(screen.getByRole('button', { name: '全量更新' }))
-    expect(within(controls).getByText('正在通过东方财富全量更新，通常需要较长时间...')).toBeInTheDocument()
+    expect(within(controls).getByText(/正在全量更新/)).toBeInTheDocument()
 
     resolveRun({
       run_id: 10,
@@ -441,14 +571,15 @@ describe('ThemeDashboard', () => {
       finished_at: '2026-07-16T02:03:04Z',
       items_scraped: 126,
       error_message: null,
+      attempted_sources: ['eastmoney', 'akshare'],
     })
 
-    expect(await within(controls).findByText('东方财富全量更新成功，共更新 126 条数据')).toBeInTheDocument()
+    expect(await within(controls).findByText(/东方财富全量更新成功，共更新 126 条数据/)).toBeInTheDocument()
   })
 
   it('uses selected scraper source for full update', async () => {
     const user = userEvent.setup()
-    vi.mocked(runScraperAndWait).mockResolvedValue({
+    vi.mocked(runScraperWithFallback).mockResolvedValue({
       run_id: 12,
       source: 'akshare',
       status: 'completed',
@@ -456,6 +587,7 @@ describe('ThemeDashboard', () => {
       finished_at: '2026-07-16T02:03:04Z',
       items_scraped: 88,
       error_message: null,
+      attempted_sources: ['akshare', 'eastmoney'],
     })
     renderDashboard()
     await screen.findByLabelText('全量更新数据源')
@@ -463,9 +595,9 @@ describe('ThemeDashboard', () => {
     await user.selectOptions(screen.getByLabelText('全量更新数据源'), 'akshare')
     await user.click(screen.getByRole('button', { name: '全量更新' }))
 
-    expect(runScraperAndWait).toHaveBeenCalledWith('akshare')
+    expect(runScraperWithFallback).toHaveBeenCalledWith(['akshare', 'eastmoney'])
     const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
-    expect(await within(controls).findByText('AKShare全量更新成功，共更新 88 条数据')).toBeInTheDocument()
+    expect(await within(controls).findByText(/AKShare全量更新成功，共更新 88 条数据/)).toBeInTheDocument()
   })
 
   it('单独按涨跌幅降序获取涨幅榜', async () => {
@@ -478,5 +610,172 @@ describe('ThemeDashboard', () => {
         sort_order: 'desc',
       })
     })
+  })
+
+  it('自定义日期切换加载中仍保留策略卡', async () => {
+    const user = userEvent.setup()
+    let resolveCustom!: (value: Awaited<ReturnType<typeof refreshShortTermData>>) => void
+    vi.mocked(refreshShortTermData).mockImplementation(async (params) => {
+      if (params?.period === 'custom') {
+        return new Promise((resolve) => {
+          resolveCustom = resolve
+        })
+      }
+      return {
+        trade_date: '2026-07-21',
+        period: 'today',
+        period_label: '当日',
+        start_date: '2026-07-21',
+        end_date: '2026-07-21',
+        degraded: false,
+        missing_sources: [],
+        market_emotion: '情绪开',
+        short_term_outlook: '指数与情绪共振',
+        operation_advice: '做连板',
+        tracking_focus: ['连板梯队'],
+        core_conclusion: '优先主线前排',
+        risk_signals: [],
+        sector_count: 3,
+        candidate_count: 0,
+        strategy_card: {
+          title: '指数情绪策略卡',
+          index_strength: 'strong',
+          emotion_strength: 'strong',
+          primary_strategy: '连板接力',
+          secondary_strategy: '主升分歧接力',
+          operation_advice: '指数强、情绪强，做连板。',
+          focus_targets: ['连板梯队'],
+          rationale: ['日均连板 28.0'],
+        },
+        refresh_meta: {
+          elapsed_ms: 900,
+          quote_source: 'eastmoney',
+          quote_attempts: ['eastmoney'],
+          quote_message: '',
+        },
+      }
+    })
+
+    renderDashboard()
+    expect(await screen.findByText('连板接力')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '自定义' }))
+    expect(await screen.findByLabelText('自定义开始日期')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('自定义开始日期'), {
+      target: { value: '2026-06-01' },
+    })
+    fireEvent.change(screen.getByLabelText('自定义结束日期'), {
+      target: { value: '2026-06-30' },
+    })
+
+    expect(screen.getByText('指数情绪策略卡')).toBeInTheDocument()
+    expect(screen.getByLabelText('自定义开始日期')).toHaveValue('2026-06-01')
+    expect(screen.getByLabelText('自定义结束日期')).toHaveValue('2026-06-30')
+    expect(screen.getByText('连板接力')).toBeInTheDocument()
+    expect(refreshShortTermData).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    await waitFor(() => {
+      expect(refreshShortTermData).toHaveBeenCalledWith({
+        period: 'custom',
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+      })
+    })
+    expect(screen.getByText('连板接力')).toBeInTheDocument()
+
+    resolveCustom({
+      trade_date: '2026-06-30',
+      period: 'custom',
+      period_label: '自定义',
+      start_date: '2026-06-01',
+      end_date: '2026-06-30',
+      degraded: true,
+      missing_sources: ['指数周期快照'],
+      market_emotion: '情绪弱',
+      short_term_outlook: '观望',
+      operation_advice: '轻仓',
+      tracking_focus: ['防守'],
+      core_conclusion: '等待确认',
+      risk_signals: [],
+      sector_count: 1,
+      candidate_count: 0,
+      strategy_card: {
+        title: '指数情绪策略卡 · 自定义',
+        index_strength: 'weak',
+        emotion_strength: 'weak',
+        primary_strategy: '轻仓或优化持仓',
+        secondary_strategy: '等待低吸反抽',
+        operation_advice: '自定义区间指数弱。',
+        focus_targets: ['防守'],
+        rationale: ['指数强度 -0.36'],
+      },
+      refresh_meta: {
+        elapsed_ms: 1100,
+        quote_source: 'eastmoney',
+        quote_attempts: ['eastmoney'],
+        quote_message: '',
+      },
+    })
+
+    expect(await screen.findByText('轻仓或优化持仓')).toBeInTheDocument()
+  })
+
+  it('策略加载失败后不会一直停在加载中', async () => {
+    const user = userEvent.setup()
+    vi.mocked(refreshShortTermData).mockImplementation(async (params) => {
+      if (params?.period === 'current_week') {
+        throw new Error('周期快照不可用')
+      }
+      return {
+        trade_date: '2026-07-21',
+        period: 'today',
+        period_label: '当日',
+        start_date: '2026-07-21',
+        end_date: '2026-07-21',
+        degraded: false,
+        missing_sources: [],
+        market_emotion: '情绪开',
+        short_term_outlook: '指数与情绪共振',
+        operation_advice: '做连板',
+        tracking_focus: ['连板梯队'],
+        core_conclusion: '优先主线前排',
+        risk_signals: [],
+        sector_count: 3,
+        candidate_count: 0,
+        strategy_card: {
+          title: '指数情绪策略卡',
+          index_strength: 'strong',
+          emotion_strength: 'strong',
+          primary_strategy: '连板接力',
+          secondary_strategy: '主升分歧接力',
+          operation_advice: '指数强、情绪强，做连板。',
+          focus_targets: ['连板梯队'],
+          rationale: ['日均连板 28.0'],
+        },
+        refresh_meta: {
+          elapsed_ms: 800,
+          quote_source: 'eastmoney',
+          quote_attempts: ['eastmoney'],
+          quote_message: '',
+        },
+      }
+    })
+
+    renderDashboard()
+    expect(await screen.findByText('连板接力')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '本周' }))
+    expect(refreshShortTermData).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    await waitFor(() => {
+      expect(refreshShortTermData).toHaveBeenCalledWith({ period: 'current_week' })
+    })
+    expect(await screen.findByText(/实时行情刷新失败/)).toBeInTheDocument()
+    expect(screen.queryByText(/正在拉取实时行情/)).not.toBeInTheDocument()
+    expect(screen.getByText('连板接力')).toBeInTheDocument()
   })
 })

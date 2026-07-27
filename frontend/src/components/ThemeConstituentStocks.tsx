@@ -28,7 +28,7 @@ export function ThemeConstituentStocks({ themeId }: ThemeConstituentStocksProps)
         )}
       </div>
 
-      {isLoading && <StockListSkeleton />}
+      {isLoading && <StockListSkeleton layout="grid" />}
 
       {isError && (
         <div className="flex items-center gap-2 py-4 text-sm text-destructive">
@@ -43,7 +43,9 @@ export function ThemeConstituentStocks({ themeId }: ThemeConstituentStocksProps)
         </div>
       )}
 
-      {!isLoading && !isError && stocks.length > 0 && <StockList stocks={stocks} />}
+      {!isLoading && !isError && stocks.length > 0 && (
+        <StockList stocks={stocks} layout="grid" />
+      )}
     </section>
   )
 }

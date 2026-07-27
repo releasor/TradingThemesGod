@@ -37,6 +37,16 @@ interface WaitOptions {
   timeout?: number
 }
 
+export interface ScraperRunWithAttempts extends ScraperRun {
+  attempted_sources: string[]
+}
+
+export interface ThemeQuotesRefreshResult {
+  trade_date: string | null
+  themes_updated: number
+  refreshed_at: string
+}
+
 const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
 
 /** 获取看板可选的爬虫数据源列表。 */
@@ -50,9 +60,19 @@ export async function fetchDashboardScraperSources(): Promise<ScraperSource[]> {
 /** 获取指定数据源最近一次成功完成的采集记录。 */
 export async function fetchLatestSuccessfulRun(source: string): Promise<ScraperRun | null> {
   const { data } = await apiClient.get<ScraperRunListResponse>('/scraper/runs', {
-    params: { source, limit: 20 },
+    params: { source, status: 'completed', limit: 5 },
   })
-  return data.runs.find((run) => run.status === 'completed') ?? null
+  return data.runs[0] ?? null
+}
+
+/** 快刷题材列表涨跌幅/热度，不触发全量成分股采集。 */
+export async function refreshThemeQuotes(): Promise<ThemeQuotesRefreshResult> {
+  const { data } = await apiClient.post<ThemeQuotesRefreshResult>(
+    '/scraper/refresh-quotes',
+    null,
+    { timeout: 120_000 }
+  )
+  return data
 }
 
 /** 触发采集任务并轮询到最终状态。 */
@@ -76,4 +96,28 @@ export async function runScraperAndWait(
   }
 
   throw new Error('数据更新超时，请稍后查看更新结果')
+}
+
+/** 按顺序尝试多个数据源，前一个失败或超时后自动切换。 */
+export async function runScraperWithFallback(
+  sources: string[],
+  { pollInterval = 2000, timeout = 3 * 60 * 1000 }: WaitOptions = {}
+): Promise<ScraperRunWithAttempts> {
+  const attemptedSources: string[] = []
+  let lastError: Error | null = null
+
+  for (const source of sources) {
+    attemptedSources.push(source)
+    try {
+      const run = await runScraperAndWait(source, { pollInterval, timeout })
+      if (run.status === 'completed') {
+        return { ...run, attempted_sources: attemptedSources }
+      }
+      lastError = new Error(run.error_message || `${source} 全量更新失败`)
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  throw lastError ?? new Error('全量更新失败')
 }

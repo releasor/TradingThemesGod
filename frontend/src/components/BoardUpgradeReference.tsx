@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import { Crosshair, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import AnimatedList from '@/components/AnimatedList'
 import { GlowCard } from '@/components/GlowCard'
 import type { FirstToSecondCandidateResponse } from '@/types/short-term'
 
@@ -60,33 +61,43 @@ export const BoardUpgradeReference = memo(function BoardUpgradeReference({
       </div>
 
       <GlowCard>
-      <div className="p-3 text-sm">
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>目标时{data?.trade_date ?? '--'}</span>
-          <span>首板时{data?.previous_trade_date ?? '--'}</span>
-          <span>排除 {data?.excluded_count ?? 0}</span>
-          {data?.degraded && (
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-700 dark:text-amber-300">
-              数据降级：{data.missing_sources.join('、')}
-            </span>
-          )}
+        <div className="px-4 pt-4 text-sm">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>目标时{data?.trade_date ?? '--'}</span>
+            <span>首板时{data?.previous_trade_date ?? '--'}</span>
+            <span>排除 {data?.excluded_count ?? 0}</span>
+            {data?.degraded && (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-700 dark:text-amber-300">
+                数据降级：{data.missing_sources.join('、')}
+              </span>
+            )}
+          </div>
         </div>
 
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-2 p-4">
             <div className="h-20 animate-pulse rounded-xl bg-muted" />
             <div className="h-20 animate-pulse rounded-xl bg-muted" />
           </div>
         ) : candidates.length === 0 ? (
-          <div className="rounded-xl bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
-            暂无符合条件的一进二候选
+          <div className="p-4">
+            <div className="rounded-xl bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
+              暂无符合条件的一进二候选
+            </div>
           </div>
         ) : (
-          <div className="space-y-2">
-            {candidates.map((candidate) => (
+          <AnimatedList
+            items={candidates}
+            getItemKey={(candidate) => candidate.code}
+            listTestId="board-upgrade-scroll-container"
+            listClassName="!max-h-[520px] xl:!h-auto xl:!max-h-[640px]"
+            showGradients
+            enableArrowNavigation={false}
+            displayScrollbar
+            renderItem={(candidate, _index, selected) => (
               <article
-                key={candidate.code}
-                className="rounded-xl border border-border/70 bg-background/50 p-2.5"
+                data-testid={`board-upgrade-item-${candidate.code}`}
+                className={`item ${selected ? 'selected' : ''}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -100,7 +111,10 @@ export const BoardUpgradeReference = memo(function BoardUpgradeReference({
                       )}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      现价 {formatNumber(candidate.price)} · 流通 {formatNumber(candidate.float_market_cap, '亿')} · 总值 {formatNumber(candidate.market_cap, '亿')} · 换手 {formatNumber(candidate.turnover_rate, '%')}
+                      现价 {formatNumber(candidate.price)} · 流通{' '}
+                      {formatNumber(candidate.float_market_cap, '亿')} · 总值{' '}
+                      {formatNumber(candidate.market_cap, '亿')} · 换手{' '}
+                      {formatNumber(candidate.turnover_rate, '%')}
                     </p>
                   </div>
                   <div className="text-right">
@@ -132,17 +146,19 @@ export const BoardUpgradeReference = memo(function BoardUpgradeReference({
                   {candidate.excluded_rules.map((rule) => (
                     <span
                       key={rule}
-                      className={cn('rounded-full border px-2 py-0.5 text-[11px]', badgeClass('exclude'))}
+                      className={cn(
+                        'rounded-full border px-2 py-0.5 text-[11px]',
+                        badgeClass('exclude')
+                      )}
                     >
                       {rule}
                     </span>
                   ))}
                 </div>
               </article>
-            ))}
-          </div>
+            )}
+          />
         )}
-      </div>
       </GlowCard>
     </section>
   )

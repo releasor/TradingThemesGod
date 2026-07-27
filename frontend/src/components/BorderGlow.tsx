@@ -2,7 +2,7 @@ import {
   useRef,
   useCallback,
   useEffect,
-  type CSSProperties,
+  useLayoutEffect,
   type PointerEvent,
   type ReactNode,
 } from 'react'
@@ -21,6 +21,8 @@ interface BorderGlowProps {
   animated?: boolean
   colors?: string[]
   fillOpacity?: number
+  /** Use legacy conic border sweep instead of radial spotlight */
+  legacyCone?: boolean
 }
 
 function parseHSL(hslStr: string): { h: number; s: number; l: number } {
@@ -38,28 +40,6 @@ function buildGlowVars(glowColor: string, intensity: number): Record<string, str
   for (let i = 0; i < opacities.length; i++) {
     vars[`--glow-color${keys[i]}`] = `hsl(${base} / ${Math.min(opacities[i] * intensity, 100)}%)`
   }
-  return vars
-}
-
-const GRADIENT_POSITIONS = ['80% 55%', '69% 34%', '8% 6%', '41% 38%', '86% 85%', '82% 18%', '51% 4%']
-const GRADIENT_KEYS = [
-  '--gradient-one',
-  '--gradient-two',
-  '--gradient-three',
-  '--gradient-four',
-  '--gradient-five',
-  '--gradient-six',
-  '--gradient-seven',
-]
-const COLOR_MAP = [0, 1, 2, 0, 1, 2, 1]
-
-function buildGradientVars(colors: string[]): Record<string, string> {
-  const vars: Record<string, string> = {}
-  for (let i = 0; i < 7; i++) {
-    const c = colors[Math.min(COLOR_MAP[i], colors.length - 1)]
-    vars[GRADIENT_KEYS[i]] = `radial-gradient(at ${GRADIENT_POSITIONS[i]}, ${c} 0px, transparent 50%)`
-  }
-  vars['--gradient-base'] = `linear-gradient(${colors[0]} 0 100%)`
   return vars
 }
 
@@ -100,6 +80,12 @@ function animateValue({
   setTimeout(() => requestAnimationFrame(tick), delay)
 }
 
+function setCardVars(card: HTMLElement, vars: Record<string, string | number>) {
+  for (const [key, value] of Object.entries(vars)) {
+    card.style.setProperty(key, String(value))
+  }
+}
+
 export default function BorderGlow({
   children,
   className = '',
@@ -109,63 +95,112 @@ export default function BorderGlow({
   borderRadius = 28,
   glowRadius = 40,
   glowIntensity = 1.0,
-  coneSpread = 25,
+  coneSpread = 18,
   animated = false,
-  colors = ['#c084fc', '#f472b6', '#38bdf8'],
-  fillOpacity = 0.5,
+  colors: _colors = ['#c084fc', '#f472b6', '#38bdf8'],
+  fillOpacity: _fillOpacity = 0.5,
+  legacyCone = false,
 }: BorderGlowProps) {
+  void _colors
+  void _fillOpacity
   const cardRef = useRef<HTMLDivElement>(null)
-
-  const getCenterOfElement = useCallback((el: HTMLElement) => {
-    const { width, height } = el.getBoundingClientRect()
-    return [width / 2, height / 2]
-  }, [])
-
-  const getEdgeProximity = useCallback(
-    (el: HTMLElement, x: number, y: number) => {
-      const [cx, cy] = getCenterOfElement(el)
-      const dx = x - cx
-      const dy = y - cy
-      let kx = Infinity
-      let ky = Infinity
-      if (dx !== 0) kx = cx / Math.abs(dx)
-      if (dy !== 0) ky = cy / Math.abs(dy)
-      return Math.min(Math.max(1 / Math.min(kx, ky), 0), 1)
-    },
-    [getCenterOfElement]
+  const rafRef = useRef<number | null>(null)
+  const pendingPointerRef = useRef<{ x: number; y: number; w: number; h: number } | null>(
+    null
   )
 
-  const getCursorAngle = useCallback(
-    (el: HTMLElement, x: number, y: number) => {
-      const [cx, cy] = getCenterOfElement(el)
-      const dx = x - cx
-      const dy = y - cy
-      if (dx === 0 && dy === 0) return 0
-      const radians = Math.atan2(dy, dx)
-      let degrees = radians * (180 / Math.PI) + 90
-      if (degrees < 0) degrees += 360
-      return degrees
+  useLayoutEffect(() => {
+    const card = cardRef.current
+    if (!card) return
+    setCardVars(card, {
+      '--card-bg': backgroundColor,
+      '--edge-sensitivity': edgeSensitivity,
+      '--border-radius': `${borderRadius}px`,
+      '--glow-padding': `${glowRadius}px`,
+      '--cone-spread': coneSpread,
+      '--glow-opacity': '0',
+      ...buildGlowVars(glowColor, glowIntensity),
+    })
+  }, [
+    backgroundColor,
+    borderRadius,
+    coneSpread,
+    edgeSensitivity,
+    glowColor,
+    glowIntensity,
+    glowRadius,
+  ])
+
+  const applyPointerGlow = useCallback(
+    (card: HTMLElement, x: number, y: number, w: number, h: number) => {
+      if (w <= 0 || h <= 0) return
+
+      card.style.setProperty('--mouse-x', `${((x / w) * 100).toFixed(3)}%`)
+      card.style.setProperty('--mouse-y', `${((y / h) * 100).toFixed(3)}%`)
+
+      // 贴边强度：只在靠近卡片边缘时点亮
+      const distToEdge = Math.min(x, y, w - x, h - y)
+      const band = Math.max(56, Math.min(w, h) * 0.1)
+      const edge = Math.min(Math.max(1 - distToEdge / band, 0), 1)
+      card.style.setProperty('--glow-opacity', edge.toFixed(3))
+      card.style.setProperty('--edge-proximity', `${(edge * 100).toFixed(3)}`)
+
+      if (legacyCone || card.classList.contains('sweep-active')) {
+        const cx = w / 2
+        const cy = h / 2
+        const dx = x - cx
+        const dy = y - cy
+        let angle = 0
+        if (dx !== 0 || dy !== 0) {
+          const degrees = Math.atan2(dy, dx) * (180 / Math.PI) + 90
+          angle = degrees < 0 ? degrees + 360 : degrees
+        }
+        card.style.setProperty('--cursor-angle', `${angle.toFixed(3)}deg`)
+      }
     },
-    [getCenterOfElement]
+    [legacyCone]
   )
 
   const handlePointerMove = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
       const card = cardRef.current
       if (!card) return
-
       const rect = card.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-
-      const edge = getEdgeProximity(card, x, y)
-      const angle = getCursorAngle(card, x, y)
-
-      card.style.setProperty('--edge-proximity', `${(edge * 100).toFixed(3)}`)
-      card.style.setProperty('--cursor-angle', `${angle.toFixed(3)}deg`)
+      pendingPointerRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+        w: rect.width,
+        h: rect.height,
+      }
+      if (rafRef.current != null) return
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null
+        const pending = pendingPointerRef.current
+        const el = cardRef.current
+        if (!pending || !el) return
+        applyPointerGlow(el, pending.x, pending.y, pending.w, pending.h)
+      })
     },
-    [getEdgeProximity, getCursorAngle]
+    [applyPointerGlow]
   )
+
+  const handlePointerLeave = useCallback(() => {
+    const card = cardRef.current
+    if (!card) return
+    pendingPointerRef.current = null
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    card.style.setProperty('--glow-opacity', '0')
+    card.style.setProperty('--edge-proximity', '0')
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!animated || !cardRef.current) return
@@ -174,8 +209,12 @@ export default function BorderGlow({
     const angleEnd = 465
     card.classList.add('sweep-active')
     card.style.setProperty('--cursor-angle', `${angleStart}deg`)
+    card.style.setProperty('--glow-opacity', '1')
 
-    animateValue({ duration: 500, onUpdate: (v) => card.style.setProperty('--edge-proximity', `${v}`) })
+    animateValue({
+      duration: 500,
+      onUpdate: (v) => card.style.setProperty('--edge-proximity', `${v}`),
+    })
     animateValue({
       ease: easeInCubic,
       duration: 1500,
@@ -207,31 +246,21 @@ export default function BorderGlow({
       start: 100,
       end: 0,
       onUpdate: (v) => card.style.setProperty('--edge-proximity', `${v}`),
-      onEnd: () => card.classList.remove('sweep-active'),
+      onEnd: () => {
+        card.classList.remove('sweep-active')
+        card.style.setProperty('--glow-opacity', '0')
+      },
     })
   }, [animated])
-
-  const glowVars = buildGlowVars(glowColor, glowIntensity)
 
   return (
     <div
       ref={cardRef}
       onPointerMove={handlePointerMove}
-      className={`border-glow-card ${className}`.trim()}
-      style={
-        {
-          '--card-bg': backgroundColor,
-          '--edge-sensitivity': edgeSensitivity,
-          '--border-radius': `${borderRadius}px`,
-          '--glow-padding': `${glowRadius}px`,
-          '--cone-spread': coneSpread,
-          '--fill-opacity': fillOpacity,
-          ...glowVars,
-          ...buildGradientVars(colors),
-        } as CSSProperties
-      }
+      onPointerLeave={handlePointerLeave}
+      className={`border-glow-card${legacyCone ? ' legacy-cone' : ''} ${className}`.trim()}
     >
-      <span className="edge-light" />
+      <span className="edge-light" aria-hidden="true" />
       <div className="border-glow-inner">{children}</div>
     </div>
   )

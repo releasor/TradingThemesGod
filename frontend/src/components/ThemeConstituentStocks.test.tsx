@@ -10,8 +10,16 @@ vi.mock('@/api/theme', () => ({
 }))
 
 vi.mock('@/components/StockList', () => ({
-  StockList: ({ stocks }: { stocks: unknown[] }) => (
-    <div data-testid="stock-list">{stocks.length} stocks</div>
+  StockList: ({
+    stocks,
+    layout,
+  }: {
+    stocks: unknown[]
+    layout?: string
+  }) => (
+    <div data-testid="stock-list" data-layout={layout ?? 'stack'}>
+      {stocks.length} stocks
+    </div>
   ),
 }))
 
@@ -63,6 +71,7 @@ describe('ThemeConstituentStocks', () => {
 
     expect(await screen.findByText('全部成分股')).toBeInTheDocument()
     expect(await screen.findByTestId('stock-list')).toHaveTextContent('1 stocks')
+    expect(screen.getByTestId('stock-list')).toHaveAttribute('data-layout', 'grid')
     expect(fetchThemeStocks).toHaveBeenCalledWith(7, undefined, 1, 100)
   })
 

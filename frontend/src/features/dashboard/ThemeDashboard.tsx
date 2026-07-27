@@ -3,11 +3,10 @@
  * 展示热门题材排名，支持加载、错误和空状态。
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { useCallback, useEffect, useMemo, useState, useDeferredValue, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { List, Settings } from 'lucide-react'
 import {
   fetchIndicatorSignals,
   fetchMarketSignals,
@@ -15,40 +14,41 @@ import {
   fetchThemes,
 } from '@/api/theme'
 import {
-  analyzeShortTermFromDatabase,
   fetchFirstToSecondCandidates,
   fetchShortTermOverview,
   refreshFirstToSecondCandidates,
   refreshShortTermData,
+  refreshShortTermSignals,
 } from '@/api/short-term'
-import { fetchLatestSuccessfulRun, fetchDashboardScraperSources, runScraperAndWait } from '@/api/scraper'
+import { fetchLatestSuccessfulRun, fetchDashboardScraperSources, refreshThemeQuotes, runScraperWithFallback } from '@/api/scraper'
+import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useRefreshTimer, formatRefreshDurationMs, quoteSourceLabel } from '@/hooks/useRefreshTimer'
 import { ThemeCard } from '@/components/ThemeCard'
 import { ThemeCardSkeleton } from '@/components/ThemeCardSkeleton'
 import { QuickStats } from '@/components/QuickStats'
+import { fetchSystemStats } from '@/api/stats'
 import { ThemeRiseFallBar } from '@/components/charts/ThemeRiseFallBar'
-import { ThemeToggle } from '@/components/ThemeToggle'
 import { LoadingBar } from '@/components/LoadingBar'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorDisplay } from '@/components/ErrorDisplay'
 import { AutoRefreshButton } from '@/components/AutoRefreshButton'
-import { AuthNav } from '@/components/AuthNav'
-import { KeyboardShortcutsButton } from '@/components/KeyboardShortcutsPanel'
+import { AppCardNav } from '@/components/AppCardNav'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
-import { useNavigateToSettings } from '@/hooks/useNavigateToSettings'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ToastContainer, useToast } from '@/components/Toast'
 import { MarketSignalSection } from '@/components/MarketSignalSection'
 import { BoardUpgradeReference } from '@/components/BoardUpgradeReference'
 import { NewsTimeline } from '@/components/NewsTimeline'
 import { MarketStrategyCard } from '@/components/short-term/MarketStrategyCard'
+import { ShortTermRadarSection } from '@/components/short-term/ShortTermRadarSection'
 import { GlowCard } from '@/components/GlowCard'
 import { strategyCardQueryKey } from '@/features/dashboard/strategyCardQuery'
 import { isCancelledError, refetchIgnoringCancel } from '@/lib/react-query'
 import type {
+  ShortTermOverviewResponse,
   ShortTermPeriod,
   ShortTermPeriodStatus,
-  StrategyCardDataSource,
 } from '@/types/short-term'
 
 function formatServerTime(value: string): string {
@@ -83,11 +83,17 @@ function shortTermErrorMessage(error: unknown): string {
   return value.response?.data?.detail || value.message || '操作失败'
 }
 
+function formatRefreshProgress(done: string[], pending: string | null, elapsed: string): string {
+  const donePart = done.length > 0 ? `已更新：${done.join('；')}。` : ''
+  if (!pending) return donePart.replace(/。$/, '')
+  return `${donePart}正在更新：${pending}（已耗时 ${elapsed}）...`
+}
+
 export function ThemeDashboard() {
   const navigate = useNavigate()
-  const navigateToSettings = useNavigateToSettings()
   const queryClient = useQueryClient()
   const limit = useDashboardStore((s) => s.limit)
+  const token = useAuthStore((s) => s.token)
   const toast = useToast()
   const [isUpdating, setIsUpdating] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<string | null>(null)
@@ -96,12 +102,13 @@ export function ThemeDashboard() {
   const [periodStatus, setPeriodStatus] = useState<ShortTermPeriodStatus | null>(null)
   const [customStartDate, setCustomStartDate] = useState<string | null>(null)
   const [customEndDate, setCustomEndDate] = useState<string | null>(null)
-  const deferredCustomStartDate = useDeferredValue(customStartDate)
-  const deferredCustomEndDate = useDeferredValue(customEndDate)
-  const [strategyDataSource, setStrategyDataSource] = useState<StrategyCardDataSource>('database')
+  const [lastStrategyOverview, setLastStrategyOverview] =
+    useState<ShortTermOverviewResponse | null>(null)
   const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false)
   const [isFirstToSecondRefreshing, setIsFirstToSecondRefreshing] = useState(false)
   const [selectedScraperSource, setSelectedScraperSource] = useState('eastmoney')
+  const lightRefreshDoneRef = useRef<string[]>([])
+  const lightRefreshPendingRef = useRef<string | null>('题材行情')
 
   const handleThemeClick = useCallback(
     (themeId: number) => navigate(`/themes/${themeId}`, { state: { from: '/' } }),
@@ -145,6 +152,14 @@ export function ThemeDashboard() {
     staleTime: 2 * 60 * 1000,
   })
   const {
+    data: systemStats,
+    refetch: refetchSystemStats,
+  } = useQuery({
+    queryKey: ['system-stats'],
+    queryFn: fetchSystemStats,
+    staleTime: 2 * 60 * 1000,
+  })
+  const {
     data: marketSignals,
     isLoading: isMarketSignalsLoading,
     isError: isMarketSignalsError,
@@ -167,39 +182,43 @@ export function ThemeDashboard() {
     staleTime: 2 * 60 * 1000,
   })
   const customRangeReady = Boolean(
-    deferredCustomStartDate &&
-      deferredCustomEndDate &&
-      deferredCustomStartDate <= deferredCustomEndDate
+    customStartDate && customEndDate && customStartDate <= customEndDate
   )
   const strategyQueryParams = useMemo(
     () => ({
       period: shortTermPeriod,
       ...(shortTermPeriod === 'custom' && customRangeReady
-        ? { startDate: deferredCustomStartDate!, endDate: deferredCustomEndDate! }
+        ? { startDate: customStartDate!, endDate: customEndDate! }
         : {}),
     }),
-    [shortTermPeriod, customRangeReady, deferredCustomStartDate, deferredCustomEndDate]
+    [shortTermPeriod, customRangeReady, customStartDate, customEndDate]
   )
   const databaseStrategyKey = useMemo(
     () =>
       strategyCardQueryKey(
         'database',
         shortTermPeriod,
-        deferredCustomStartDate,
-        deferredCustomEndDate
+        shortTermPeriod === 'custom' ? customStartDate : null,
+        shortTermPeriod === 'custom' ? customEndDate : null
       ),
-    [shortTermPeriod, deferredCustomStartDate, deferredCustomEndDate]
+    [shortTermPeriod, customStartDate, customEndDate]
   )
   const liveStrategyKey = useMemo(
     () =>
-      strategyCardQueryKey('live', shortTermPeriod, deferredCustomStartDate, deferredCustomEndDate),
-    [shortTermPeriod, deferredCustomStartDate, deferredCustomEndDate]
+      strategyCardQueryKey(
+        'live',
+        shortTermPeriod,
+        shortTermPeriod === 'custom' ? customStartDate : null,
+        shortTermPeriod === 'custom' ? customEndDate : null
+      ),
+    [shortTermPeriod, customStartDate, customEndDate]
   )
   const strategyPeriodEnabled = shortTermPeriod !== 'custom' || customRangeReady
   const {
     data: databaseStrategyOverview,
     isFetching: isDatabaseStrategyFetching,
     isError: isDatabaseStrategyError,
+    isPlaceholderData: isDatabaseStrategyPlaceholder,
     error: databaseStrategyError,
     refetch: refetchDatabaseStrategyOverview,
   } = useQuery({
@@ -207,55 +226,69 @@ export function ThemeDashboard() {
     queryFn: () => fetchShortTermOverview(strategyQueryParams),
     enabled: strategyPeriodEnabled,
     staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
+    retry: false,
   })
   const { data: liveStrategyOverview } = useQuery({
     queryKey: liveStrategyKey,
     queryFn: async () => {
-      throw new Error('实时策略数据请通过「刷新行情」获取')
+      throw new Error('实时策略数据请通过上方「刷新」获取')
     },
     enabled: false,
     staleTime: Infinity,
   })
   const databaseOverviewMatches = useMemo(() => {
-    if (!databaseStrategyOverview) return false
+    if (!databaseStrategyOverview || isDatabaseStrategyPlaceholder) return false
     if (shortTermPeriod !== databaseStrategyOverview.period) return false
     if (shortTermPeriod !== 'custom') return true
     return (
-      databaseStrategyOverview.start_date === deferredCustomStartDate &&
-      databaseStrategyOverview.end_date === deferredCustomEndDate
+      databaseStrategyOverview.start_date === customStartDate &&
+      databaseStrategyOverview.end_date === customEndDate
     )
   }, [
+    customEndDate,
+    customStartDate,
     databaseStrategyOverview,
-    deferredCustomEndDate,
-    deferredCustomStartDate,
+    isDatabaseStrategyPlaceholder,
     shortTermPeriod,
   ])
-  const displayedStrategyOverview = useMemo(() => {
-    if (strategyDataSource === 'live') {
-      return liveStrategyOverview ?? null
-    }
-    return databaseStrategyOverview ?? null
-  }, [databaseStrategyOverview, liveStrategyOverview, strategyDataSource])
-  const isLivePreview =
-    strategyDataSource === 'live' &&
-    !liveStrategyOverview &&
-    Boolean(databaseStrategyOverview?.strategy_card)
+  const isStrategyPreview =
+    !liveStrategyOverview && Boolean(databaseStrategyOverview?.strategy_card)
   const strategyOverviewForCard = useMemo(() => {
-    if (displayedStrategyOverview) return displayedStrategyOverview
-    if (isLivePreview) return databaseStrategyOverview ?? null
-    return null
-  }, [databaseStrategyOverview, displayedStrategyOverview, isLivePreview])
+    return (
+      liveStrategyOverview ??
+      databaseStrategyOverview ??
+      lastStrategyOverview
+    )
+  }, [databaseStrategyOverview, lastStrategyOverview, liveStrategyOverview])
   const refreshStrategyDataMutation = useMutation({
-    mutationFn: () => refreshShortTermData(strategyQueryParams),
+    mutationFn: (params: typeof strategyQueryParams) => refreshShortTermData(params),
     onMutate: () => {
       setPeriodStatus({ type: 'progress', message: '正在拉取实时行情并更新策略卡...' })
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(liveStrategyKey, data)
-      setStrategyDataSource('live')
+    onSuccess: (data, params) => {
+      const liveKey = strategyCardQueryKey(
+        'live',
+        params.period,
+        params.period === 'custom' ? (params.startDate ?? null) : null,
+        params.period === 'custom' ? (params.endDate ?? null) : null
+      )
+      queryClient.setQueryData(liveKey, data)
+      setLastStrategyOverview(data)
+      const meta = data.refresh_meta
+      const degraded = Boolean(meta?.quote_message) || meta?.quote_source === 'database'
+      const timing = meta?.elapsed_ms ? `，耗时 ${formatRefreshDurationMs(meta.elapsed_ms)}` : ''
+      const source = meta && !degraded ? `，数据源 ${quoteSourceLabel(meta.quote_source)}` : ''
+      const attempts =
+        meta && meta.quote_attempts.length > 1
+          ? `（${meta.quote_attempts.map(quoteSourceLabel).join(' → ')}）`
+          : ''
       setPeriodStatus({
-        type: 'success',
-        message: `${SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}策略卡实时数据已更新`,
+        type: degraded ? 'error' : 'success',
+        message: degraded
+          ? meta?.quote_message ||
+            `实时行情不可用，已回退数据库数据${attempts}`
+          : `${SHORT_TERM_PERIOD_LABELS[params.period]}策略卡实时数据已更新${timing}${source}${attempts}`,
       })
     },
     onError: (error) => {
@@ -265,35 +298,13 @@ export function ThemeDashboard() {
       })
     },
   })
-  const analyzeStrategyMutation = useMutation({
-    mutationFn: () => analyzeShortTermFromDatabase(strategyQueryParams),
-    onMutate: () => {
-      setPeriodStatus({
-        type: 'progress',
-        message: `正在依据数据库题材数据重新分析${SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}策略...`,
-      })
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(databaseStrategyKey, data)
-      setStrategyDataSource('database')
-      setPeriodStatus({
-        type: 'success',
-        message: `${SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}策略已按数据库题材数据分析完成`,
-      })
-    },
-    onError: (error) => {
-      setPeriodStatus({
-        type: 'error',
-        message: `数据库分析失败：${shortTermErrorMessage(error)}`,
-      })
-    },
-  })
   const isStrategyPeriodLoading =
     refreshStrategyDataMutation.isPending ||
-    analyzeStrategyMutation.isPending ||
-    (strategyDataSource === 'database'
-      ? isDatabaseStrategyFetching && !databaseOverviewMatches
-      : !liveStrategyOverview && isDatabaseStrategyFetching)
+    (isDatabaseStrategyFetching && !databaseOverviewMatches && !liveStrategyOverview)
+  const { elapsedLabel: strategyRefreshElapsed } = useRefreshTimer(
+    refreshStrategyDataMutation.isPending
+  )
+
   const {
     data: firstToSecondCandidates,
     isLoading: isFirstToSecondLoading,
@@ -303,6 +314,7 @@ export function ThemeDashboard() {
     queryKey: ['first-to-second-candidates'],
     queryFn: () => fetchFirstToSecondCandidates({}),
     staleTime: 60 * 1000,
+    retry: 1,
   })
 
   const { data: dashboardScraperSources = [] } = useQuery({
@@ -334,6 +346,9 @@ export function ThemeDashboard() {
     staleTime: 2 * 60 * 1000,
   })
 
+  const { elapsedLabel: dashboardRefreshElapsed } = useRefreshTimer(isDashboardRefreshing)
+  const { elapsedLabel: fullUpdateElapsed } = useRefreshTimer(isUpdating)
+
   const refreshInFlightRef = useRef<Promise<void> | null>(null)
 
   const refreshMainDashboard = useCallback(async () => {
@@ -342,17 +357,20 @@ export function ThemeDashboard() {
     }
 
     const run = (async () => {
-      await Promise.all([
+      const tasks = [
         refetchIgnoringCancel(refetch),
         refetchIgnoringCancel(refetchRiseRanking),
         refetchIgnoringCancel(refetchThemeCount),
+        refetchIgnoringCancel(refetchSystemStats),
         refetchIgnoringCancel(refetchMarketSignals),
         refetchIgnoringCancel(refetchIndicatorSignals),
-        refetchIgnoringCancel(refetchFirstToSecondCandidates),
         ...(strategyPeriodEnabled
           ? [refetchIgnoringCancel(refetchDatabaseStrategyOverview)]
           : []),
-      ])
+      ]
+      await Promise.all(tasks)
+      // 一进二需登录，失败不应卡住整页刷新
+      await refetchIgnoringCancel(refetchFirstToSecondCandidates).catch(() => undefined)
     })()
 
     refreshInFlightRef.current = run
@@ -370,35 +388,181 @@ export function ThemeDashboard() {
     refetchIndicatorSignals,
     refetchMarketSignals,
     refetchRiseRanking,
+    refetchSystemStats,
     refetchThemeCount,
     strategyPeriodEnabled,
   ])
 
-  const handleLightRefresh = useCallback(async () => {
+  const handleLightRefresh = useCallback(async (options?: { silent?: boolean }) => {
+    const startedAt = Date.now()
+    const done: string[] = []
+    const skipped: string[] = []
+    lightRefreshDoneRef.current = []
+    lightRefreshPendingRef.current = '题材行情'
     setIsDashboardRefreshing(true)
-    setUpdateResult({ type: 'progress', message: '正在刷新看板全部数据...' })
+    setUpdateResult({
+      type: 'progress',
+      message: formatRefreshProgress(done, '题材行情', '0 秒'),
+    })
+
+    const publishProgress = (pending: string | null) => {
+      lightRefreshDoneRef.current = [...done]
+      lightRefreshPendingRef.current = pending
+      setUpdateResult({
+        type: 'progress',
+        message: formatRefreshProgress(
+          done,
+          pending,
+          formatRefreshDurationMs(Date.now() - startedAt)
+        ),
+      })
+    }
+
     try {
+      const quotes = await refreshThemeQuotes()
+      const refreshedAt = quotes.refreshed_at || new Date().toISOString()
+      setLastUpdate(refreshedAt)
+      done.push(`题材行情 ${quotes.themes_updated} 个`)
       await refreshMainDashboard()
-      setUpdateResult({ type: 'success', message: '看板数据已刷新（题材排名、市场信号、策略卡数据库视图）' })
-      toast.success('看板已刷新')
+      publishProgress(strategyPeriodEnabled ? '策略卡' : token ? '短线信号' : null)
+
+      if (strategyPeriodEnabled) {
+        if (shortTermPeriod === 'custom' && (!customStartDate || !customEndDate)) {
+          skipped.push('策略卡（未选自定义日期）')
+          setPeriodStatus({
+            type: 'error',
+            message: '请先选择自定义日期范围后再刷新策略卡',
+          })
+        } else {
+          try {
+            await refreshStrategyDataMutation.mutateAsync(strategyQueryParams)
+            done.push('策略卡')
+          } catch (strategyError) {
+            skipped.push(`策略卡失败：${shortTermErrorMessage(strategyError)}`)
+            if (!isCancelledError(strategyError) && !options?.silent) {
+              toast.error(`策略卡刷新失败：${shortTermErrorMessage(strategyError)}`)
+            }
+          }
+        }
+        publishProgress(token && !options?.silent ? '短线信号' : null)
+      }
+
+      // 手动刷新时继续刷短线信号；自动静默刷新跳过，避免每 30 秒打 AkShare
+      if (token && !options?.silent) {
+        publishProgress('短线信号')
+        try {
+          const signals = await refreshShortTermSignals()
+          await queryClient.invalidateQueries({ queryKey: ['short-term-sectors'] })
+          await queryClient.invalidateQueries({ queryKey: ['short-term-overview'] })
+          if (signals.status === 'failed') {
+            skipped.push(signals.error_message || '短线信号失败')
+          } else {
+            done.push(
+              `短线信号（涨停${signals.signal_count}/龙虎${signals.dragon_tiger_count}/轮动${signals.sector_count}）`
+            )
+            if (signals.degraded && signals.missing_sources.length > 0) {
+              skipped.push(`短线源缺失：${signals.missing_sources.join('、')}`)
+            }
+          }
+        } catch (signalError) {
+          skipped.push(`短线信号失败：${shortTermErrorMessage(signalError)}`)
+        }
+      } else if (!token && !options?.silent) {
+        skipped.push('短线信号（未登录）')
+      }
+
+      const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+      const refreshedLabel = formatServerTime(refreshedAt)
+      const summary = [
+        done.length > 0 ? `已更新：${done.join('；')}` : null,
+        skipped.length > 0 ? `未完成：${skipped.join('；')}` : null,
+        `更新于 ${refreshedLabel}，耗时 ${elapsedSeconds} 秒`,
+      ]
+        .filter(Boolean)
+        .join('。')
+      lightRefreshPendingRef.current = null
+      lightRefreshDoneRef.current = [...done]
+      setIsDashboardRefreshing(false)
+      setUpdateResult({
+        type: skipped.length > 0 && done.length === 0 ? 'error' : 'success',
+        message: summary,
+      })
+      if (!options?.silent) {
+        if (skipped.length > 0 && done.length > 0) {
+          toast.success(`部分刷新完成：${done.join('；')}`)
+        } else if (done.length > 0) {
+          toast.success(`已刷新：${done.join('；')}`)
+        }
+      }
     } catch (error) {
+      setIsDashboardRefreshing(false)
+      lightRefreshPendingRef.current = null
       if (isCancelledError(error)) return
       const message = error instanceof Error ? error.message : '未知错误'
-      setUpdateResult({ type: 'error', message: `看板刷新失败：${message}` })
-      toast.error(`看板刷新失败：${message}`)
+      const partial =
+        done.length > 0 ? `已更新：${done.join('；')}。` : ''
+      setUpdateResult({
+        type: 'error',
+        message: `${partial}看板刷新失败：${message}`,
+      })
+      if (!options?.silent) {
+        toast.error(`看板刷新失败：${message}`)
+      }
     } finally {
       setIsDashboardRefreshing(false)
+      lightRefreshPendingRef.current = null
     }
-  }, [refreshMainDashboard, toast])
+  }, [
+    customEndDate,
+    customStartDate,
+    queryClient,
+    refreshMainDashboard,
+    refreshStrategyDataMutation,
+    shortTermPeriod,
+    strategyPeriodEnabled,
+    strategyQueryParams,
+    toast,
+    token,
+  ])
+
+  useEffect(() => {
+    if (!isDashboardRefreshing) return
+    setUpdateResult((current) => {
+      if (current?.type === 'success' || current?.type === 'error') return current
+      return {
+        type: 'progress',
+        message: formatRefreshProgress(
+          lightRefreshDoneRef.current,
+          lightRefreshPendingRef.current,
+          dashboardRefreshElapsed
+        ),
+      }
+    })
+  }, [dashboardRefreshElapsed, isDashboardRefreshing])
+
+  useEffect(() => {
+    if (!isUpdating) return
+    setUpdateResult({
+      type: 'progress',
+      message: `正在全量更新（已耗时 ${fullUpdateElapsed}，东方财富慢时将自动切换其他数据源）...`,
+    })
+  }, [fullUpdateElapsed, isUpdating])
 
   const updateDashboard = useCallback(async () => {
+    const startedAt = Date.now()
     setIsUpdating(true)
     setUpdateResult({
       type: 'progress',
-      message: `正在通过${selectedScraperSourceLabel}全量更新，通常需要较长时间...`,
+      message: `正在通过${selectedScraperSourceLabel}全量更新（已耗时 0 秒）...`,
     })
     try {
-      const run = await runScraperAndWait(selectedScraperSource)
+      const sourcesToTry = [
+        selectedScraperSource,
+        ...dashboardScraperSources
+          .map((item) => item.id)
+          .filter((id) => id !== selectedScraperSource),
+      ]
+      const run = await runScraperWithFallback(sourcesToTry)
       if (run.status === 'failed') {
         const message = `全量更新失败：${run.error_message || '未知错误'}`
         setUpdateResult({ type: 'error', message })
@@ -407,16 +571,26 @@ export function ThemeDashboard() {
       }
 
       await refreshMainDashboard()
-      // finished_at 偶发为空时用本地时间兜底，避免更新时间停在旧值
       const finishedAt = run.finished_at ?? new Date().toISOString()
       setLastUpdate(finishedAt)
-      queryClient.setQueryData(latestScraperRunQueryKey(selectedScraperSource), finishedAt)
+      queryClient.setQueryData(latestScraperRunQueryKey(run.source), finishedAt)
       await refetchLatestSuccessfulUpdate()
+      const usedSourceLabel =
+        dashboardScraperSources.find((item) => item.id === run.source)?.label ?? run.source
+      const fallbackNote =
+        run.attempted_sources.length > 1
+          ? `（已自动切换：${run.attempted_sources
+              .map(
+                (id) => dashboardScraperSources.find((item) => item.id === id)?.label ?? id
+              )
+              .join(' → ')}）`
+          : ''
+      const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
       setUpdateResult({
         type: 'success',
-        message: `${selectedScraperSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据`,
+        message: `${usedSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据，耗时 ${elapsedSeconds} 秒${fallbackNote}`,
       })
-      toast.success(`${selectedScraperSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据`)
+      toast.success(`${usedSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据`)
     } catch (error) {
       if (isCancelledError(error)) return
       const message = error instanceof Error ? error.message : '未知错误'
@@ -426,6 +600,7 @@ export function ThemeDashboard() {
       setIsUpdating(false)
     }
   }, [
+    dashboardScraperSources,
     queryClient,
     refreshMainDashboard,
     refetchLatestSuccessfulUpdate,
@@ -434,11 +609,11 @@ export function ThemeDashboard() {
     toast,
   ])
 
-  // 自动刷新
+  // 自动刷新：仅在用户打开「自动刷新」后按间隔快刷
   const { isAutoRefresh, toggleAutoRefresh, refreshInterval, setRefreshInterval } = useAutoRefresh({
     interval: 30000, // 默认 30 秒
     onRefresh: () => {
-      void refreshMainDashboard().catch((error) => {
+      void handleLightRefresh({ silent: true }).catch((error) => {
         if (!isCancelledError(error)) {
           console.error('自动刷新失败', error)
         }
@@ -458,10 +633,16 @@ export function ThemeDashboard() {
       action: () => navigate('/themes'),
       description: '打开题材库',
     },
+    {
+      key: '?',
+      shift: true,
+      action: () => navigate('/settings/shortcuts'),
+      description: '打开快捷键设置',
+    },
   ])
 
   const themes = useMemo(() => data?.items ?? [], [data?.items])
-  const totalStocks = useMemo(() => themes.reduce((sum, t) => sum + t.stock_count, 0), [themes])
+  const totalStocks = systemStats?.stocks.total ?? 0
   const formattedLastUpdate = useMemo(() => {
     const value = lastUpdate ?? latestSuccessfulUpdate
     return value ? formatServerTime(value) : null
@@ -497,11 +678,7 @@ export function ThemeDashboard() {
         setCustomEndDate((current) => current ?? endDate)
         setCustomStartDate((current) => current ?? defaultCustomStartDate(endDate))
       }
-      setStrategyDataSource('database')
-      setPeriodStatus({
-        type: 'progress',
-        message: `正在加载${SHORT_TERM_PERIOD_LABELS[period]}数据库策略...`,
-      })
+      setPeriodStatus(null)
       setShortTermPeriod(period)
     },
     [databaseStrategyOverview?.end_date, shortTermPeriod]
@@ -519,11 +696,7 @@ export function ThemeDashboard() {
           })
           return
         }
-        setStrategyDataSource('database')
-        setPeriodStatus({
-          type: 'progress',
-          message: '正在刷新自定义策略数据...',
-        })
+        setPeriodStatus(null)
       }
       if (shortTermPeriod !== 'custom') {
         setShortTermPeriod('custom')
@@ -549,27 +722,20 @@ export function ThemeDashboard() {
 
   useEffect(() => {
     if (isDatabaseStrategyFetching) return
-    if (strategyDataSource !== 'database') return
+    if (liveStrategyOverview) return
 
     if (isDatabaseStrategyError) {
       const message =
         databaseStrategyError instanceof Error ? databaseStrategyError.message : '未知错误'
       setPeriodStatus({
         type: 'error',
-        message: `数据库策略加载失败：${message}`,
+        message: `策略加载失败：${message}`,
       })
       return
     }
 
     if (databaseOverviewMatches && databaseStrategyOverview) {
-      const label =
-        shortTermPeriod === 'custom'
-          ? shortTermDateRange ?? databaseStrategyOverview.period_label
-          : databaseStrategyOverview.period_label
-      setPeriodStatus({
-        type: 'success',
-        message: `${label}数据库策略已加载`,
-      })
+      setLastStrategyOverview(databaseStrategyOverview)
     }
   }, [
     databaseOverviewMatches,
@@ -577,46 +743,32 @@ export function ThemeDashboard() {
     databaseStrategyOverview,
     isDatabaseStrategyError,
     isDatabaseStrategyFetching,
-    shortTermDateRange,
-    shortTermPeriod,
-    strategyDataSource,
+    liveStrategyOverview,
   ])
   const visiblePeriodStatus = useMemo<ShortTermPeriodStatus | null>(() => {
     if (refreshStrategyDataMutation.isPending) {
-      return { type: 'progress', message: '正在拉取实时行情并更新策略卡...' }
-    }
-    if (analyzeStrategyMutation.isPending) {
       return {
         type: 'progress',
-        message: `正在依据数据库题材数据分析${SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}策略...`,
+        message: `正在拉取实时行情并更新策略卡（已耗时 ${strategyRefreshElapsed}，东方财富慢时将自动切换 AKShare）...`,
       }
     }
     if (isStrategyPeriodLoading) {
       return {
         type: 'progress',
-        message:
-          strategyDataSource === 'live'
-            ? `正在加载${shortTermDateRange ?? '自定义'}实时策略...`
-            : `正在加载${shortTermDateRange ?? SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}数据库策略...`,
+        message: `正在加载${shortTermDateRange ?? SHORT_TERM_PERIOD_LABELS[shortTermPeriod]}策略...`,
       }
     }
-    if (strategyDataSource === 'live' && !liveStrategyOverview && strategyPeriodEnabled) {
-      return {
-        type: 'error',
-        message: '当前周期暂无实时数据，请点击「刷新行情」获取',
-      }
+    if (periodStatus?.type === 'error') {
+      return periodStatus
     }
     return periodStatus
   }, [
-    analyzeStrategyMutation.isPending,
     isStrategyPeriodLoading,
-    liveStrategyOverview,
     periodStatus,
     refreshStrategyDataMutation.isPending,
     shortTermDateRange,
     shortTermPeriod,
-    strategyDataSource,
-    strategyPeriodEnabled,
+    strategyRefreshElapsed,
   ])
 
   return (
@@ -636,45 +788,7 @@ export function ThemeDashboard() {
         }
       />
 
-      {/* 页头 */}
-      <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
-        <div
-          className="mx-auto flex w-full max-w-none flex-wrap items-center justify-between gap-3 px-3 py-4 sm:px-4 lg:px-5 xl:px-6"
-          data-testid="dashboard-header-shell"
-        >
-          <h1>
-            <button
-              type="button"
-              aria-label="返回主页"
-              onClick={() => navigate('/')}
-              className="text-left text-xl font-bold text-foreground transition-colors hover:text-primary sm:text-2xl"
-            >
-              TradingThemesGod <span className="text-muted-foreground font-normal">题材看板</span>
-            </button>
-          </h1>
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('/themes')}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              <List className="h-4 w-4" />
-              <span>题材库</span>
-            </button>
-            <button
-              type="button"
-              onClick={navigateToSettings}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent"
-            >
-              <Settings className="h-4 w-4" />
-              <span>模型设置</span>
-            </button>
-            <KeyboardShortcutsButton />
-            <AuthNav />
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      <AppCardNav />
 
       <main
         className="mx-auto w-full max-w-none px-3 py-6 sm:px-4 lg:px-5 xl:px-6"
@@ -691,15 +805,7 @@ export function ThemeDashboard() {
               className="flex flex-wrap items-center gap-6"
             >
               <AutoRefreshButton
-                isRefreshing={
-                  isDashboardRefreshing ||
-                  isFetching ||
-                  isRiseRankingFetching ||
-                  isThemeCountFetching ||
-                  isMarketSignalsFetching ||
-                  isIndicatorSignalsFetching ||
-                  isFirstToSecondFetching
-                }
+                isRefreshing={isDashboardRefreshing || refreshStrategyDataMutation.isPending}
                 isUpdating={isUpdating}
                 isAutoRefresh={isAutoRefresh}
                 onToggleAutoRefresh={toggleAutoRefresh}
@@ -710,6 +816,12 @@ export function ThemeDashboard() {
                 scraperSources={dashboardScraperSources}
                 selectedScraperSource={selectedScraperSource}
                 onScraperSourceChange={setSelectedScraperSource}
+                refreshElapsedLabel={
+                  isDashboardRefreshing || refreshStrategyDataMutation.isPending
+                    ? dashboardRefreshElapsed || strategyRefreshElapsed
+                    : undefined
+                }
+                updateElapsedLabel={isUpdating ? fullUpdateElapsed : undefined}
               />
               {updateResult && (
                 <p
@@ -733,8 +845,13 @@ export function ThemeDashboard() {
           data-testid="dashboard-content-grid"
         >
           <div className="min-w-0" data-testid="dashboard-main-column">
+            <ShortTermRadarSection
+              onFeedback={handleNewsFeedback}
+              onSelectTheme={handleThemeClick}
+            />
+
             {strategyOverviewForCard?.strategy_card && (
-              <div className="mb-6">
+              <div className="mb-6" id="strategy">
                 <MarketStrategyCard
                   card={strategyOverviewForCard.strategy_card}
                   period={shortTermPeriod}
@@ -745,34 +862,10 @@ export function ThemeDashboard() {
                   customEndDate={customEndDate ?? undefined}
                   onCustomDateRangeChange={handleCustomDateRangeChange}
                   periodStatus={visiblePeriodStatus}
-                  isPeriodLoading={isStrategyPeriodLoading}
-                  dataSource={strategyDataSource}
-                  onDataSourceChange={setStrategyDataSource}
-                  isLivePreview={isLivePreview}
+                  isPeriodLoading={isStrategyPeriodLoading || isDashboardRefreshing}
+                  isPreview={isStrategyPreview}
                   degraded={strategyOverviewForCard.degraded}
                   missingSources={strategyOverviewForCard.missing_sources}
-                  isRefreshingData={refreshStrategyDataMutation.isPending}
-                  isAnalyzingDatabase={analyzeStrategyMutation.isPending}
-                  onRefreshData={() => {
-                    if (shortTermPeriod === 'custom' && (!customStartDate || !customEndDate)) {
-                      setPeriodStatus({
-                        type: 'error',
-                        message: '请先选择自定义日期范围',
-                      })
-                      return
-                    }
-                    refreshStrategyDataMutation.mutate()
-                  }}
-                  onAnalyzeDatabase={() => {
-                    if (shortTermPeriod === 'custom' && (!customStartDate || !customEndDate)) {
-                      setPeriodStatus({
-                        type: 'error',
-                        message: '请先选择自定义日期范围',
-                      })
-                      return
-                    }
-                    analyzeStrategyMutation.mutate()
-                  }}
                 />
               </div>
             )}

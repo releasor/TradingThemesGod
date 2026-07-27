@@ -72,4 +72,11 @@ describe('BoardUpgradeReference', () => {
 
     expect(screen.getByText('暂无符合条件的一进二候选')).toBeInTheDocument()
   })
+
+  it('renders candidates in an animated scroll list like news cards', () => {
+    render(<BoardUpgradeReference data={response} isLoading={false} />)
+
+    expect(screen.getByTestId('board-upgrade-scroll-container')).toBeInTheDocument()
+    expect(screen.getByTestId('board-upgrade-item-000001')).toBeInTheDocument()
+  })
 })

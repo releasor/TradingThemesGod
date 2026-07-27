@@ -66,6 +66,12 @@ describe('StockList', () => {
     expect(items).toHaveLength(4)
   })
 
+  it('uses multi-column grid layout when layout=grid', () => {
+    render(<StockList stocks={mockStocks} layout="grid" />)
+    expect(screen.getByTestId('stock-list')).toHaveAttribute('data-layout', 'grid')
+    expect(screen.getByTestId('stock-list').className).toMatch(/grid-cols-2/)
+  })
+
   it('renders single stock correctly', () => {
     const singleStock = [mockStocks[0]]
     render(<StockList stocks={singleStock} />)
