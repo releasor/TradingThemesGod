@@ -15,11 +15,16 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.api.auth import router as auth_router
+from app.api.catalysts import router as catalysts_router
 from app.api.errors import router as errors_router
 from app.api.health import router as health_router
+from app.api.mainline_graph import router as mainline_graph_router
+from app.api.market_calendar import router as market_calendar_router
+from app.api.mining import router as mining_router
 from app.api.model_provider import router as model_provider_router
 from app.api.news import router as news_router
 from app.api.scraper import router as scraper_router
+from app.api.review import router as review_router
 from app.api.short_term import router as short_term_router
 from app.api.stats import router as stats_router
 from app.api.stock import router as stock_router
@@ -60,6 +65,18 @@ async def lifespan(app: FastAPI):
             settings.THEME_PROFILE_MAX_AGE_DAYS
         )
         theme_insight_scheduler.start(settings.THEME_INSIGHT_INTERVAL_SECONDS)
+
+    import asyncio
+
+    from app.services.trading_calendar_sync import startup_sync_calendar
+
+    async def _calendar_startup() -> None:
+        try:
+            await startup_sync_calendar()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("交易日历启动任务失败", error=str(exc))
+
+    asyncio.create_task(_calendar_startup())
 
     try:
         yield
@@ -199,6 +216,11 @@ def create_app() -> FastAPI:
     app.include_router(news_router, prefix="/api/v1")
     app.include_router(model_provider_router, prefix="/api/v1")
     app.include_router(short_term_router, prefix="/api/v1")
+    app.include_router(review_router, prefix="/api/v1")
+    app.include_router(catalysts_router, prefix="/api/v1")
+    app.include_router(mining_router, prefix="/api/v1")
+    app.include_router(mainline_graph_router, prefix="/api/v1")
+    app.include_router(market_calendar_router, prefix="/api/v1")
 
     # 全局异常处理器
     @app.exception_handler(Exception)
