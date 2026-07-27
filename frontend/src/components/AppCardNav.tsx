@@ -2,6 +2,7 @@ import { CardNav, type CardNavItem } from '@/components/CardNav'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AuthNav } from '@/components/AuthNav'
 import { MarketStatusNav } from '@/components/MarketStatusNav'
+import { KeyboardShortcutsButton } from '@/components/KeyboardShortcutsPanel'
 
 export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
   {
@@ -67,6 +68,7 @@ export function AppCardNav({ className = '' }: { className?: string }) {
       </div>
       <CardNav logoAlt="TradingThemesGod" items={APP_CARD_NAV_ITEMS} logoHref="/" />
       <div className="absolute right-3 top-3 z-50 flex h-9 items-center gap-2 sm:right-4 sm:top-4">
+        <KeyboardShortcutsButton />
         <AuthNav />
         <ThemeToggle />
       </div>

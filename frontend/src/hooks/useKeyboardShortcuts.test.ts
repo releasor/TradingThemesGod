@@ -140,12 +140,27 @@ describe('useKeyboardShortcuts', () => {
     expect(action).toHaveBeenCalledOnce()
   })
 
-  it('does not trigger when extra modifiers are held', () => {
+  it('allows shift when shift option is unspecified (e.g. ? / Shift+R)', () => {
     const action = vi.fn()
     renderHook(() => useKeyboardShortcuts([{ key: 'r', action }]))
 
-    // 纯 'r' 匹配，但附带 shift 则不应匹配（shift: undefined → 要求 !shiftKey）
     pressKey('r', { shiftKey: true })
+    expect(action).toHaveBeenCalledOnce()
+  })
+
+  it('matches ? without requiring explicit shift option', () => {
+    const action = vi.fn()
+    renderHook(() => useKeyboardShortcuts([{ key: '?', action }]))
+
+    pressKey('?', { shiftKey: true })
+    expect(action).toHaveBeenCalledOnce()
+  })
+
+  it('does not trigger when ctrl is held unless required', () => {
+    const action = vi.fn()
+    renderHook(() => useKeyboardShortcuts([{ key: 'r', action }]))
+
+    pressKey('r', { ctrlKey: true })
     expect(action).not.toHaveBeenCalled()
   })
 })

@@ -9,6 +9,7 @@ import { onApiError } from '@/api/client'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GlobalSideRaysBackground } from '@/components/GlobalSideRaysBackground'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { GlobalKeyboardShortcuts } from '@/components/GlobalKeyboardShortcuts'
 
 // 路由级懒加载 - 实现代码分割
 const ThemeDashboard = lazy(() =>
@@ -137,6 +138,7 @@ function App() {
       <ToastContext.Provider value={toast}>
         <Router>
           <ScrollToTop />
+          <GlobalKeyboardShortcuts />
           <GlobalSideRaysBackground />
           <div className="relative z-10 min-h-screen">
             <Suspense fallback={<PageSkeleton />}>

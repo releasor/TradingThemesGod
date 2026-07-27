@@ -35,10 +35,16 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      // IME 组字中不拦截，避免中文输入时误触
+      if (event.isComposing || event.key === 'Process') {
+        return
+      }
+
       const target = event.target as HTMLElement
       if (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
         target.isContentEditable
       ) {
         return
@@ -46,9 +52,26 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
 
       for (const shortcut of shortcutsRef.current) {
         const keyMatch = event.key.toLowerCase() === shortcut.key.toLowerCase()
-        const ctrlMatch = shortcut.ctrl ? event.ctrlKey || event.metaKey : !event.ctrlKey && !event.metaKey
-        const shiftMatch = shortcut.shift ? event.shiftKey : !event.shiftKey
-        const altMatch = shortcut.alt ? event.altKey : !event.altKey
+        // 未声明修饰键时：Ctrl/Meta/Alt 仍需未按下，避免抢走浏览器快捷键；
+        // Shift 放宽——`?` 等键本身就带 Shift，且 Shift+R 也应触发刷新。
+        const ctrlMatch =
+          shortcut.ctrl === true
+            ? event.ctrlKey || event.metaKey
+            : shortcut.ctrl === false
+              ? !event.ctrlKey && !event.metaKey
+              : !event.ctrlKey && !event.metaKey
+        const shiftMatch =
+          shortcut.shift === true
+            ? event.shiftKey
+            : shortcut.shift === false
+              ? !event.shiftKey
+              : true
+        const altMatch =
+          shortcut.alt === true
+            ? event.altKey
+            : shortcut.alt === false
+              ? !event.altKey
+              : !event.altKey
 
         if (keyMatch && ctrlMatch && shiftMatch && altMatch) {
           event.preventDefault()
@@ -57,7 +80,7 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
         }
       }
     },
-    []  // no dependencies needed, uses ref
+    [] // no dependencies needed, uses ref
   )
 
   useEffect(() => {

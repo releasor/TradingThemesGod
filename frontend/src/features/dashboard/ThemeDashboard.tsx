@@ -34,7 +34,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorDisplay } from '@/components/ErrorDisplay'
 import { AutoRefreshButton } from '@/components/AutoRefreshButton'
 import { AppCardNav } from '@/components/AppCardNav'
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { DASHBOARD_REFRESH_EVENT } from '@/components/GlobalKeyboardShortcuts'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ToastContainer, useToast } from '@/components/Toast'
 import { MarketSignalSection } from '@/components/MarketSignalSection'
@@ -621,25 +621,14 @@ export function ThemeDashboard() {
     },
   })
 
-  // 键盘快捷键
-  useKeyboardShortcuts([
-    {
-      key: 'r',
-      action: () => void handleLightRefresh(),
-      description: '刷新看板',
-    },
-    {
-      key: 't',
-      action: () => navigate('/themes'),
-      description: '打开题材库',
-    },
-    {
-      key: '?',
-      shift: true,
-      action: () => navigate('/settings/shortcuts'),
-      description: '打开快捷键设置',
-    },
-  ])
+  // 全站快捷键 R：在看板页触发轻量刷新
+  useEffect(() => {
+    const onRefresh = () => {
+      void handleLightRefresh()
+    }
+    window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+    return () => window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
+  }, [handleLightRefresh])
 
   const themes = useMemo(() => data?.items ?? [], [data?.items])
   const totalStocks = systemStats?.stocks.total ?? 0
