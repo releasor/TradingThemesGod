@@ -23,7 +23,7 @@ export const LoadingBar = memo(function LoadingBar({ isLoading, progress }: Load
       : null
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 h-0.5">
+    <div className="fixed top-0 left-0 right-0 z-50 h-1.5 bg-muted/40">
       <div
         className={cn(
           // 暗色主题 --primary 接近白，勿用 bg-primary，否则顶部像一条白线

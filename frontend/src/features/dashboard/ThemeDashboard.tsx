@@ -40,6 +40,7 @@ import { LoadingBar } from '@/components/LoadingBar'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorDisplay } from '@/components/ErrorDisplay'
 import { DashboardRefreshControls } from '@/components/DashboardRefreshControls'
+import { DashboardRefreshStatus } from '@/components/DashboardRefreshStatus'
 import { AppCardNav } from '@/components/AppCardNav'
 import { DASHBOARD_REFRESH_EVENT } from '@/components/GlobalKeyboardShortcuts'
 import { ToastContainer, useToast } from '@/components/Toast'
@@ -145,6 +146,27 @@ function formatRefreshProgress(done: string[], pending: string | null, elapsed: 
   return `${donePart}正在更新：${pending}（已耗时 ${elapsed}）...`
 }
 
+/** 轻量/分板块阶段 → 进度百分比（全量竞速结束后映射到 70–100） */
+function sectionPhaseProgress(pending: string | null, racePhase = false): number {
+  const base: Record<string, number> = {
+    题材行情: 12,
+    '热度榜 / 涨幅榜 / 信号': 35,
+    热度榜: 28,
+    涨幅榜: 32,
+    策略卡: 55,
+    短线信号: 75,
+    一进二: 90,
+  }
+  if (pending === null) return 100
+  const raw = base[pending] ?? 40
+  if (!racePhase) return raw
+  return Math.round(70 + (raw / 100) * 30)
+}
+
+function mapRaceProgressToOverall(racePct: number): number {
+  return Math.round(Math.min(70, Math.max(0, racePct) * 0.7))
+}
+
 function initialSectionTimes(): SectionTimesState {
   return {
     [SECTION_IDS.heatRanking]: readSectionRefreshedAt(SECTION_IDS.heatRanking),
@@ -164,7 +186,9 @@ export function ThemeDashboard() {
   const token = useAuthStore((s) => s.token)
   const toast = useToast()
   const [isUpdating, setIsUpdating] = useState(false)
-  const [fullUpdateProgress, setFullUpdateProgress] = useState<number | null>(null)
+  const [refreshProgressPct, setRefreshProgressPct] = useState<number | null>(null)
+  const [refreshPendingLabel, setRefreshPendingLabel] = useState<string | null>(null)
+  const [refreshDoneLabels, setRefreshDoneLabels] = useState<string[]>([])
   const [lastUpdate, setLastUpdate] = useState<string | null>(null)
   const [updateResult, setUpdateResult] = useState<UpdateResult>(null)
   const [shortTermPeriod, setShortTermPeriod] = useState<ShortTermPeriod>('today')
@@ -404,27 +428,34 @@ export function ThemeDashboard() {
     sessionRef.current = null
     setIsDashboardRefreshing(false)
     setIsUpdating(false)
-    setFullUpdateProgress(null)
+    setRefreshProgressPct(null)
+    setRefreshPendingLabel(null)
+    setRefreshDoneLabels([])
     clearSectionBusy()
     lightRefreshPendingRef.current = null
     setUpdateResult({ type: 'info', message: '已取消，已保留成功板块' })
   }, [clearSectionBusy])
 
   const publishProgress = useCallback(
-    (done: string[], pending: string | null, startedAt: number, mode: 'light' | 'full') => {
+    (
+      done: string[],
+      pending: string | null,
+      startedAt: number,
+      mode: 'light' | 'full'
+    ) => {
       lightRefreshDoneRef.current = [...done]
       lightRefreshPendingRef.current = pending
+      setRefreshDoneLabels([...done])
+      setRefreshPendingLabel(pending)
+      setRefreshProgressPct(sectionPhaseProgress(pending, mode === 'full'))
       if (mode === 'full' && !pending) return
       setUpdateResult({
         type: 'progress',
-        message:
-          mode === 'full' && pending === null
-            ? formatRefreshProgress(done, null, formatRefreshDurationMs(Date.now() - startedAt))
-            : formatRefreshProgress(
-                done,
-                pending,
-                formatRefreshDurationMs(Date.now() - startedAt)
-              ),
+        message: formatRefreshProgress(
+          done,
+          pending,
+          formatRefreshDurationMs(Date.now() - startedAt)
+        ),
       })
     },
     []
@@ -665,6 +696,9 @@ export function ThemeDashboard() {
     lightRefreshDoneRef.current = []
     lightRefreshPendingRef.current = '题材行情'
     setIsDashboardRefreshing(true)
+    setRefreshProgressPct(sectionPhaseProgress('题材行情'))
+    setRefreshPendingLabel('题材行情')
+    setRefreshDoneLabels([])
     setUpdateResult({
       type: 'progress',
       message: formatRefreshProgress(done, '题材行情', '0 秒'),
@@ -703,6 +737,9 @@ export function ThemeDashboard() {
         .join('。')
       lightRefreshPendingRef.current = null
       lightRefreshDoneRef.current = [...done]
+      setRefreshProgressPct(100)
+      setRefreshPendingLabel(null)
+      setRefreshDoneLabels([...done])
       setUpdateResult({
         type: skipped.length > 0 && done.length === 0 ? 'error' : 'success',
         message: summary,
@@ -727,6 +764,10 @@ export function ThemeDashboard() {
         setIsDashboardRefreshing(false)
         clearSectionBusy()
         lightRefreshPendingRef.current = null
+        window.setTimeout(() => {
+          setRefreshProgressPct(null)
+          setRefreshPendingLabel(null)
+        }, 800)
       }
     }
   }, [
@@ -767,7 +808,9 @@ export function ThemeDashboard() {
     const skipped: string[] = []
 
     setIsUpdating(true)
-    setFullUpdateProgress(0)
+    setRefreshProgressPct(0)
+    setRefreshPendingLabel('多源竞速')
+    setRefreshDoneLabels([])
     setUpdateResult({
       type: 'progress',
       message: '多源竞速中 0%（已耗时 0 秒）...',
@@ -777,7 +820,15 @@ export function ThemeDashboard() {
         signal,
         onProgress: (nextRace) => {
           if (signal.aborted) return
-          setFullUpdateProgress(nextRace.progress_pct)
+          const pct = mapRaceProgressToOverall(nextRace.progress_pct)
+          setRefreshProgressPct(pct)
+          const pending =
+            nextRace.phase === 'committing'
+              ? '落库'
+              : nextRace.winner
+                ? `竞速（领先 ${sourceLabelFor(nextRace.winner, dashboardScraperSources)}）`
+                : '多源竞速'
+          setRefreshPendingLabel(pending)
           setUpdateResult({
             type: 'progress',
             message: formatRaceProgressMessage(
@@ -811,10 +862,12 @@ export function ThemeDashboard() {
       queryClient.setQueryData(latestScraperRunQueryKey(winnerSource), finishedAt)
       await refetchLatestSuccessfulUpdate()
 
-      setIsUpdating(false)
-      setFullUpdateProgress(null)
-      setIsDashboardRefreshing(true)
-      publishProgress(done, '题材行情', startedAt, 'light')
+      // 竞速落库完成 → 继续分板块刷新，进度条保持确定进度（70%→100%）
+      setRefreshProgressPct(70)
+      setRefreshDoneLabels([
+        `全量落库（${sourceLabelFor(winnerSource, dashboardScraperSources)}）`,
+      ])
+      publishProgress(done, '题材行情', startedAt, 'full')
 
       try {
         const quotes = await refreshThemeQuotes(signal)
@@ -826,7 +879,7 @@ export function ThemeDashboard() {
         skipped.push(`题材行情失败：${shortTermErrorMessage(quotesError)}`)
       }
 
-      await runSectionPipeline(signal, done, skipped, startedAt, 'light')
+      await runSectionPipeline(signal, done, skipped, startedAt, 'full')
       if (signal.aborted) return
 
       const usedSourceLabel = sourceLabelFor(winnerSource, dashboardScraperSources)
@@ -841,6 +894,9 @@ export function ThemeDashboard() {
               .filter(Boolean)
               .join('。')}`
           : ''
+      setRefreshProgressPct(100)
+      setRefreshPendingLabel(null)
+      setRefreshDoneLabels([...done])
       setUpdateResult({
         type: 'success',
         message: `${usedSourceLabel}全量更新成功，共更新 ${itemsScraped} 条数据，耗时 ${elapsedSeconds} 秒${sectionSummary}`,
@@ -855,10 +911,13 @@ export function ThemeDashboard() {
       if (sessionRef.current === session) {
         sessionRef.current = null
         setIsUpdating(false)
-        setFullUpdateProgress(null)
         setIsDashboardRefreshing(false)
         clearSectionBusy()
         lightRefreshPendingRef.current = null
+        window.setTimeout(() => {
+          setRefreshProgressPct(null)
+          setRefreshPendingLabel(null)
+        }, 800)
       }
     }
   }, [
@@ -1012,7 +1071,9 @@ export function ThemeDashboard() {
           isFirstToSecondFetching ||
           isUpdating
         }
-        progress={isUpdating ? fullUpdateProgress : null}
+        progress={
+          isDashboardRefreshing || isUpdating ? refreshProgressPct : null
+        }
       />
 
       <AppCardNav />
@@ -1044,21 +1105,17 @@ export function ThemeDashboard() {
                 }
                 updateElapsedLabel={isUpdating ? fullUpdateElapsed : undefined}
               />
-              {updateResult && (
-                <p
-                  className={`text-sm ${
-                    updateResult.type === 'error'
-                      ? 'text-destructive'
-                      : updateResult.type === 'success'
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                  }`}
-                >
-                  {updateResult.message}
-                </p>
-              )}
             </div>
           }
+        />
+
+        <DashboardRefreshStatus
+          active={isBusy}
+          progressPct={refreshProgressPct}
+          pendingLabel={refreshPendingLabel}
+          doneLabels={refreshDoneLabels}
+          message={updateResult?.message ?? null}
+          messageType={updateResult?.type ?? null}
         />
 
         <div

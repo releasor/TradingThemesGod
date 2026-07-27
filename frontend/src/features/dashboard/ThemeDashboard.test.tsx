@@ -534,9 +534,9 @@ describe('ThemeDashboard', () => {
       expect(runScraperRaceAndWait).not.toHaveBeenCalled()
     })
     expect(refreshNews).not.toHaveBeenCalled()
-    const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
+    const status = await screen.findByTestId('dashboard-refresh-status')
     expect(
-      await within(controls).findByText(
+      await within(status).findByText(
         /已更新：题材行情 495 个；热度榜；涨幅榜；市场表现；行情指标；策略卡；短线信号.*一进二。更新于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}，耗时 \d+ 秒/
       )
     ).toBeInTheDocument()
@@ -615,11 +615,9 @@ describe('ThemeDashboard', () => {
 
     await user.click(screen.getByRole('button', { name: '全量更新' }))
 
-    const successControls = within(screen.getByTestId('quick-stats')).getByTestId(
-      'dashboard-data-controls'
-    )
+    const successStatus = await screen.findByTestId('dashboard-refresh-status')
     expect(
-      await within(successControls).findByText(/东方财富全量更新成功，共更新 126 条数据/)
+      await within(successStatus).findByText(/东方财富全量更新成功，共更新 126 条数据/)
     ).toBeInTheDocument()
     expect(runScraperRaceAndWait).toHaveBeenCalledWith(
       expect.objectContaining({ signal: expect.any(AbortSignal) })
@@ -639,10 +637,8 @@ describe('ThemeDashboard', () => {
 
     await user.click(await screen.findByRole('button', { name: '全量更新' }))
 
-    const failControls = within(screen.getByTestId('quick-stats')).getByTestId(
-      'dashboard-data-controls'
-    )
-    expect(await within(failControls).findByText('全量更新失败：数据源不可用')).toBeInTheDocument()
+    const failStatus = await screen.findByTestId('dashboard-refresh-status')
+    expect(await within(failStatus).findByText('全量更新失败：数据源不可用')).toBeInTheDocument()
     expect(vi.mocked(fetchThemeRanking).mock.calls.length).toBe(rankingCallsBeforeUpdate)
   })
 
@@ -669,13 +665,16 @@ describe('ThemeDashboard', () => {
       'dashboard-data-controls'
     )
     await user.click(screen.getByRole('button', { name: '全量更新' }))
-    expect(within(controls).getByText(/多源竞速中 35%/)).toBeInTheDocument()
+    const status = await screen.findByTestId('dashboard-refresh-status')
+    expect(within(status).getByText(/多源竞速中 35%/)).toBeInTheDocument()
+    expect(within(status).getByText(/正在更新：/)).toBeInTheDocument()
+    expect(within(status).getByTestId('dashboard-refresh-status-bar')).toBeInTheDocument()
     expect(within(controls).getByRole('button', { name: '取消' })).toBeInTheDocument()
 
     resolveRun(mockCompletedRace())
 
     expect(
-      await within(controls).findByText(/东方财富全量更新成功，共更新 126 条数据/)
+      await within(status).findByText(/东方财富全量更新成功，共更新 126 条数据/)
     ).toBeInTheDocument()
   })
 
@@ -693,8 +692,10 @@ describe('ThemeDashboard', () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
     const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
+    expect(within(controls).queryByRole('combobox')).not.toBeInTheDocument()
+    const status = await screen.findByTestId('dashboard-refresh-status')
     expect(
-      await within(controls).findByText(/AKShare全量更新成功，共更新 88 条数据/)
+      await within(status).findByText(/AKShare全量更新成功，共更新 88 条数据/)
     ).toBeInTheDocument()
   })
 
