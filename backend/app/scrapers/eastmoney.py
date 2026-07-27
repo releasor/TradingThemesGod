@@ -18,6 +18,7 @@ from app.models.theme import Theme
 from app.models.theme_stock import ThemeStock
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.scrapers.base import BaseScraper
+from app.scrapers.draft_types import FullScrapeDraft
 from app.services.theme_market import ThemeMarketService
 
 logger = get_logger(__name__)
@@ -574,21 +575,22 @@ class EastMoneyScraper(BaseScraper):
         )
         return saved_count
 
-    async def run(
-        self, url: str = "", params: dict[str, Any] | None = None
-    ) -> tuple[list[dict[str, Any]], int]:
-        """执行完整爬虫生命周期
+    async def collect_full(
+        self,
+        cancel: asyncio.Event | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> FullScrapeDraft:
+        """采集全量题材与成分股草稿，不落库。
 
         Args:
-            url: 未使用（使用默认 API）
-            params: 额外参数
+            cancel: 可选取消事件；循环拉成分股前若已 set 则抛出 CancelledError
+            params: 额外题材列表请求参数
 
         Returns:
-            (题材数据列表, 保存的记录数) 元组
+            FullScrapeDraft 内存草稿
         """
-        logger.info(f"[{self.source_name}] 开始爬取任务")
+        logger.info(f"[{self.source_name}] 开始全量采集（不落库）")
 
-        # Step 1: 获取题材列表
         theme_params = {
             **DEFAULT_PARAMS,
             "fid": "f12",
@@ -603,30 +605,28 @@ class EastMoneyScraper(BaseScraper):
             logger.error(f"[{self.source_name}] 获取题材列表失败: {e}")
             raise
 
-        # Step 2: 解析题材列表
         themes = self.parse_theme_list(theme_data)
         logger.info(f"[{self.source_name}] 解析到 {len(themes)} 个题材")
 
         if not themes:
             logger.warning(f"[{self.source_name}] 未获取到题材数据")
-            return [], 0
+            return FullScrapeDraft(
+                source=self.source_name,
+                trade_date=None,
+                themes=[],
+            )
 
-        # Step 3: 保存题材
-        saved_themes = await self._save_themes(themes)
-
-        # Step 4: 获取并保存每个题材的关联股票
-        total_stocks = 0
+        stocks_by_code: dict[str, list[dict[str, Any]]] = {}
         latest_trade_date: date | None = None
         for theme in themes:
+            if cancel is not None and cancel.is_set():
+                raise asyncio.CancelledError()
             try:
-                # 构建题材股票请求参数
                 stock_params = {
                     **DEFAULT_PARAMS,
                     "fid": "f12",
                     "fs": f"b:{theme['code']}",
                 }
-
-                # 获取题材股票
                 stock_data = await self.fetch_all_pages(
                     EASTMONEY_API_BASE, stock_params
                 )
@@ -636,35 +636,76 @@ class EastMoneyScraper(BaseScraper):
                 ):
                     latest_trade_date = stock_trade_date
 
-                # 解析股票列表
                 stocks = self.parse_theme_stocks(stock_data, theme["code"])
-
-                # 保存股票关联
                 if stocks:
-                    saved_stocks = await self._save_theme_stocks(theme["code"], stocks)
-                    total_stocks += saved_stocks
-
+                    stocks_by_code[theme["code"]] = stocks
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 logger.error(f"[{self.source_name}] 处理题材 {theme['code']} 失败: {e}")
-                # 继续处理其他题材，不中断
                 continue
 
         logger.info(
-            f"[{self.source_name}] 爬取任务完成: "
+            f"[{self.source_name}] 全量采集完成: "
+            f"{len(themes)} 个题材, {sum(len(s) for s in stocks_by_code.values())} 只股票"
+        )
+        return FullScrapeDraft(
+            source=self.source_name,
+            trade_date=latest_trade_date,
+            themes=themes,
+            stocks_by_code=stocks_by_code,
+        )
+
+    async def commit_full(self, draft: FullScrapeDraft) -> int:
+        """将全量草稿落库并刷新市场快照。
+
+        Args:
+            draft: collect_full 产出的草稿
+
+        Returns:
+            保存的记录数（题材 + 成分股）
+        """
+        saved_themes = await self._save_themes(draft.themes)
+        total_stocks = 0
+        for code, stocks in draft.stocks_by_code.items():
+            if stocks:
+                total_stocks += await self._save_theme_stocks(code, stocks)
+
+        logger.info(
+            f"[{self.source_name}] 全量落库完成: "
             f"保存 {saved_themes} 个题材, {total_stocks} 只股票"
         )
 
-        if latest_trade_date is None:
+        if draft.trade_date is None:
             logger.warning(
                 f"[{self.source_name}] 行情缺少有效交易时间，跳过市场快照刷新"
             )
         else:
             try:
-                await self._refresh_market_snapshots(latest_trade_date)
+                await self._refresh_market_snapshots(draft.trade_date)
             except Exception as exc:
                 logger.warning(f"[{self.source_name}] 题材市场快照刷新失败: {exc}")
 
-        return themes, saved_themes + total_stocks
+        return saved_themes + total_stocks
+
+    async def run(
+        self, url: str = "", params: dict[str, Any] | None = None
+    ) -> tuple[list[dict[str, Any]], int]:
+        """执行完整爬虫生命周期（collect → commit）
+
+        Args:
+            url: 未使用（使用默认 API）
+            params: 额外参数
+
+        Returns:
+            (题材数据列表, 保存的记录数) 元组
+        """
+        logger.info(f"[{self.source_name}] 开始爬取任务")
+        draft = await self.collect_full(params=params)
+        if not draft.themes:
+            return [], 0
+        count = await self.commit_full(draft)
+        return draft.themes, count
 
     async def collect_theme_quotes(
         self, *, only_codes: set[str] | None = None
