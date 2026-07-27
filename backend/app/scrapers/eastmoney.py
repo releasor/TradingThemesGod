@@ -666,10 +666,10 @@ class EastMoneyScraper(BaseScraper):
 
         return themes, saved_themes + total_stocks
 
-    async def refresh_theme_quotes(
+    async def collect_theme_quotes(
         self, *, only_codes: set[str] | None = None
-    ) -> tuple[date | None, int]:
-        """仅刷新题材列表行情，不抓取成分股，供策略卡快速更新使用。"""
+    ) -> tuple[date | None, list[dict[str, Any]]]:
+        """仅采集题材列表行情草稿，不落库。"""
         logger.info(f"[{self.source_name}] 开始快速刷新题材行情")
         if only_codes:
             themes = await self._fetch_themes_by_codes(only_codes)
@@ -685,8 +685,16 @@ class EastMoneyScraper(BaseScraper):
             trade_date = self._extract_trade_date(theme_data) or date.today()
         if not themes:
             logger.warning(f"[{self.source_name}] 未获取到题材行情")
-            return None, 0
+            return None, []
+        return trade_date, themes
 
+    async def refresh_theme_quotes(
+        self, *, only_codes: set[str] | None = None
+    ) -> tuple[date | None, int]:
+        """仅刷新题材列表行情，不抓取成分股，供策略卡快速更新使用。"""
+        trade_date, themes = await self.collect_theme_quotes(only_codes=only_codes)
+        if not themes:
+            return None, 0
         await self._save_themes(themes)
         scope = f"{len(only_codes)} 个指定题材" if only_codes else f"{len(themes)} 个题材"
         logger.info(
