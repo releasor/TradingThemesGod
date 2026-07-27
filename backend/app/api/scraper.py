@@ -12,6 +12,8 @@ from app.core.database import get_db
 from app.domain.scraper_sources import list_registered_scraper_sources
 from app.repositories.scraper_run import ScraperRunRepository
 from app.schemas.scraper import (
+    ScraperRaceRequest,
+    ScraperRaceResponse,
     ScraperRunRequest,
     ScraperRunResponse,
     ScraperRunListResponse,
@@ -20,6 +22,7 @@ from app.schemas.scraper import (
     ThemeQuotesRefreshResponse,
 )
 from app.scrapers.eastmoney import EastMoneyScraper
+from app.scrapers.full_race import cancel_race, get_race, start_full_race
 from app.scrapers.scheduler import scraper_scheduler
 from app.services.quotes_refresh_race import race_theme_quotes
 from app.services.strategy_quote_refresh import collect_akshare_theme_quotes
@@ -48,6 +51,43 @@ async def list_scraper_sources(
         for item in sources
     ]
     return ScraperSourceListResponse(sources=payload, count=len(payload))
+
+
+@router.post("/run-race", response_model=ScraperRaceResponse)
+@limiter.limit("5/minute")
+async def run_scraper_race(
+    request: Request,
+    body: ScraperRaceRequest = ScraperRaceRequest(),
+):
+    """启动全量多源竞速：并行 collect_full，仅胜出源 commit_full。"""
+    try:
+        race_id = await start_full_race(sources=body.sources)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    return ScraperRaceResponse.model_validate(await get_race(race_id))
+
+
+@router.get("/race/{race_id}", response_model=ScraperRaceResponse)
+async def get_scraper_race(race_id: str):
+    """查询全量竞速进度。"""
+    try:
+        return ScraperRaceResponse.model_validate(await get_race(race_id))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="竞速任务不存在") from None
+
+
+@router.post("/race/{race_id}/cancel", response_model=ScraperRaceResponse)
+@limiter.limit("10/minute")
+async def cancel_scraper_race(request: Request, race_id: str):
+    """取消全量竞速。
+
+    尚未 committing 时不落库；已 committing 时尽力而为（落库可能仍完成）。
+    """
+    try:
+        return ScraperRaceResponse.model_validate(await cancel_race(race_id))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="竞速任务不存在") from None
 
 
 @router.post("/run/{source}", response_model=ScraperRunResponse)
@@ -178,3 +218,46 @@ async def refresh_theme_quotes(request: Request):
         themes_updated=themes_updated,
         refreshed_at=datetime.now(timezone.utc),
     )
+
+
+@router.post("/run-race", response_model=ScraperRaceResponse)
+@limiter.limit("5/minute")
+async def run_scraper_race(
+    request: Request,
+    body: ScraperRaceRequest = ScraperRaceRequest(),
+):
+    """启动全量多源竞速：并行 collect_full，仅胜出源 commit_full。"""
+    try:
+        race_id = await start_full_race(sources=body.sources)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    try:
+        state = await get_race(race_id)
+    except KeyError as e:
+        raise HTTPException(status_code=500, detail="创建竞速任务失败") from e
+    return ScraperRaceResponse.model_validate(state)
+
+
+@router.get("/race/{race_id}", response_model=ScraperRaceResponse)
+async def get_scraper_race(race_id: str):
+    """查询全量多源竞速进度。"""
+    try:
+        state = await get_race(race_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="竞速任务不存在") from e
+    return ScraperRaceResponse.model_validate(state)
+
+
+@router.post("/race/{race_id}/cancel", response_model=ScraperRaceResponse)
+@limiter.limit("10/minute")
+async def cancel_scraper_race(request: Request, race_id: str):
+    """取消全量多源竞速。
+
+    尚未 committing 时不落库；已进入 committing 则尽力而为（库可能已写入）。
+    """
+    try:
+        state = await cancel_race(race_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="竞速任务不存在") from e
+    return ScraperRaceResponse.model_validate(state)
