@@ -228,6 +228,21 @@ class WebResearchService:
     async def research_theme(self, theme_name: str) -> list[ResearchSource]:
         return await self.research_profile(theme_name)
 
+    async def research_concept_graph(
+        self,
+        theme_name: str,
+        stock_names: list[str] | None = None,
+    ) -> list[ResearchSource]:
+        """概念树专用检索：偏产业链结构与龙头业务，避免只搜到泛资讯。"""
+        queries = [
+            f"{theme_name} 产业链 上中下游 结构",
+            f"{theme_name} 核心技术 设备 材料 应用",
+            f"{theme_name} 龙头公司 竞争格局",
+        ]
+        for stock_name in (stock_names or [])[:5]:
+            queries.append(f"{theme_name} {stock_name} 产品 业务")
+        return await self._research_queries(queries)
+
     async def _research_queries(self, queries: list[str]) -> list[ResearchSource]:
         candidates: list[str] = []
         for query in queries:

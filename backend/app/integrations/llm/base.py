@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+import json
 
 import httpx
 
@@ -11,6 +12,15 @@ class LLMRequest:
     url: str
     headers: dict[str, str]
     json: dict[str, Any]
+
+
+@dataclass(slots=True)
+class LLMCompletionResult:
+    """模型完成结果，附带思考过程与原始响应预览，便于排障。"""
+
+    content: str
+    reasoning: str | None = None
+    raw_preview: str | None = None
 
 
 class BaseLLMAdapter:
@@ -45,6 +55,10 @@ class BaseLLMAdapter:
     def parse_completion(self, payload: dict[str, Any]) -> str:
         raise NotImplementedError
 
+    def extract_reasoning(self, payload: dict[str, Any]) -> str | None:
+        """从厂商响应中尽量提取思考/推理文本。"""
+        return None
+
     def models_request(self) -> tuple[str, dict[str, str]]:
         raise NotImplementedError
 
@@ -60,6 +74,24 @@ class BaseLLMAdapter:
         reasoning: bool = True,
         timeout_seconds: int | None = None,
     ) -> str:
+        result = await self.complete_detailed(
+            system,
+            user,
+            json_mode=json_mode,
+            reasoning=reasoning,
+            timeout_seconds=timeout_seconds,
+        )
+        return result.content
+
+    async def complete_detailed(
+        self,
+        system: str,
+        user: str,
+        *,
+        json_mode: bool = True,
+        reasoning: bool = True,
+        timeout_seconds: int | None = None,
+    ) -> LLMCompletionResult:
         request = self.completion_request(
             system, user, json_mode=json_mode, reasoning=reasoning
         )
@@ -69,8 +101,19 @@ class BaseLLMAdapter:
             response = await client.post(
                 request.url, headers=request.headers, json=request.json
             )
-            response.raise_for_status()
-            return self.parse_completion(response.json())
+            raw_preview = response.text[:12000]
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise ValueError(
+                    f"模型 HTTP {exc.response.status_code}: {raw_preview[:2000]}"
+                ) from exc
+            payload = response.json()
+            return LLMCompletionResult(
+                content=self.parse_completion(payload),
+                reasoning=self.extract_reasoning(payload),
+                raw_preview=json.dumps(payload, ensure_ascii=False)[:12000],
+            )
 
     async def list_models(self) -> list[str]:
         url, headers = self.models_request()

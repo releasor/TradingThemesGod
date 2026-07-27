@@ -58,6 +58,20 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
             raise ValueError("模型返回了空内容")
         return content
 
+    def extract_reasoning(self, payload: dict[str, Any]) -> str | None:
+        choice = (payload.get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        for key in ("reasoning_content", "reasoning", "thinking", "reasoning_text"):
+            value = message.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        # 部分兼容层把思考放在单独字段
+        for key in ("reasoning", "thinking"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
     def models_request(self) -> tuple[str, dict[str, str]]:
         return f"{self.base_url}/models", self._headers()
 
