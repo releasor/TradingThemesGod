@@ -25,7 +25,8 @@ import {
   fetchLatestSuccessfulRun,
   fetchDashboardScraperSources,
   refreshThemeQuotes,
-  runScraperWithFallback,
+  runScraperRaceAndWait,
+  type ScraperRace,
 } from '@/api/scraper'
 import { fetchSystemStats } from '@/api/stats'
 import { useAuthStore } from '@/stores/auth'
@@ -80,9 +81,39 @@ type RefreshSession = {
 
 type SectionTimesState = Record<SectionId, string | null>
 
-const FULL_UPDATE_SOURCES = ['eastmoney', 'akshare'] as const
 const latestScraperRunQueryKey = (source: string) =>
   ['latest-successful-scraper-run', source] as const
+
+function sourceLabelFor(
+  sourceId: string | null | undefined,
+  sources: { id: string; label: string }[]
+): string {
+  if (!sourceId) return '未知数据源'
+  return sources.find((item) => item.id === sourceId)?.label ?? sourceId
+}
+
+function formatRaceProgressMessage(
+  race: Pick<ScraperRace, 'phase' | 'progress_pct' | 'winner'>,
+  elapsed: string,
+  sources: { id: string; label: string }[]
+): string {
+  const pct = Math.round(race.progress_pct)
+  const winnerLabel = race.winner ? sourceLabelFor(race.winner, sources) : null
+
+  if (race.phase === 'committing') {
+    return winnerLabel
+      ? `已选定 ${winnerLabel}，落库中 ${pct}%（已耗时 ${elapsed}）...`
+      : `落库中 ${pct}%（已耗时 ${elapsed}）...`
+  }
+  if (race.phase === 'selecting' && winnerLabel) {
+    return `已选定 ${winnerLabel} ${pct}%（已耗时 ${elapsed}）...`
+  }
+  if (winnerLabel) {
+    return `多源竞速中，领先 ${winnerLabel} ${pct}%（已耗时 ${elapsed}）...`
+  }
+  return `多源竞速中 ${pct}%（已耗时 ${elapsed}）...`
+}
+
 const SHORT_TERM_PERIOD_LABELS: Record<ShortTermPeriod, string> = {
   today: '当日',
   current_week: '本周',
@@ -133,6 +164,7 @@ export function ThemeDashboard() {
   const token = useAuthStore((s) => s.token)
   const toast = useToast()
   const [isUpdating, setIsUpdating] = useState(false)
+  const [fullUpdateProgress, setFullUpdateProgress] = useState<number | null>(null)
   const [lastUpdate, setLastUpdate] = useState<string | null>(null)
   const [updateResult, setUpdateResult] = useState<UpdateResult>(null)
   const [shortTermPeriod, setShortTermPeriod] = useState<ShortTermPeriod>('today')
@@ -372,6 +404,7 @@ export function ThemeDashboard() {
     sessionRef.current = null
     setIsDashboardRefreshing(false)
     setIsUpdating(false)
+    setFullUpdateProgress(null)
     clearSectionBusy()
     lightRefreshPendingRef.current = null
     setUpdateResult({ type: 'info', message: '已取消，已保留成功板块' })
@@ -722,14 +755,6 @@ export function ThemeDashboard() {
     })
   }, [dashboardRefreshElapsed, isDashboardRefreshing])
 
-  useEffect(() => {
-    if (!isUpdating) return
-    setUpdateResult({
-      type: 'progress',
-      message: `正在全量更新（已耗时 ${fullUpdateElapsed}，东方财富慢时将自动切换其他数据源）...`,
-    })
-  }, [fullUpdateElapsed, isUpdating])
-
   const updateDashboard = useCallback(async () => {
     if (sessionRef.current) return
 
@@ -742,26 +767,52 @@ export function ThemeDashboard() {
     const skipped: string[] = []
 
     setIsUpdating(true)
+    setFullUpdateProgress(0)
     setUpdateResult({
       type: 'progress',
-      message: '正在全量更新（已耗时 0 秒）...',
+      message: '多源竞速中 0%（已耗时 0 秒）...',
     })
     try {
-      const run = await runScraperWithFallback([...FULL_UPDATE_SOURCES], { signal })
+      const race = await runScraperRaceAndWait({
+        signal,
+        onProgress: (nextRace) => {
+          if (signal.aborted) return
+          setFullUpdateProgress(nextRace.progress_pct)
+          setUpdateResult({
+            type: 'progress',
+            message: formatRaceProgressMessage(
+              nextRace,
+              formatRefreshDurationMs(Date.now() - startedAt),
+              dashboardScraperSources
+            ),
+          })
+        },
+      })
       if (signal.aborted) return
-      if (run.status === 'failed') {
-        const message = `全量更新失败：${run.error_message || '未知错误'}`
+      if (race.status === 'failed') {
+        const message = `全量更新失败：${race.error || '未知错误'}`
+        setUpdateResult({ type: 'error', message })
+        toast.error(message)
+        return
+      }
+      if (race.status === 'cancelled') {
+        return
+      }
+      if (race.status !== 'completed') {
+        const message = `全量更新失败：${race.error || `竞速状态 ${race.status}`}`
         setUpdateResult({ type: 'error', message })
         toast.error(message)
         return
       }
 
-      const finishedAt = run.finished_at ?? new Date().toISOString()
+      const finishedAt = new Date().toISOString()
+      const winnerSource = race.winner ?? 'eastmoney'
       setLastUpdate(finishedAt)
-      queryClient.setQueryData(latestScraperRunQueryKey(run.source), finishedAt)
+      queryClient.setQueryData(latestScraperRunQueryKey(winnerSource), finishedAt)
       await refetchLatestSuccessfulUpdate()
 
       setIsUpdating(false)
+      setFullUpdateProgress(null)
       setIsDashboardRefreshing(true)
       publishProgress(done, '题材行情', startedAt, 'light')
 
@@ -778,17 +829,9 @@ export function ThemeDashboard() {
       await runSectionPipeline(signal, done, skipped, startedAt, 'light')
       if (signal.aborted) return
 
-      const usedSourceLabel =
-        dashboardScraperSources.find((item) => item.id === run.source)?.label ?? run.source
-      const fallbackNote =
-        run.attempted_sources.length > 1
-          ? `（已自动切换：${run.attempted_sources
-              .map(
-                (id) => dashboardScraperSources.find((item) => item.id === id)?.label ?? id
-              )
-              .join(' → ')}）`
-          : ''
+      const usedSourceLabel = sourceLabelFor(winnerSource, dashboardScraperSources)
       const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+      const itemsScraped = race.items_scraped ?? 0
       const sectionSummary =
         done.length > 0 || skipped.length > 0
           ? `。${[
@@ -800,9 +843,9 @@ export function ThemeDashboard() {
           : ''
       setUpdateResult({
         type: 'success',
-        message: `${usedSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据，耗时 ${elapsedSeconds} 秒${fallbackNote}${sectionSummary}`,
+        message: `${usedSourceLabel}全量更新成功，共更新 ${itemsScraped} 条数据，耗时 ${elapsedSeconds} 秒${sectionSummary}`,
       })
-      toast.success(`${usedSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据`)
+      toast.success(`${usedSourceLabel}全量更新成功，共更新 ${itemsScraped} 条数据`)
     } catch (error) {
       if (isCancelledError(error) || signal.aborted) return
       const message = error instanceof Error ? error.message : '未知错误'
@@ -812,6 +855,7 @@ export function ThemeDashboard() {
       if (sessionRef.current === session) {
         sessionRef.current = null
         setIsUpdating(false)
+        setFullUpdateProgress(null)
         setIsDashboardRefreshing(false)
         clearSectionBusy()
         lightRefreshPendingRef.current = null
@@ -968,6 +1012,7 @@ export function ThemeDashboard() {
           isFirstToSecondFetching ||
           isUpdating
         }
+        progress={isUpdating ? fullUpdateProgress : null}
       />
 
       <AppCardNav />

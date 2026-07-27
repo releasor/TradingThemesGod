@@ -48,6 +48,33 @@ export interface ThemeQuotesRefreshResult {
   refreshed_at: string
 }
 
+export interface ScraperRaceSource {
+  id: string
+  status: string
+  progress_pct: number
+  error?: string | null
+}
+
+export interface ScraperRace {
+  race_id: string
+  status: string
+  phase: string
+  progress_pct: number
+  sources: ScraperRaceSource[]
+  winner: string | null
+  error: string | null
+  items_scraped?: number | null
+}
+
+interface RaceWaitOptions {
+  pollInterval?: number
+  timeout?: number
+  signal?: AbortSignal
+  onProgress?: (race: ScraperRace) => void
+}
+
+const RACE_IN_PROGRESS = new Set(['racing', 'committing'])
+
 const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
 
 /** 获取看板可选的爬虫数据源列表。 */
@@ -148,4 +175,74 @@ export async function runScraperWithFallback(
   }
 
   throw lastError ?? new Error('全量更新失败')
+}
+
+/** 启动全量多源竞速。 */
+export async function startScraperRace(signal?: AbortSignal): Promise<ScraperRace> {
+  const { data } = await apiClient.post<ScraperRace>('/scraper/run-race', null, { signal })
+  return data
+}
+
+/** 查询全量竞速状态与进度。 */
+export async function fetchScraperRace(raceId: string, signal?: AbortSignal): Promise<ScraperRace> {
+  const { data } = await apiClient.get<ScraperRace>(`/scraper/race/${raceId}`, { signal })
+  return data
+}
+
+/** 取消全量竞速。 */
+export async function cancelScraperRace(raceId: string, signal?: AbortSignal): Promise<ScraperRace> {
+  const { data } = await apiClient.post<ScraperRace>(
+    `/scraper/race/${raceId}/cancel`,
+    null,
+    { signal }
+  )
+  return data
+}
+
+/** 启动全量竞速并轮询至终态；AbortSignal 触发时尽力取消后端竞速。 */
+export async function runScraperRaceAndWait(
+  options: RaceWaitOptions = {}
+): Promise<ScraperRace> {
+  const { pollInterval = 2000, timeout = 20 * 60 * 1000, signal, onProgress } = options
+  throwIfAborted(signal)
+
+  const started = await startScraperRace(signal)
+  onProgress?.(started)
+
+  if (!RACE_IN_PROGRESS.has(started.status)) {
+    return started
+  }
+
+  const raceId = started.race_id
+  const cancelBestEffort = () => {
+    void cancelScraperRace(raceId).catch(() => {
+      /* best-effort */
+    })
+  }
+
+  if (signal?.aborted) {
+    cancelBestEffort()
+    throwIfAborted(signal)
+  }
+
+  signal?.addEventListener('abort', cancelBestEffort, { once: true })
+
+  try {
+    const deadline = Date.now() + timeout
+    while (Date.now() <= deadline) {
+      throwIfAborted(signal)
+      await sleep(pollInterval)
+      throwIfAborted(signal)
+      const race = await fetchScraperRace(raceId, signal)
+      onProgress?.(race)
+      if (!RACE_IN_PROGRESS.has(race.status)) {
+        return race
+      }
+    }
+    throw new Error(
+      `数据更新超时（竞速任务 ${raceId} 可能仍在后台运行）。请稍后再点「刷新」；全量采集结束前轻量刷新会被暂时锁定。`
+    )
+  } finally {
+    signal?.removeEventListener('abort', cancelBestEffort)
+  }
 }

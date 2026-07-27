@@ -23,7 +23,7 @@ vi.mock('@/api/scraper', () => ({
   fetchLatestSuccessfulRun: vi.fn(),
   fetchDashboardScraperSources: vi.fn(),
   refreshThemeQuotes: vi.fn(),
-  runScraperWithFallback: vi.fn(),
+  runScraperRaceAndWait: vi.fn(),
   runScraperAndWait: vi.fn(),
 }))
 
@@ -73,7 +73,7 @@ import {
   fetchDashboardScraperSources,
   fetchLatestSuccessfulRun,
   refreshThemeQuotes,
-  runScraperWithFallback,
+  runScraperRaceAndWait,
 } from '@/api/scraper'
 import {
   fetchFirstToSecondCandidates,
@@ -174,6 +174,28 @@ const mockIndicatorSignals = [
     source: 'eastmoney',
   },
 ]
+
+function mockCompletedRace(
+  overrides: Partial<{
+    winner: string | null
+    items_scraped: number | null
+  }> = {}
+) {
+  return {
+    race_id: 'race-abc',
+    status: 'completed',
+    phase: 'done',
+    progress_pct: 100,
+    sources: [
+      { id: 'eastmoney', status: 'completed', progress_pct: 100, error: null },
+      { id: 'akshare', status: 'cancelled', progress_pct: 40, error: null },
+    ],
+    winner: 'eastmoney',
+    error: null,
+    items_scraped: 126,
+    ...overrides,
+  }
+}
 
 function renderDashboard() {
   const queryClient = new QueryClient({
@@ -509,7 +531,7 @@ describe('ThemeDashboard', () => {
       expect(refreshFirstToSecondCandidates).toHaveBeenCalled()
       expect(fetchThemeRanking.mock.calls.length).toBeGreaterThan(1)
       expect(fetchThemes.mock.calls.length).toBeGreaterThan(2)
-      expect(runScraperWithFallback).not.toHaveBeenCalled()
+      expect(runScraperRaceAndWait).not.toHaveBeenCalled()
     })
     expect(refreshNews).not.toHaveBeenCalled()
     const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
@@ -574,15 +596,18 @@ describe('ThemeDashboard', () => {
 
   it('点击全量更新时触发爬虫并刷新看板', async () => {
     const user = userEvent.setup()
-    vi.mocked(runScraperWithFallback).mockResolvedValue({
-      run_id: 10,
-      source: 'eastmoney',
+    vi.mocked(runScraperRaceAndWait).mockResolvedValue({
+      race_id: 'race-abc',
       status: 'completed',
-      started_at: '2026-07-16T02:00:00Z',
-      finished_at: '2026-07-16T02:03:04Z',
+      phase: 'done',
+      progress_pct: 100,
+      sources: [
+        { id: 'eastmoney', status: 'completed', progress_pct: 100, error: null },
+        { id: 'akshare', status: 'cancelled', progress_pct: 40, error: null },
+      ],
+      winner: 'eastmoney',
+      error: null,
       items_scraped: 126,
-      error_message: null,
-      attempted_sources: ['eastmoney'],
     })
     renderDashboard()
     await screen.findByText('2026-07-16 09:02:03')
@@ -596,8 +621,7 @@ describe('ThemeDashboard', () => {
     expect(
       await within(successControls).findByText(/东方财富全量更新成功，共更新 126 条数据/)
     ).toBeInTheDocument()
-    expect(runScraperWithFallback).toHaveBeenCalledWith(
-      ['eastmoney', 'akshare'],
+    expect(runScraperRaceAndWait).toHaveBeenCalledWith(
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
     expect(vi.mocked(fetchThemeRanking).mock.calls.length).toBeGreaterThan(rankingCallsBeforeUpdate)
@@ -607,7 +631,7 @@ describe('ThemeDashboard', () => {
   })
 
   it('全量更新失败时反馈错误', async () => {
-    vi.mocked(runScraperWithFallback).mockRejectedValue(new Error('数据源不可用'))
+    vi.mocked(runScraperRaceAndWait).mockRejectedValue(new Error('数据源不可用'))
     const user = userEvent.setup()
     renderDashboard()
     await screen.findByRole('heading', { name: '人工智能' })
@@ -623,21 +647,21 @@ describe('ThemeDashboard', () => {
   })
 
   it('全量更新过程中显示进度文案', async () => {
-    let resolveRun!: (value: {
-      run_id: number
-      source: string
-      status: 'completed'
-      started_at: string
-      finished_at: string
-      items_scraped: number
-      error_message: null
-      attempted_sources: string[]
-    }) => void
-    vi.mocked(runScraperWithFallback).mockReturnValue(
-      new Promise((resolve) => {
+    let resolveRun!: (value: ReturnType<typeof mockCompletedRace>) => void
+    vi.mocked(runScraperRaceAndWait).mockImplementation(async (options) => {
+      options?.onProgress?.({
+        race_id: 'race-abc',
+        status: 'racing',
+        phase: 'collecting',
+        progress_pct: 35,
+        sources: [],
+        winner: null,
+        error: null,
+      })
+      return new Promise((resolve) => {
         resolveRun = resolve
       })
-    )
+    })
     const user = userEvent.setup()
     renderDashboard()
 
@@ -645,44 +669,27 @@ describe('ThemeDashboard', () => {
       'dashboard-data-controls'
     )
     await user.click(screen.getByRole('button', { name: '全量更新' }))
-    expect(within(controls).getByText(/正在全量更新/)).toBeInTheDocument()
+    expect(within(controls).getByText(/多源竞速中 35%/)).toBeInTheDocument()
     expect(within(controls).getByRole('button', { name: '取消' })).toBeInTheDocument()
 
-    resolveRun({
-      run_id: 10,
-      source: 'eastmoney',
-      status: 'completed',
-      started_at: '2026-07-16T02:00:00Z',
-      finished_at: '2026-07-16T02:03:04Z',
-      items_scraped: 126,
-      error_message: null,
-      attempted_sources: ['eastmoney', 'akshare'],
-    })
+    resolveRun(mockCompletedRace())
 
     expect(
       await within(controls).findByText(/东方财富全量更新成功，共更新 126 条数据/)
     ).toBeInTheDocument()
   })
 
-  it('无数据源下拉，全量固定多源顺序', async () => {
+  it('无数据源下拉，全量走多源竞速', async () => {
     const user = userEvent.setup()
-    vi.mocked(runScraperWithFallback).mockResolvedValue({
-      run_id: 12,
-      source: 'akshare',
-      status: 'completed',
-      started_at: '2026-07-16T02:00:00Z',
-      finished_at: '2026-07-16T02:03:04Z',
-      items_scraped: 88,
-      error_message: null,
-      attempted_sources: ['eastmoney', 'akshare'],
-    })
+    vi.mocked(runScraperRaceAndWait).mockResolvedValue(
+      mockCompletedRace({ winner: 'akshare', items_scraped: 88 })
+    )
     renderDashboard()
     expect(screen.queryByLabelText('全量更新数据源')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '全量更新' }))
 
-    expect(runScraperWithFallback).toHaveBeenCalledWith(
-      ['eastmoney', 'akshare'],
+    expect(runScraperRaceAndWait).toHaveBeenCalledWith(
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
     const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
