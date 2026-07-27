@@ -52,3 +52,24 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "用户不存在")
     return user
+
+
+async def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Bearer 缺失时返回 None；无效 token 仍返回 401。"""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            credentials.credentials, settings.JWT_SECRET, algorithms=["HS256"]
+        )
+        user_id = int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "登录已失效") from exc
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "用户不存在")
+    return user

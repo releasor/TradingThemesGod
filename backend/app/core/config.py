@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     THEME_INSIGHT_INTERVAL_SECONDS: int = 3600
     THEME_INSIGHT_BATCH_SIZE: int = 10
     THEME_PROFILE_MAX_AGE_DAYS: int = 7
+    # 复盘日报盘后调度（默认关闭；首开 ensure 已够用，勿在 lifespan 无条件启动）
+    REVIEW_REPORT_SCHEDULER_ENABLED: bool = False
 
     # 雪球公开信息访问配置（可选）
     XUEQIU_COOKIE: str = ""
