@@ -15,6 +15,11 @@ export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
         ariaLabel: '进入题材看板',
       },
       {
+        label: '题材库',
+        href: '/themes',
+        ariaLabel: '进入题材库',
+      },
+      {
         label: '短线雷达',
         href: '/#short-term-radar',
         ariaLabel: '跳转到短线机会雷达',
@@ -27,18 +32,11 @@ export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
     ],
   },
   {
-    label: '题材分析',
-    tone: 'analysis',
-    links: [
-      { label: '题材库', href: '/themes', ariaLabel: '进入题材库' },
-      { label: 'AI 个股分析', href: '/ai-analysis', ariaLabel: '打开 AI 个股分析' },
-    ],
-  },
-  {
     label: '复盘研究',
     tone: 'review',
     links: [
       { label: '复盘台', href: '/review', ariaLabel: '进入复盘台' },
+      { label: 'AI 个股分析', href: '/ai-analysis', ariaLabel: '打开 AI 个股分析' },
       { label: '催化雷达', href: '/catalysts', ariaLabel: '进入催化雷达' },
       { label: '题材挖掘', href: '/mining', ariaLabel: '进入题材挖掘' },
       { label: '主线图谱', href: '/mainline-graph', ariaLabel: '进入主线图谱' },
