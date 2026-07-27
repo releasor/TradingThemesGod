@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { TrendingUp, TrendingDown, BarChart3, ChevronRight } from 'lucide-react'
 import { getHeatColor, getRiseFallColor } from '@/lib/theme-colors'
 import { GlowCard } from '@/components/GlowCard'
+import { ThemeLifecycleBadge } from '@/components/ThemeLifecycleBadge'
 import type { ThemeBrief } from '@/types/theme'
 
 interface ThemeTableRowProps {
@@ -54,6 +55,14 @@ export const ThemeTableRow = memo(function ThemeTableRow({ theme, onClick }: The
                 {theme.category}
               </span>
             )}
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <ThemeLifecycleBadge stage={theme.lifecycle_stage} />
+              {typeof theme.strength_score === 'number' && (
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  强度 {theme.strength_score}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-4 text-xs">

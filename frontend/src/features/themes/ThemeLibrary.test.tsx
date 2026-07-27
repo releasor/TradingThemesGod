@@ -26,6 +26,10 @@ vi.mock('@/api/theme', () => ({
   refreshConceptGraph: vi.fn(),
 }))
 
+vi.mock('@/components/AppCardNav', () => ({
+  AppCardNav: () => <div data-testid="app-card-nav" />,
+}))
+
 vi.mock('@/hooks/useThemeFilters', () => ({
   useThemeFilters: vi.fn(),
 }))
@@ -158,7 +162,7 @@ describe('ThemeLibrary', () => {
     vi.mocked(fetchCategories).mockResolvedValue({ categories: ['科技', '汽车'] })
   })
 
-  it('点击品牌标题返回主页', async () => {
+  it('点击品牌 Logo 可回到主页', async () => {
     vi.mocked(fetchThemes).mockResolvedValue({
       items: [],
       total: 0,
@@ -168,9 +172,7 @@ describe('ThemeLibrary', () => {
     })
     renderThemeLibrary()
 
-    await userEvent.click(screen.getByRole('button', { name: '返回主页' }))
-
-    expect(mockNavigate).toHaveBeenCalledWith('/')
+    expect(await screen.findByTestId('app-card-nav')).toBeInTheDocument()
   })
 
   it('逐个更新图谱并展示成功、失败和最终汇总', async () => {
@@ -189,6 +191,8 @@ describe('ThemeLibrary', () => {
         added_nodes: 12,
         updated_nodes: 3,
         stock_links: 8,
+        elapsed_ms: 2100,
+        refreshed_at: '2026-07-24T07:00:00Z',
         message: '更新完成',
       })
       .mockRejectedValueOnce({
@@ -248,6 +252,8 @@ describe('ThemeLibrary', () => {
       added_nodes: number
       updated_nodes: number
       stock_links: number
+      elapsed_ms: number
+      refreshed_at: string
       message: string
     }) => void) | undefined
     vi.mocked(refreshConceptGraph).mockReturnValueOnce(
@@ -269,6 +275,8 @@ describe('ThemeLibrary', () => {
       added_nodes: 1,
       updated_nodes: 0,
       stock_links: 0,
+      elapsed_ms: 1000,
+      refreshed_at: '2026-07-24T07:00:00Z',
       message: '完成',
     })
     await waitFor(() => expect(refreshConceptGraph).toHaveBeenCalledWith(2))
@@ -276,7 +284,7 @@ describe('ThemeLibrary', () => {
 
   // 1. 页头渲染
   describe('页头渲染', () => {
-    it('渲染页面标题 TradingThemesGod', () => {
+    it('渲染卡片导航与题材库标题', async () => {
       vi.mocked(fetchThemes).mockResolvedValue({
         items: [],
         total: 0,
@@ -285,19 +293,8 @@ describe('ThemeLibrary', () => {
         total_pages: 0,
       })
       renderThemeLibrary()
-      expect(screen.getByText('TradingThemesGod')).toBeInTheDocument()
-    })
-
-    it('渲染副标题 题材库', () => {
-      vi.mocked(fetchThemes).mockResolvedValue({
-        items: [],
-        total: 0,
-        page: 1,
-        page_size: 20,
-        total_pages: 0,
-      })
-      renderThemeLibrary()
-      expect(screen.getByText('题材库')).toBeInTheDocument()
+      expect(await screen.findByTestId('app-card-nav')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /题材库/ })).toBeInTheDocument()
     })
   })
 
@@ -489,14 +486,13 @@ describe('ThemeLibrary', () => {
         total_pages: 1,
       })
       renderThemeLibrary()
-      expect(await screen.findByText(/分类: 科技/)).toBeInTheDocument()
+      expect(await screen.findByText(/分类 科技/)).toBeInTheDocument()
     })
   })
 
   // 7. 导航到看板
   describe('导航到看板', () => {
-    it('点击看板按钮导航到首页', async () => {
-      const user = userEvent.setup()
+    it('页面包含全站卡片导航', async () => {
       vi.mocked(fetchThemes).mockResolvedValue({
         items: [],
         total: 0,
@@ -505,9 +501,7 @@ describe('ThemeLibrary', () => {
         total_pages: 0,
       })
       renderThemeLibrary()
-      const dashboardButton = await screen.findByText('看板')
-      await user.click(dashboardButton)
-      expect(mockNavigate).toHaveBeenCalledWith('/')
+      expect(await screen.findByTestId('app-card-nav')).toBeInTheDocument()
     })
   })
 

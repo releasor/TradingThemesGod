@@ -54,7 +54,7 @@ describe('short-term api', () => {
 
     expect(apiClient.get).toHaveBeenCalledWith('/short-term/overview', {
       params: { trade_date: '2026-07-21', period: 'current_week' },
-      timeout: 300_000,
+      timeout: 30_000,
     })
     expect(result.period_label).toBe('本周')
     expect(result.strategy_card.primary_strategy).toBe('连板接力')
@@ -103,7 +103,7 @@ describe('short-term api', () => {
         start_date: '2026-07-03',
         end_date: '2026-07-17',
       },
-      timeout: 300_000,
+      timeout: 30_000,
     })
     expect(result.period_label).toBe('自定义')
   })

@@ -7,12 +7,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { RefreshCw, AlertCircle, Inbox, List, Settings, Sparkles } from 'lucide-react'
+import { RefreshCw, AlertCircle, Inbox, List, Sparkles } from 'lucide-react'
 import { fetchThemes, fetchCategories, refreshConceptGraph } from '@/api/theme'
 import type { ConceptGraphRefreshResponse } from '@/types/theme'
 import { useThemeFilters } from '@/hooks/useThemeFilters'
 import { FilterBar } from '@/components/FilterBar'
-import { AuthNav } from '@/components/AuthNav'
+import { AppCardNav } from '@/components/AppCardNav'
 import { SortSelect } from '@/components/SortSelect'
 import { ExportButton } from '@/components/ExportButton'
 import { ThemeTableRow } from '@/components/ThemeTableRow'
@@ -52,6 +52,7 @@ export function ThemeLibrary() {
   const [batchItems, setBatchItems] = useState<BatchProgressItem[]>([])
   const [currentBatchIndex, setCurrentBatchIndex] = useState<number | null>(null)
   const [isBatchUpdating, setIsBatchUpdating] = useState(false)
+  const [lifecycleFilter, setLifecycleFilter] = useState<string>('')
   const {
     filters,
     searchInput,
@@ -96,7 +97,11 @@ export function ThemeLibrary() {
     staleTime: 10 * 60 * 1000, // 10 分钟
   })
 
-  const themes = useMemo(() => data?.items ?? [], [data?.items])
+  const themes = useMemo(() => {
+    const items = data?.items ?? []
+    if (!lifecycleFilter) return items
+    return items.filter((theme) => theme.lifecycle_stage === lifecycleFilter)
+  }, [data?.items, lifecycleFilter])
   const total = data?.total ?? 0
   const totalPages = data?.total_pages ?? 0
   const categories = categoriesData?.categories ?? []
@@ -148,56 +153,32 @@ export function ThemeLibrary() {
 
   return (
     <div className="min-h-screen">
-      {/* 页头 */}
-      <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <h1 className="min-w-0">
-              <button
-                type="button"
-                aria-label="返回主页"
-                onClick={() => navigate('/')}
-                className="block max-w-full truncate text-left text-xl font-bold text-foreground transition-colors hover:text-primary sm:text-2xl"
-              >
-                TradingThemesGod
-              </button>
-            </h1>
-            <span className="text-muted-foreground font-normal">题材库</span>
-          </div>
-          <div className="flex min-w-0 items-center justify-between gap-2 sm:justify-end sm:gap-3">
-            <button
-              onClick={navigateToSettings}
-              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
-            >
-              <Settings className="h-4 w-4" />
-              <span>模型设置</span>
-            </button>
-            <AuthNav />
-            <button
-              onClick={() => navigate('/')}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              看板
-            </button>
-            <ExportButton
-              data={themes.map((theme) => ({
-                ...theme,
-                category: theme.category ?? undefined,
-              }))}
-            />
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-              刷新
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppCardNav />
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-none flex-wrap items-center justify-between gap-3 px-3 pt-4 sm:px-4 lg:px-5 xl:px-6">
+        <h1 className="text-lg font-semibold text-foreground">
+          题材库
+          <span className="ml-2 text-sm font-normal text-muted-foreground">浏览与筛选全部题材</span>
+        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportButton
+            data={themes.map((theme) => ({
+              ...theme,
+              category: theme.category ?? undefined,
+            }))}
+          />
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+            刷新
+          </button>
+        </div>
+      </div>
+
+      <main className="mx-auto w-full max-w-none px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
           <div>
             <h2 className="text-base font-semibold">题材细分图谱</h2>
@@ -234,8 +215,8 @@ export function ThemeLibrary() {
                     {item.status === 'running' && <span className="text-primary">正在抓取和分析</span>}
                     {item.status === 'success' && item.result && (
                       <span className="text-muted-foreground">
-                        来源 {item.result.source_count}，新境{item.result.added_nodes}，更新{' '}
-                        {item.result.updated_nodes}，股票关联{item.result.stock_links}
+                        来源 {item.result.source_count}，新增 {item.result.added_nodes}，更新{' '}
+                        {item.result.updated_nodes}，股票关联 {item.result.stock_links}
                       </span>
                     )}
                     {item.status === 'error' && (
@@ -284,11 +265,29 @@ export function ThemeLibrary() {
               {filters.category && <span>，分类 {filters.category}</span>}
             </span>
           </div>
-          <SortSelect
-            sortBy={filters.sort_by}
-            sortOrder={filters.sort_order}
-            onSortChange={setSort}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              阶段
+              <select
+                aria-label="按生命周期阶段筛选"
+                value={lifecycleFilter}
+                onChange={(event) => setLifecycleFilter(event.target.value)}
+                className="h-8 rounded-xl border border-border bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">全部</option>
+                <option value="germination">萌芽</option>
+                <option value="fermentation">发酵</option>
+                <option value="climax">高潮</option>
+                <option value="divergence">分歧</option>
+                <option value="ebb">退潮</option>
+              </select>
+            </label>
+            <SortSelect
+              sortBy={filters.sort_by}
+              sortOrder={filters.sort_order}
+              onSortChange={setSort}
+            />
+          </div>
         </div>
 
         {/* 主题列表 */}

@@ -11,6 +11,7 @@ import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
 import { getHeatColor, getRiseFallColor } from '@/lib/theme-colors'
 import { usePrefetchTheme } from '@/hooks/usePrefetch'
 import { GlowCard } from '@/components/GlowCard'
+import { ThemeLifecycleBadge } from '@/components/ThemeLifecycleBadge'
 import type { ThemeBrief } from '@/types/theme'
 
 interface ThemeCardProps {
@@ -32,14 +33,14 @@ export const ThemeCard = memo(function ThemeCard({ theme, onClick }: ThemeCardPr
         onClick={onClick}
         onMouseEnter={() => prefetchTheme(theme.id)}
         className={cn(
-          'w-full cursor-pointer p-4 text-left',
+          'w-full cursor-pointer p-3 text-left',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
         )}
         aria-label={`查看题材详情: ${theme.name}`}
       >
         <h3 className="truncate text-sm font-semibold text-card-foreground">{theme.name}</h3>
 
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <span
             className={cn(
               'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
@@ -48,6 +49,14 @@ export const ThemeCard = memo(function ThemeCard({ theme, onClick }: ThemeCardPr
           >
             热度 {heatValue.toFixed(1)}
           </span>
+          {theme.lifecycle_stage && (
+            <ThemeLifecycleBadge stage={theme.lifecycle_stage} />
+          )}
+          {typeof theme.strength_score === 'number' && (
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              强度 {theme.strength_score}
+            </span>
+          )}
         </div>
 
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">

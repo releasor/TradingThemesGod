@@ -7,6 +7,7 @@
 import { useMemo } from 'react'
 import { useLocation, useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import {
   RefreshCw,
   AlertCircle,
@@ -32,8 +33,17 @@ import { ThemeMarketBreadth } from '@/components/ThemeMarketBreadth'
 import { ThemeProfileSection } from '@/components/ThemeProfileSection'
 import { ThemeDriverEvents } from '@/components/ThemeDriverEvents'
 import { GlowCard } from '@/components/GlowCard'
-import { AuthNav } from '@/components/AuthNav'
+import { AppCardNav } from '@/components/AppCardNav'
+import { ThemeLifecycleBadge } from '@/components/ThemeLifecycleBadge'
+import { ThemeStrengthGauge } from '@/components/ThemeStrengthGauge'
+import { ThemeLifecycleTrend } from '@/components/charts/ThemeLifecycleTrend'
 import { useNavigateToSettings } from '@/hooks/useNavigateToSettings'
+import { formatRefreshDurationMs, useRefreshTimer } from '@/hooks/useRefreshTimer'
+
+function formatServerTime(value: string): string {
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)
+  return dayjs(hasTimezone ? value : `${value}Z`).format('YYYY-MM-DD HH:mm:ss')
+}
 
 /**
  * 生成模拟热度趋势数据
@@ -97,26 +107,32 @@ export function ThemeDetail() {
     mutationFn: () => refreshThemeInsights(themeId),
     onSuccess: () => refetch(),
   })
+  const { elapsedLabel: graphElapsed } = useRefreshTimer(graphRefresh.isPending)
+  const { elapsedLabel: insightElapsed } = useRefreshTimer(insightRefresh.isPending)
   const refreshError = graphRefresh.error as {
-    response?: { status?: number; data?: { detail?: string } }
+    response?: { status?: number; data?: { detail?: string; message?: string } }
     message?: string
   } | null
   const insightRefreshError = insightRefresh.error as {
-    response?: { data?: { detail?: string } }
+    response?: { data?: { detail?: string; message?: string } }
     message?: string
   } | null
-
+  const graphErrorMessage =
+    refreshError?.response?.data?.detail ||
+    refreshError?.response?.data?.message ||
+    refreshError?.message ||
+    '图谱刷新失败，原图谱已保留'
+  const insightErrorMessage =
+    insightRefreshError?.response?.data?.detail ||
+    insightRefreshError?.response?.data?.message ||
+    insightRefreshError?.message ||
+    '题材资料刷新失败，已保留原有数据'
   // 加载状态
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
-          <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <Skeleton className="h-8 w-8" />
-            <Skeleton className="h-7 w-48" />
-          </div>
-        </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <AppCardNav />
+        <main className="mx-auto w-full max-w-none px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
           <div className="space-y-6">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-64 w-full" />
@@ -130,18 +146,8 @@ export function ThemeDetail() {
   if (isError) {
     return (
       <div className="min-h-screen">
-        <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
-          <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <button
-              onClick={handleBack}
-              className="rounded-xl p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h1 className="text-xl font-bold text-foreground">题材详情</h1>
-          </div>
-        </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <AppCardNav />
+        <main className="mx-auto w-full max-w-none px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
           <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-12">
             <AlertCircle className="h-10 w-10 text-destructive" />
             <p className="mt-3 text-sm text-destructive">
@@ -164,18 +170,8 @@ export function ThemeDetail() {
   if (!theme) {
     return (
       <div className="min-h-screen">
-        <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
-          <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <button
-              onClick={handleBack}
-              className="rounded-xl p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h1 className="text-xl font-bold text-foreground">题材详情</h1>
-          </div>
-        </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <AppCardNav />
+        <main className="mx-auto w-full max-w-none px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
           <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card px-6 py-12">
             <Inbox className="h-10 w-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">题材不存在</p>
@@ -196,50 +192,63 @@ export function ThemeDetail() {
 
   return (
     <div className="min-h-screen">
-      {/* 页头 */}
-      <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
+      <AppCardNav />
+
+      <header className="mx-auto w-full max-w-none px-3 pt-4 sm:px-4 lg:px-5 xl:px-6">
         <div
           data-testid="theme-detail-header"
-          className="mx-auto flex max-w-7xl flex-col items-stretch gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"
+          className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex min-w-0 items-center gap-4">
             <button
               onClick={handleBack}
               className="rounded-xl p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="返回"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
             <h1 className="min-w-0 break-words text-xl font-bold text-foreground">{theme.name}</h1>
           </div>
           <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
-            <AuthNav />
             <button
               onClick={() => insightRefresh.mutate()}
-              disabled={isFetching || insightRefresh.isPending}
+              disabled={isFetching || insightRefresh.isPending || graphRefresh.isPending}
               className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${insightRefresh.isPending ? 'animate-spin' : ''}`} />
-              {insightRefresh.isPending ? '正在研究' : '刷新题材资料'}
+              {insightRefresh.isPending
+                ? `正在研究（已耗时 ${insightElapsed}）`
+                : '刷新题材资料'}
             </button>
             <button
               onClick={() => graphRefresh.mutate()}
-              disabled={isFetching || graphRefresh.isPending}
+              disabled={isFetching || graphRefresh.isPending || insightRefresh.isPending}
               className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-accent disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${graphRefresh.isPending ? 'animate-spin' : ''}`} />
-              {graphRefresh.isPending ? '正在分析' : '刷新图谱'}
+              {graphRefresh.isPending ? `正在分析（已耗时 ${graphElapsed}）` : '刷新图谱'}
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {graphRefresh.data && (
+      <main className="mx-auto w-full max-w-none px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
+        {graphRefresh.isPending && (
+          <div
+            role="status"
+            className="mb-5 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground"
+          >
+            正在刷新图谱（已耗时 {graphElapsed}）…
+          </div>
+        )}
+        {graphRefresh.data && !graphRefresh.isPending && (
           <div
             role="status"
             className="mb-5 flex flex-wrap gap-x-5 gap-y-1 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
           >
             <span>{graphRefresh.data.message}</span>
+            <span>更新于 {formatServerTime(graphRefresh.data.refreshed_at)}</span>
+            <span>耗时 {formatRefreshDurationMs(graphRefresh.data.elapsed_ms)}</span>
             <span>来源 {graphRefresh.data.source_count}</span>
             <span>新增 {graphRefresh.data.added_nodes}</span>
             <span>更新 {graphRefresh.data.updated_nodes}</span>
@@ -251,11 +260,7 @@ export function ThemeDetail() {
             role="alert"
             className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
           >
-            <span>
-              {refreshError.response?.data?.detail ||
-                refreshError.message ||
-                '图谱刷新失败，原图谱已保留'}
-            </span>
+            <span>{graphErrorMessage}</span>
             {refreshError.response?.status === 401 ? (
               <button
                 onClick={() => navigate('/login', { state: { from: location.pathname } })}
@@ -344,18 +349,71 @@ export function ThemeDetail() {
         </section>
         </GlowCard>
 
-        {insightRefresh.data && (
+        {insightRefresh.isPending && (
           <div
             role="status"
-            className="mt-5 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
+            className="mt-5 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground"
+          >
+            <p>正在刷新题材资料（已耗时 {insightElapsed}）…</p>
+            <p className="mt-1 text-xs">
+              流程：抓取公开网页/资讯 → 调用默认模型整理档案与事件。若超过数分钟仍无结果，多半卡在网页抓取或模型超时；可刷新页面后重试。
+            </p>
+          </div>
+        )}
+        {insightRefresh.data && !insightRefresh.isPending && (
+          <div
+            role="status"
+            className="mt-5 space-y-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
+            data-testid="insight-refresh-result"
           >
             <p>
-              {insightRefresh.data.message}，新增事件 {insightRefresh.data.inserted_events} 条
+              {insightRefresh.data.message}，新增事件 {insightRefresh.data.inserted_events}{' '}
+              条，来源 {insightRefresh.data.source_count ?? insightRefresh.data.successful_sources.length}{' '}
+              条，更新于 {formatServerTime(insightRefresh.data.refreshed_at)}，耗时{' '}
+              {formatRefreshDurationMs(insightRefresh.data.elapsed_ms)}
             </p>
             {insightRefresh.data.failed_sources.length > 0 && (
-              <p className="mt-1 text-muted-foreground">
+              <p className="text-muted-foreground">
                 失败来源：{insightRefresh.data.failed_sources.join('、')}
               </p>
+            )}
+            {(insightRefresh.data.model_name ||
+              insightRefresh.data.model_error ||
+              insightRefresh.data.model_reasoning ||
+              insightRefresh.data.model_raw_response) && (
+              <details className="rounded-lg border border-border/60 bg-background/40 px-3 py-2" open>
+                <summary className="cursor-pointer text-xs font-medium text-foreground">
+                  模型调用详情
+                  {insightRefresh.data.model_name ? ` · ${insightRefresh.data.model_name}` : ''}
+                  {insightRefresh.data.degraded ? ' · 已降级' : ''}
+                </summary>
+                <div className="mt-2 space-y-2 text-xs text-muted-foreground">
+                  {insightRefresh.data.model_error && (
+                    <div>
+                      <div className="mb-1 font-medium text-destructive">错误</div>
+                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-destructive/5 p-2 text-destructive">
+                        {insightRefresh.data.model_error}
+                      </pre>
+                    </div>
+                  )}
+                  {insightRefresh.data.model_reasoning && (
+                    <div>
+                      <div className="mb-1 font-medium text-foreground">思考过程</div>
+                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-foreground/90">
+                        {insightRefresh.data.model_reasoning}
+                      </pre>
+                    </div>
+                  )}
+                  {insightRefresh.data.model_raw_response && (
+                    <div>
+                      <div className="mb-1 font-medium text-foreground">原始返回（截断）</div>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 text-foreground/80">
+                        {insightRefresh.data.model_raw_response}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </details>
             )}
           </div>
         )}
@@ -364,17 +422,22 @@ export function ThemeDetail() {
             role="alert"
             className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
           >
-            {insightRefreshError?.response?.data?.detail ||
-              insightRefreshError?.message ||
-              '题材资料刷新失败，已保留原有数据'}
+            {insightErrorMessage}
           </div>
         )}
-
         <div
           data-testid="theme-detail-content-grid"
           className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]"
         >
           <div className="min-w-0">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <ThemeLifecycleBadge stage={theme.lifecycle_stage} />
+              {typeof theme.lifecycle_confidence === 'number' && (
+                <span className="text-xs text-muted-foreground">
+                  置信 {theme.lifecycle_confidence}
+                </span>
+              )}
+            </div>
             <ThemeMarketBreadth snapshot={theme.market_snapshot} />
             <ThemeProfileSection profile={theme.profile} className="mt-6" />
 
@@ -423,8 +486,20 @@ export function ThemeDetail() {
 
           <aside
             data-testid="theme-detail-side-rail"
-            className="min-w-0 xl:sticky xl:top-24 xl:self-start"
+            className="min-w-0 space-y-4 xl:sticky xl:top-24 xl:self-start"
           >
+            <ThemeStrengthGauge
+              strengthScore={theme.strength_score}
+              limitQualityScore={theme.limit_quality_score}
+              flowScore={theme.flow_score}
+              leaderClarityScore={theme.leader_clarity_score}
+              breadthScore={theme.breadth_score}
+            />
+            <GlowCard>
+              <div className="p-3">
+                <ThemeLifecycleTrend themeId={theme.id} />
+              </div>
+            </GlowCard>
             <ThemeDriverEvents events={theme.recent_driver_events} />
           </aside>
         </div>

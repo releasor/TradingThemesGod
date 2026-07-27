@@ -5,6 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import { ThemeDetail } from './ThemeDetail'
 import type { ThemeDetailResponse } from '@/types/theme'
 
@@ -39,6 +40,10 @@ vi.mock('@/api/theme', () => ({
   fetchThemeDetail: vi.fn(),
   refreshConceptGraph: vi.fn(),
   refreshThemeInsights: vi.fn(),
+}))
+
+vi.mock('@/components/AppCardNav', () => ({
+  AppCardNav: () => <div data-testid="app-card-nav" />,
 }))
 
 vi.mock('@/components/IndustryChainSection', () => ({
@@ -447,12 +452,17 @@ describe('ThemeDetail', () => {
         added_nodes: 2,
         updated_nodes: 1,
         stock_links: 1,
+        elapsed_ms: 4500,
+        refreshed_at: '2026-07-24T07:00:00Z',
         message: '图谱已根据公开资料增量更新',
       })
       renderThemeDetail()
       const refreshButton = await screen.findByText('刷新图谱')
       await user.click(refreshButton)
       expect(vi.mocked(refreshConceptGraph)).toHaveBeenCalledWith(1)
+      const graphUpdatedAt = dayjs('2026-07-24T07:00:00Z').format('YYYY-MM-DD HH:mm:ss')
+      expect(await screen.findByText(new RegExp(`更新于 ${graphUpdatedAt}`))).toBeInTheDocument()
+      expect(screen.getByText(/耗时 5 秒/)).toBeInTheDocument()
     })
 
     it('展示洞察区域并在刷新资料后重新获取详情', async () => {
@@ -469,6 +479,7 @@ describe('ThemeDetail', () => {
         successful_sources: ['示例网'],
         failed_sources: ['DuckDuckGo'],
         degraded: false,
+        elapsed_ms: 3200,
         refreshed_at: '2026-07-20T10:00:00Z',
         message: '题材资料已部分更新',
       })
@@ -486,6 +497,9 @@ describe('ThemeDetail', () => {
 
       await waitFor(() => expect(fetchThemeDetail).toHaveBeenCalledTimes(2))
       expect(await screen.findByText(/失败来源：DuckDuckGo/)).toBeInTheDocument()
+      const insightUpdatedAt = dayjs('2026-07-20T10:00:00Z').format('YYYY-MM-DD HH:mm:ss')
+      expect(screen.getByText(new RegExp(`更新于 ${insightUpdatedAt}`))).toBeInTheDocument()
+      expect(screen.getByText(/耗时 3 秒/)).toBeInTheDocument()
     })
 
     it('显示后端返回的资料刷新中文错误', async () => {
@@ -501,10 +515,29 @@ describe('ThemeDetail', () => {
       expect(await screen.findByText('未抓取到可验证的题材资料，原数据已保留')).toBeInTheDocument()
     })
 
+    it('显示后端返回的图谱刷新中文错误', async () => {
+      const user = userEvent.setup()
+      vi.mocked(fetchThemeDetail).mockResolvedValue(mockThemeDetail)
+      vi.mocked(refreshConceptGraph).mockRejectedValue({
+        response: {
+          status: 502,
+          data: { detail: '未抓取到可验证的公开资料，原图谱已保留' },
+        },
+      })
+      renderThemeDetail()
+
+      await user.click(await screen.findByRole('button', { name: '刷新图谱' }))
+
+      expect(
+        await screen.findByText('未抓取到可验证的公开资料，原图谱已保留')
+      ).toBeInTheDocument()
+    })
+
     it('页头在窄屏使用纵向布局避免按钮横向溢出', async () => {
       vi.mocked(fetchThemeDetail).mockResolvedValue(mockThemeDetail)
       renderThemeDetail()
 
+      expect(await screen.findByTestId('app-card-nav')).toBeInTheDocument()
       expect(await screen.findByTestId('theme-detail-header')).toHaveClass('flex-col')
     })
   })

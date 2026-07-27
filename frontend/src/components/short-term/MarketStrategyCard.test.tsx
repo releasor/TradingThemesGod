@@ -16,6 +16,10 @@ describe('MarketStrategyCard', () => {
           operation_advice: '指数强但情绪弱，做补涨、趋势和高低切换。',
           focus_targets: ['低位补涨', '趋势承接'],
           rationale: ['指数强度 0.80', '情绪强度 32，日均连板 6.0'],
+          formulas: [
+            '指数板日均涨跌幅均值；≥ 0.3 判强，否则弱',
+            '情绪分 = clamp(30 + 涨停宽度分 + 涨跌广度分, 0, 100)；≥ 60 判强',
+          ],
         }}
         period="today"
         periodLabel="当日"
@@ -29,6 +33,11 @@ describe('MarketStrategyCard', () => {
     expect(screen.getByText('补涨趋势与切换')).toBeInTheDocument()
     expect(screen.getByText('轮动低吸')).toBeInTheDocument()
     expect(screen.getByText(/做补涨/)).toBeInTheDocument()
+    expect(screen.getByTestId('strategy-formula-0')).toHaveTextContent('≥ 0.3 判强')
+    expect(screen.getByTestId('strategy-formula-1')).toHaveTextContent('情绪分')
+    expect(screen.queryByRole('button', { name: '实时' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '数据库' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '数据库分析' })).not.toBeInTheDocument()
   })
 
   it('switches between preset and custom periods', async () => {
@@ -100,37 +109,6 @@ describe('MarketStrategyCard', () => {
     expect(onPeriodChange).not.toHaveBeenCalled()
   })
 
-  it('shows refresh and database analyze actions', async () => {
-    const onRefreshData = vi.fn()
-    const onAnalyzeDatabase = vi.fn()
-    const user = userEvent.setup()
-
-    render(
-      <MarketStrategyCard
-        card={{
-          title: '指数情绪策略卡',
-          index_strength: 'strong',
-          emotion_strength: 'weak',
-          primary_strategy: '补涨趋势与切换',
-          secondary_strategy: '轮动低吸',
-          operation_advice: '指数强但情绪弱，做补涨、趋势和高低切换。',
-          focus_targets: ['低位补涨'],
-          rationale: ['指数强度 0.39'],
-        }}
-        period="today"
-        periodLabel="当日"
-        onRefreshData={onRefreshData}
-        onAnalyzeDatabase={onAnalyzeDatabase}
-      />
-    )
-
-    await user.click(screen.getByRole('button', { name: '刷新行情' }))
-    await user.click(screen.getByRole('button', { name: '数据库分析' }))
-
-    expect(onRefreshData).toHaveBeenCalledTimes(1)
-    expect(onAnalyzeDatabase).toHaveBeenCalledTimes(1)
-  })
-
   it('shows period refresh progress and result inside the card', () => {
     const { rerender } = render(
       <MarketStrategyCard
@@ -173,10 +151,7 @@ describe('MarketStrategyCard', () => {
     expect(screen.getByText('本月策略数据已刷新')).toBeInTheDocument()
   })
 
-  it('shows live and database source toggle', async () => {
-    const onDataSourceChange = vi.fn()
-    const user = userEvent.setup()
-
+  it('shows preview banner when refreshed data is missing', () => {
     render(
       <MarketStrategyCard
         card={{
@@ -191,37 +166,11 @@ describe('MarketStrategyCard', () => {
         }}
         period="today"
         periodLabel="当日"
-        dataSource="database"
-        onDataSourceChange={onDataSourceChange}
+        isPreview
       />
     )
 
-    expect(screen.getByRole('button', { name: '数据库' })).toHaveAttribute('aria-pressed', 'true')
-    await user.click(screen.getByRole('button', { name: '实时' }))
-    expect(onDataSourceChange).toHaveBeenCalledWith('live')
-  })
-
-  it('shows live preview banner when realtime data is missing', () => {
-    render(
-      <MarketStrategyCard
-        card={{
-          title: '指数情绪策略卡',
-          index_strength: 'strong',
-          emotion_strength: 'weak',
-          primary_strategy: '补涨趋势与切换',
-          secondary_strategy: '轮动低吸',
-          operation_advice: '指数强但情绪弱，做补涨、趋势和高低切换。',
-          focus_targets: ['低位补涨'],
-          rationale: ['指数强度 0.39'],
-        }}
-        period="today"
-        periodLabel="当日"
-        dataSource="live"
-        isLivePreview
-      />
-    )
-
-    expect(screen.getByText(/当前周期暂无实时数据/)).toBeInTheDocument()
+    expect(screen.getByText(/请点击顶部「刷新」获取最新策略/)).toBeInTheDocument()
   })
 
   it('dims strategy content while period data is loading', () => {

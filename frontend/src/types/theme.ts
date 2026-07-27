@@ -15,6 +15,15 @@ export interface ThemeBrief {
   category: string | null
   tags: string[] | Record<string, unknown> | null
   source: string | null
+  lifecycle_stage?:
+    | 'germination'
+    | 'fermentation'
+    | 'climax'
+    | 'divergence'
+    | 'ebb'
+    | null
+  strength_score?: number | null
+  lifecycle_confidence?: number | null
 }
 
 /** 题材排名响应 */
@@ -106,6 +115,8 @@ export interface ConceptGraphRefreshResponse {
   added_nodes: number
   updated_nodes: number
   stock_links: number
+  elapsed_ms: number
+  refreshed_at: string
   message: string
 }
 
@@ -168,8 +179,14 @@ export interface ThemeInsightRefreshResponse {
   successful_sources: string[]
   failed_sources: string[]
   degraded: boolean
+  elapsed_ms: number
   refreshed_at: string
   message: string
+  model_name?: string | null
+  model_error?: string | null
+  model_reasoning?: string | null
+  model_raw_response?: string | null
+  source_count?: number
 }
 
 /** 题材详情响应 */
@@ -200,4 +217,17 @@ export interface ThemeDetailResponse {
   profile: ThemeProfile | null
   recent_driver_events: ThemeDriverEvent[]
   market_snapshot: ThemeMarketSnapshot | null
+  lifecycle_stage?:
+    | 'germination'
+    | 'fermentation'
+    | 'climax'
+    | 'divergence'
+    | 'ebb'
+    | null
+  strength_score?: number | null
+  lifecycle_confidence?: number | null
+  limit_quality_score?: number | null
+  flow_score?: number | null
+  leader_clarity_score?: number | null
+  breadth_score?: number | null
 }

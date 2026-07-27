@@ -1,11 +1,10 @@
-import { Activity, AlertTriangle, Crosshair, Database, Gauge, GitBranch, RefreshCw, Target } from 'lucide-react'
+import { Activity, AlertTriangle, Crosshair, Gauge, GitBranch, Target } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GlowCard } from '@/components/GlowCard'
 import type {
   MarketStrategyCardResponse,
   ShortTermPeriod,
   ShortTermPeriodStatus,
-  StrategyCardDataSource,
 } from '@/types/short-term'
 
 interface MarketStrategyCardProps {
@@ -19,15 +18,9 @@ interface MarketStrategyCardProps {
   onCustomDateRangeChange?: (startDate: string, endDate: string) => void
   periodStatus?: ShortTermPeriodStatus | null
   isPeriodLoading?: boolean
-  dataSource?: StrategyCardDataSource
-  onDataSourceChange?: (source: StrategyCardDataSource) => void
-  isLivePreview?: boolean
+  isPreview?: boolean
   degraded?: boolean
   missingSources?: string[]
-  isRefreshingData?: boolean
-  isAnalyzingDatabase?: boolean
-  onRefreshData?: () => void
-  onAnalyzeDatabase?: () => void
 }
 
 const PERIOD_OPTIONS: Array<{ value: ShortTermPeriod; label: string }> = [
@@ -59,15 +52,9 @@ export function MarketStrategyCard({
   onCustomDateRangeChange,
   periodStatus,
   isPeriodLoading = false,
-  dataSource = 'database',
-  onDataSourceChange,
-  isLivePreview = false,
+  isPreview = false,
   degraded = false,
   missingSources = [],
-  isRefreshingData = false,
-  isAnalyzingDatabase = false,
-  onRefreshData,
-  onAnalyzeDatabase,
 }: MarketStrategyCardProps) {
   return (
     <GlowCard>
@@ -86,60 +73,9 @@ export function MarketStrategyCard({
           <p className="mt-1 text-xs text-muted-foreground">
             指数强弱 + 情绪强弱独立择时
             {dateRange ? ` · ${dateRange}` : ''}
-            {dataSource === 'live' ? ' · 实时专用数据' : ' · 数据库题材数据'}
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          <div className="flex flex-wrap items-center justify-end gap-1 rounded-xl bg-muted/60 p-1">
-            <button
-              type="button"
-              aria-pressed={dataSource === 'live'}
-              onClick={() => onDataSourceChange?.('live')}
-              className={cn(
-                'rounded-xl px-2 py-1 text-xs font-medium transition-colors',
-                dataSource === 'live'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              实时
-            </button>
-            <button
-              type="button"
-              aria-pressed={dataSource === 'database'}
-              onClick={() => onDataSourceChange?.('database')}
-              className={cn(
-                'rounded-xl px-2 py-1 text-xs font-medium transition-colors',
-                dataSource === 'database'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              数据库
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              title="拉取东方财富指数/情绪题材实时行情，仅更新策略卡专用数据，不影响下方看板"
-              onClick={onRefreshData}
-              disabled={!onRefreshData || isRefreshingData || isAnalyzingDatabase}
-              className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshingData && 'animate-spin')} />
-              刷新行情
-            </button>
-            <button
-              type="button"
-              title="基于数据库中的题材与快照数据重新计算策略，不访问外部接口"
-              onClick={onAnalyzeDatabase}
-              disabled={!onAnalyzeDatabase || isRefreshingData || isAnalyzingDatabase}
-              className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Database className={cn('h-3.5 w-3.5', isAnalyzingDatabase && 'animate-pulse')} />
-              数据库分析
-            </button>
-          </div>
           <div className="flex flex-wrap items-center gap-1 rounded-xl bg-muted/60 p-1">
             {PERIOD_OPTIONS.map((option) => (
               <button
@@ -207,9 +143,9 @@ export function MarketStrategyCard({
         </div>
       </div>
 
-      {isLivePreview && (
+      {isPreview && (
         <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          当前周期暂无实时数据，以下为数据库预览。请点击「刷新行情」获取实时策略。
+          当前为缓存预览。请点击顶部「刷新」获取最新策略。
         </div>
       )}
 
@@ -222,7 +158,8 @@ export function MarketStrategyCard({
         <div className="rounded-xl bg-muted/40 p-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Target className="h-3.5 w-3.5" />
-            主策略          </div>
+            主策略
+          </div>
           <p className="mt-1 text-base font-semibold text-foreground">{card.primary_strategy}</p>
         </div>
         <div className="rounded-xl bg-muted/40 p-3">
@@ -269,39 +206,48 @@ export function MarketStrategyCard({
 
         <div>
           <div className="mb-2 text-xs font-medium text-muted-foreground">判断依据</div>
-          <ul className="space-y-1 text-xs leading-5 text-muted-foreground">
-            {card.rationale.map((item) => (
-              <li key={item}>{item}</li>
+          <ul className="space-y-2 text-xs leading-5 text-muted-foreground">
+            {card.rationale.map((item, index) => (
+              <li
+                key={item}
+                className="grid gap-2 rounded-lg border border-border/50 bg-muted/20 px-2.5 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
+                data-testid={`strategy-rationale-${index}`}
+              >
+                <span className="text-foreground/90">{item}</span>
+                <span
+                  className="border-t border-border/40 pt-1.5 text-[11px] leading-4 text-muted-foreground sm:border-l sm:border-t-0 sm:pl-2.5 sm:pt-0"
+                  data-testid={`strategy-formula-${index}`}
+                >
+                  {card.formulas?.[index] ?? '计算公式待补充'}
+                </span>
+              </li>
             ))}
           </ul>
         </div>
       </div>
 
-      {(degraded || missingSources.length > 0) && (
-        <div className="mt-3 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+      {missingSources.length > 0 && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            数据不完整
-            {missingSources.length > 0 ? `：缺失 ${missingSources.join('、')}` : ''}
-          </span>
+          <p>部分数据源缺失：{missingSources.join('、')}</p>
         </div>
       )}
 
       {periodStatus && (
-        <div
+        <p
           className={cn(
-            'mt-3 rounded-xl border px-3 py-2 text-xs font-medium',
+            'mt-3 text-xs',
             periodStatus.type === 'error'
-              ? 'border-destructive/30 bg-destructive/10 text-destructive'
+              ? 'text-destructive'
               : periodStatus.type === 'success'
-                ? 'border-primary/30 bg-primary/10 text-primary'
-                : 'border-border bg-muted/50 text-muted-foreground'
+                ? 'text-primary'
+                : 'text-muted-foreground'
           )}
         >
           {periodStatus.message}
-        </div>
+        </p>
       )}
-    </section>
+      </section>
     </GlowCard>
   )
 }

@@ -1,8 +1,11 @@
 import { apiClient } from '@/api/client'
 import type {
   FirstToSecondCandidateResponse,
+  SectorRotationResponse,
   ShortTermOverviewResponse,
   ShortTermPeriod,
+  ShortTermSignalRefreshResponse,
+  ThemeLifecycleResponse,
 } from '@/types/short-term'
 
 interface FetchShortTermOverviewParams {
@@ -31,7 +34,7 @@ export async function fetchShortTermOverview(
 ): Promise<ShortTermOverviewResponse> {
   const { data } = await apiClient.get<ShortTermOverviewResponse>('/short-term/overview', {
     params: buildShortTermOverviewParams(params),
-    timeout: 300_000,
+    timeout: 30_000,
   })
   return data
 }
@@ -51,14 +54,15 @@ export async function refreshShortTermData(
 }
 
 export async function analyzeShortTermFromDatabase(
-  params: FetchShortTermOverviewParams = {}
+  params: FetchShortTermOverviewParams = {},
+  options: { timeout?: number } = {}
 ): Promise<ShortTermOverviewResponse> {
   const { data } = await apiClient.post<ShortTermOverviewResponse>(
     '/short-term/overview/analyze',
     null,
     {
       params: buildShortTermOverviewParams(params),
-      timeout: 300_000,
+      timeout: options.timeout ?? 300_000,
     }
   )
   return data
@@ -94,6 +98,37 @@ export async function refreshFirstToSecondCandidates({
         ...(tradeDate ? { trade_date: tradeDate } : {}),
       },
       timeout: 300_000,
+    }
+  )
+  return data
+}
+
+export async function refreshShortTermSignals(tradeDate?: string) {
+  const { data } = await apiClient.post<ShortTermSignalRefreshResponse>(
+    '/short-term/signals/refresh',
+    null,
+    {
+      params: tradeDate ? { trade_date: tradeDate } : {},
+      timeout: 300_000,
+    }
+  )
+  return data
+}
+
+export async function fetchShortTermSectors(tradeDate?: string) {
+  const { data } = await apiClient.get<SectorRotationResponse>('/short-term/sectors', {
+    params: tradeDate ? { trade_date: tradeDate } : {},
+    timeout: 30_000,
+  })
+  return data
+}
+
+export async function fetchThemeLifecycle(themeId: number, days = 10) {
+  const { data } = await apiClient.get<ThemeLifecycleResponse>(
+    `/short-term/themes/${themeId}/lifecycle`,
+    {
+      params: { days },
+      timeout: 30_000,
     }
   )
   return data
