@@ -13,6 +13,7 @@ vi.mock('@/api/client', () => ({
 const {
   fetchLatestSuccessfulRun,
   fetchDashboardScraperSources,
+  refreshThemeQuotes,
   runScraperAndWait,
   runScraperWithFallback,
 } = await import('./scraper')
@@ -162,5 +163,24 @@ describe('scraper API', () => {
 
     expect(mockPost).toHaveBeenCalledTimes(1)
     expect(mockPost).toHaveBeenCalledWith('/scraper/run/eastmoney', { params: {} })
+  })
+
+  it('passes AbortSignal to refreshThemeQuotes', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        trade_date: '2026-07-21',
+        themes_updated: 42,
+        refreshed_at: '2026-07-21T10:00:00Z',
+      },
+    })
+
+    const signal = new AbortController().signal
+    await refreshThemeQuotes(signal)
+
+    expect(mockPost).toHaveBeenCalledWith(
+      '/scraper/refresh-quotes',
+      null,
+      expect.objectContaining({ signal, timeout: 120_000 })
+    )
   })
 })

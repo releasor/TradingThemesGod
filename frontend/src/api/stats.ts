@@ -17,7 +17,7 @@ export interface SystemStats {
   }
 }
 
-export async function fetchSystemStats(): Promise<SystemStats> {
-  const { data } = await apiClient.get<SystemStats>('/stats')
+export async function fetchSystemStats(signal?: AbortSignal): Promise<SystemStats> {
+  const { data } = await apiClient.get<SystemStats>('/stats', { signal })
   return data
 }

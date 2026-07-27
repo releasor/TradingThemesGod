@@ -30,17 +30,20 @@ function buildShortTermOverviewParams({
 }
 
 export async function fetchShortTermOverview(
-  params: FetchShortTermOverviewParams = {}
+  params: FetchShortTermOverviewParams = {},
+  signal?: AbortSignal
 ): Promise<ShortTermOverviewResponse> {
   const { data } = await apiClient.get<ShortTermOverviewResponse>('/short-term/overview', {
     params: buildShortTermOverviewParams(params),
     timeout: 30_000,
+    signal,
   })
   return data
 }
 
 export async function refreshShortTermData(
-  params: FetchShortTermOverviewParams = {}
+  params: FetchShortTermOverviewParams = {},
+  signal?: AbortSignal
 ): Promise<ShortTermOverviewResponse> {
   const { data } = await apiClient.post<ShortTermOverviewResponse>(
     '/short-term/overview/refresh-data',
@@ -48,6 +51,7 @@ export async function refreshShortTermData(
     {
       params: buildShortTermOverviewParams(params),
       timeout: 300_000,
+      signal,
     }
   )
   return data
@@ -72,9 +76,10 @@ interface FirstToSecondParams {
   tradeDate?: string
 }
 
-export async function fetchFirstToSecondCandidates({
-  tradeDate,
-}: FirstToSecondParams = {}): Promise<FirstToSecondCandidateResponse> {
+export async function fetchFirstToSecondCandidates(
+  { tradeDate }: FirstToSecondParams = {},
+  signal?: AbortSignal
+): Promise<FirstToSecondCandidateResponse> {
   const { data } = await apiClient.get<FirstToSecondCandidateResponse>(
     '/short-term/first-to-second',
     {
@@ -82,14 +87,16 @@ export async function fetchFirstToSecondCandidates({
         ...(tradeDate ? { trade_date: tradeDate } : {}),
       },
       timeout: 300_000,
+      signal,
     }
   )
   return data
 }
 
-export async function refreshFirstToSecondCandidates({
-  tradeDate,
-}: FirstToSecondParams = {}): Promise<FirstToSecondCandidateResponse> {
+export async function refreshFirstToSecondCandidates(
+  { tradeDate }: FirstToSecondParams = {},
+  signal?: AbortSignal
+): Promise<FirstToSecondCandidateResponse> {
   const { data } = await apiClient.post<FirstToSecondCandidateResponse>(
     '/short-term/first-to-second/refresh',
     null,
@@ -98,27 +105,30 @@ export async function refreshFirstToSecondCandidates({
         ...(tradeDate ? { trade_date: tradeDate } : {}),
       },
       timeout: 300_000,
+      signal,
     }
   )
   return data
 }
 
-export async function refreshShortTermSignals(tradeDate?: string) {
+export async function refreshShortTermSignals(tradeDate?: string, signal?: AbortSignal) {
   const { data } = await apiClient.post<ShortTermSignalRefreshResponse>(
     '/short-term/signals/refresh',
     null,
     {
       params: tradeDate ? { trade_date: tradeDate } : {},
       timeout: 300_000,
+      signal,
     }
   )
   return data
 }
 
-export async function fetchShortTermSectors(tradeDate?: string) {
+export async function fetchShortTermSectors(tradeDate?: string, signal?: AbortSignal) {
   const { data } = await apiClient.get<SectorRotationResponse>('/short-term/sectors', {
     params: tradeDate ? { trade_date: tradeDate } : {},
     timeout: 30_000,
+    signal,
   })
   return data
 }

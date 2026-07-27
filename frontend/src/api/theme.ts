@@ -17,16 +17,20 @@ import type {
 import type { StockListResponse } from '@/types/stock'
 
 /** 获取题材排名（按热度降序） */
-export async function fetchThemeRanking(limit = 20): Promise<ThemeRankingResponse> {
+export async function fetchThemeRanking(
+  limit = 20,
+  signal?: AbortSignal
+): Promise<ThemeRankingResponse> {
   const { data } = await apiClient.get<ThemeRankingResponse>('/themes/ranking', {
     params: { limit },
+    signal,
   })
   return data
 }
 
 /** 获取独立展示的市场表现板块。 */
-export async function fetchMarketSignals(): Promise<ThemeRankingResponse> {
-  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/market-signals')
+export async function fetchMarketSignals(signal?: AbortSignal): Promise<ThemeRankingResponse> {
+  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/market-signals', { signal })
   return {
     ...data,
     items: data.items.map((item) => ({
@@ -38,8 +42,10 @@ export async function fetchMarketSignals(): Promise<ThemeRankingResponse> {
 }
 
 /** 获取独立展示的行情指标板块（新高、财报预告、破增发等）。 */
-export async function fetchIndicatorSignals(): Promise<ThemeRankingResponse> {
-  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/indicator-signals')
+export async function fetchIndicatorSignals(signal?: AbortSignal): Promise<ThemeRankingResponse> {
+  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/indicator-signals', {
+    signal,
+  })
   return {
     ...data,
     items: data.items.map((item) => ({

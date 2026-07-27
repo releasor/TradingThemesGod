@@ -66,11 +66,11 @@ export async function fetchLatestSuccessfulRun(source: string): Promise<ScraperR
 }
 
 /** 快刷题材列表涨跌幅/热度，不触发全量成分股采集。 */
-export async function refreshThemeQuotes(): Promise<ThemeQuotesRefreshResult> {
+export async function refreshThemeQuotes(signal?: AbortSignal): Promise<ThemeQuotesRefreshResult> {
   const { data } = await apiClient.post<ThemeQuotesRefreshResult>(
     '/scraper/refresh-quotes',
     null,
-    { timeout: 120_000 }
+    { timeout: 120_000, signal }
   )
   return data
 }

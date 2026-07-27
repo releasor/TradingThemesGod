@@ -4,8 +4,10 @@ import {
   analyzeShortTermFromDatabase,
   fetchFirstToSecondCandidates,
   fetchShortTermOverview,
+  fetchShortTermSectors,
   refreshFirstToSecondCandidates,
   refreshShortTermData,
+  refreshShortTermSignals,
 } from './short-term'
 
 vi.mock('@/api/client', () => ({
@@ -250,5 +252,80 @@ describe('short-term api', () => {
       params: { period: 'today' },
       timeout: 300_000,
     })
+  })
+
+  it('passes AbortSignal to fetchShortTermOverview', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { period_label: '当日' } })
+    const signal = new AbortController().signal
+
+    await fetchShortTermOverview({ period: 'today' }, signal)
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/short-term/overview',
+      expect.objectContaining({ signal, timeout: 30_000 })
+    )
+  })
+
+  it('passes AbortSignal to refreshShortTermData', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { period_label: '当日' } })
+    const signal = new AbortController().signal
+
+    await refreshShortTermData({ period: 'today' }, signal)
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/short-term/overview/refresh-data',
+      null,
+      expect.objectContaining({ signal, timeout: 300_000 })
+    )
+  })
+
+  it('passes AbortSignal to fetchFirstToSecondCandidates', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { candidates: [] } })
+    const signal = new AbortController().signal
+
+    await fetchFirstToSecondCandidates({ tradeDate: '2026-07-21' }, signal)
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/short-term/first-to-second',
+      expect.objectContaining({ signal, timeout: 300_000 })
+    )
+  })
+
+  it('passes AbortSignal to refreshFirstToSecondCandidates', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { candidates: [] } })
+    const signal = new AbortController().signal
+
+    await refreshFirstToSecondCandidates({ tradeDate: '2026-07-21' }, signal)
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/short-term/first-to-second/refresh',
+      null,
+      expect.objectContaining({ signal, timeout: 300_000 })
+    )
+  })
+
+  it('passes AbortSignal to refreshShortTermSignals', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { refreshed_at: '2026-07-21T10:00:00Z' } })
+    const signal = new AbortController().signal
+
+    await refreshShortTermSignals('2026-07-21', signal)
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/short-term/signals/refresh',
+      null,
+      expect.objectContaining({ signal, timeout: 300_000 })
+    )
+  })
+
+  it('passes AbortSignal to fetchShortTermSectors', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { sectors: [] } })
+    const signal = new AbortController().signal
+
+    await fetchShortTermSectors('2026-07-21', signal)
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/short-term/sectors',
+      expect.objectContaining({ signal, timeout: 30_000 })
+    )
   })
 })

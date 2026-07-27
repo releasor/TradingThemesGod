@@ -9,6 +9,7 @@ vi.mock('@/api/client', () => ({
 const {
   fetchThemes,
   fetchCategories,
+  fetchThemeRanking,
   fetchMarketSignals,
   fetchIndicatorSignals,
   refreshThemeInsights,
@@ -70,6 +71,15 @@ describe('fetchThemes', () => {
       })
     )
   })
+
+  it('passes AbortSignal to fetchThemes', async () => {
+    mockGet.mockResolvedValue({ data: { items: [], total: 0 } })
+    const signal = new AbortController().signal
+
+    await fetchThemes({ page: 1, page_size: 20, sort_by: 'heat_index', sort_order: 'desc' }, signal)
+
+    expect(mockGet).toHaveBeenCalledWith('/themes', expect.objectContaining({ signal }))
+  })
 })
 
 describe('fetchCategories', () => {
@@ -83,6 +93,30 @@ describe('fetchCategories', () => {
   })
 })
 
+describe('fetchThemeRanking', () => {
+  it('calls /themes/ranking endpoint', async () => {
+    const response = { items: [], limit: 20 }
+    mockGet.mockResolvedValue({ data: response })
+
+    const result = await fetchThemeRanking()
+
+    expect(mockGet).toHaveBeenCalledWith('/themes/ranking', { params: { limit: 20 } })
+    expect(result).toEqual(response)
+  })
+
+  it('passes AbortSignal to fetchThemeRanking', async () => {
+    mockGet.mockResolvedValue({ data: { items: [], limit: 10 } })
+    const signal = new AbortController().signal
+
+    await fetchThemeRanking(10, signal)
+
+    expect(mockGet).toHaveBeenCalledWith(
+      '/themes/ranking',
+      expect.objectContaining({ params: { limit: 10 }, signal })
+    )
+  })
+})
+
 describe('fetchMarketSignals', () => {
   it('calls /themes/market-signals endpoint', async () => {
     const response = { items: [], limit: 0 }
@@ -90,7 +124,7 @@ describe('fetchMarketSignals', () => {
 
     const result = await fetchMarketSignals()
 
-    expect(mockGet).toHaveBeenCalledWith('/themes/market-signals')
+    expect(mockGet).toHaveBeenCalledWith('/themes/market-signals', { signal: undefined })
     expect(result).toEqual(response)
   })
 
@@ -120,6 +154,15 @@ describe('fetchMarketSignals', () => {
       })
     )
   })
+
+  it('passes AbortSignal to fetchMarketSignals', async () => {
+    mockGet.mockResolvedValue({ data: { items: [], limit: 0 } })
+    const signal = new AbortController().signal
+
+    await fetchMarketSignals(signal)
+
+    expect(mockGet).toHaveBeenCalledWith('/themes/market-signals', expect.objectContaining({ signal }))
+  })
 })
 
 describe('fetchIndicatorSignals', () => {
@@ -129,7 +172,19 @@ describe('fetchIndicatorSignals', () => {
 
     const result = await fetchIndicatorSignals()
 
-    expect(mockGet).toHaveBeenCalledWith('/themes/indicator-signals')
+    expect(mockGet).toHaveBeenCalledWith('/themes/indicator-signals', { signal: undefined })
     expect(result).toEqual(response)
+  })
+
+  it('passes AbortSignal to fetchIndicatorSignals', async () => {
+    mockGet.mockResolvedValue({ data: { items: [], limit: 0 } })
+    const signal = new AbortController().signal
+
+    await fetchIndicatorSignals(signal)
+
+    expect(mockGet).toHaveBeenCalledWith(
+      '/themes/indicator-signals',
+      expect.objectContaining({ signal })
+    )
   })
 })
