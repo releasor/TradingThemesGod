@@ -232,8 +232,22 @@ class FullRaceManager:
                 source_state.status = "running"
                 source_state.progress_pct = 0.0
                 cancel = state.cancel_events[source]
+
+                def _make_progress_cb(
+                    src: SourceRaceState, race: RaceState
+                ) -> Callable[[float], None]:
+                    def _on_progress(pct: float) -> None:
+                        src.progress_pct = max(0.0, min(100.0, float(pct)))
+                        if src.status == "running":
+                            race.refresh_collect_progress()
+
+                    return _on_progress
+
                 task = asyncio.create_task(
-                    scraper.collect_full(cancel=cancel),
+                    scraper.collect_full(
+                        cancel=cancel,
+                        on_progress=_make_progress_cb(source_state, state),
+                    ),
                     name=f"full-race-collect-{race_id}-{source}",
                 )
                 tasks[task] = source

@@ -83,6 +83,21 @@ class TestEastMoneyCollectCommit:
         eastmoney_scraper._save_theme_stocks.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_collect_full_reports_progress(
+        self, eastmoney_scraper, theme_payload, stocks_payload
+    ):
+        eastmoney_scraper.fetch_all_pages = AsyncMock(
+            side_effect=[theme_payload, stocks_payload, stocks_payload]
+        )
+        ticks: list[float] = []
+
+        await eastmoney_scraper.collect_full(on_progress=ticks.append)
+
+        assert ticks[0] >= 1.0
+        assert ticks[-1] == 100.0
+        assert any(8.0 <= t < 100.0 for t in ticks)
+
+    @pytest.mark.asyncio
     async def test_commit_full_calls_saves(self, eastmoney_scraper):
         draft = FullScrapeDraft(
             source="eastmoney",

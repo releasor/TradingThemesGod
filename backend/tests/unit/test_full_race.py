@@ -47,7 +47,7 @@ class _FakeScraper:
         self.commit_calls = 0
         self._commit = asyncio.Event()
 
-    async def collect_full(self, cancel: asyncio.Event | None = None, params=None):
+    async def collect_full(self, cancel: asyncio.Event | None = None, params=None, **_kwargs):
         if self._hold_until is not None:
             await self._hold_until.wait()
         if self._delay:

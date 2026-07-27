@@ -4,6 +4,7 @@
 """
 
 import asyncio
+from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -579,17 +580,24 @@ class EastMoneyScraper(BaseScraper):
         self,
         cancel: asyncio.Event | None = None,
         params: dict[str, Any] | None = None,
+        on_progress: Callable[[float], None] | None = None,
     ) -> FullScrapeDraft:
         """采集全量题材与成分股草稿，不落库。
 
         Args:
             cancel: 可选取消事件；循环拉成分股前若已 set 则抛出 CancelledError
             params: 额外题材列表请求参数
+            on_progress: 可选进度回调，参数为 0–100
 
         Returns:
             FullScrapeDraft 内存草稿
         """
+        def report(pct: float) -> None:
+            if on_progress is not None:
+                on_progress(max(0.0, min(100.0, pct)))
+
         logger.info(f"[{self.source_name}] 开始全量采集（不落库）")
+        report(1.0)
 
         theme_params = {
             **DEFAULT_PARAMS,
@@ -607,9 +615,11 @@ class EastMoneyScraper(BaseScraper):
 
         themes = self.parse_theme_list(theme_data)
         logger.info(f"[{self.source_name}] 解析到 {len(themes)} 个题材")
+        report(8.0)
 
         if not themes:
             logger.warning(f"[{self.source_name}] 未获取到题材数据")
+            report(100.0)
             return FullScrapeDraft(
                 source=self.source_name,
                 trade_date=None,
@@ -618,7 +628,8 @@ class EastMoneyScraper(BaseScraper):
 
         stocks_by_code: dict[str, list[dict[str, Any]]] = {}
         latest_trade_date: date | None = None
-        for theme in themes:
+        total = len(themes)
+        for index, theme in enumerate(themes):
             if cancel is not None and cancel.is_set():
                 raise asyncio.CancelledError()
             try:
@@ -643,12 +654,14 @@ class EastMoneyScraper(BaseScraper):
                 raise
             except Exception as e:
                 logger.error(f"[{self.source_name}] 处理题材 {theme['code']} 失败: {e}")
-                continue
+            # 题材列表 8%，成分股采集占 8→99
+            report(8.0 + 91.0 * (index + 1) / total)
 
         logger.info(
             f"[{self.source_name}] 全量采集完成: "
             f"{len(themes)} 个题材, {sum(len(s) for s in stocks_by_code.values())} 只股票"
         )
+        report(100.0)
         return FullScrapeDraft(
             source=self.source_name,
             trade_date=latest_trade_date,

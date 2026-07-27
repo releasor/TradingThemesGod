@@ -8,6 +8,7 @@ import asyncio
 import json
 import math
 import re
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -402,6 +403,7 @@ class AKShareScraper(BaseScraper):
         self,
         cancel: asyncio.Event | None = None,
         params: dict[str, Any] | None = None,
+        on_progress: Callable[[float], None] | None = None,
     ) -> FullScrapeDraft:
         """采集概念题材草稿（themes-only），不落库、不抓成分股。
 
@@ -409,10 +411,16 @@ class AKShareScraper(BaseScraper):
         题材非空即可作为可胜出草稿（stocks_by_code 为空）。
         """
         del params  # 保留与 EastMoney 一致的签名
+
+        def report(pct: float) -> None:
+            if on_progress is not None:
+                on_progress(max(0.0, min(100.0, pct)))
+
         if cancel is not None and cancel.is_set():
             raise asyncio.CancelledError()
 
         logger.info(f"[{self.source_name}] 开始全量题材采集（概念板块，不落库）")
+        report(10.0)
         try:
             frame = await asyncio.to_thread(ak.stock_board_concept_name_em)
         except Exception as e:
@@ -422,8 +430,10 @@ class AKShareScraper(BaseScraper):
         if cancel is not None and cancel.is_set():
             raise asyncio.CancelledError()
 
+        report(80.0)
         themes = self._parse_concept_themes(frame)
         logger.info(f"[{self.source_name}] 解析到 {len(themes)} 个概念题材")
+        report(100.0)
         return FullScrapeDraft(
             source=self.source_name,
             trade_date=date.today() if themes else None,

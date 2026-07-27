@@ -94,12 +94,19 @@ function sourceLabelFor(
 }
 
 function formatRaceProgressMessage(
-  race: Pick<ScraperRace, 'phase' | 'progress_pct' | 'winner'>,
+  race: Pick<ScraperRace, 'phase' | 'progress_pct' | 'winner' | 'sources'>,
   elapsed: string,
   sources: { id: string; label: string }[]
 ): string {
   const pct = Math.round(race.progress_pct)
   const winnerLabel = race.winner ? sourceLabelFor(race.winner, sources) : null
+  const leading = [...(race.sources ?? [])]
+    .filter((item) => item.status === 'running' || item.status === 'completed')
+    .sort((a, b) => b.progress_pct - a.progress_pct)[0]
+  const leadingHint =
+    leading && leading.progress_pct > 0
+      ? `（${sourceLabelFor(leading.id, sources)} ${Math.round(leading.progress_pct)}%）`
+      : ''
 
   if (race.phase === 'committing') {
     return winnerLabel
@@ -112,7 +119,7 @@ function formatRaceProgressMessage(
   if (winnerLabel) {
     return `多源竞速中，领先 ${winnerLabel} ${pct}%（已耗时 ${elapsed}）...`
   }
-  return `多源竞速中 ${pct}%（已耗时 ${elapsed}）...`
+  return `多源竞速中 ${pct}%${leadingHint}（已耗时 ${elapsed}）...`
 }
 
 const SHORT_TERM_PERIOD_LABELS: Record<ShortTermPeriod, string> = {
@@ -822,12 +829,17 @@ export function ThemeDashboard() {
           if (signal.aborted) return
           const pct = mapRaceProgressToOverall(nextRace.progress_pct)
           setRefreshProgressPct(pct)
+          const leading = [...(nextRace.sources ?? [])]
+            .filter((item) => item.status === 'running' || item.status === 'completed')
+            .sort((a, b) => b.progress_pct - a.progress_pct)[0]
           const pending =
             nextRace.phase === 'committing'
               ? '落库'
-              : nextRace.winner
-                ? `竞速（领先 ${sourceLabelFor(nextRace.winner, dashboardScraperSources)}）`
-                : '多源竞速'
+              : leading && leading.progress_pct > 0
+                ? `竞速 · ${sourceLabelFor(leading.id, dashboardScraperSources)} ${Math.round(leading.progress_pct)}%`
+                : nextRace.winner
+                  ? `竞速（领先 ${sourceLabelFor(nextRace.winner, dashboardScraperSources)}）`
+                  : '多源竞速'
           setRefreshPendingLabel(pending)
           setUpdateResult({
             type: 'progress',
