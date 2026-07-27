@@ -21,6 +21,8 @@ from app.schemas.scraper import (
 )
 from app.scrapers.eastmoney import EastMoneyScraper
 from app.scrapers.scheduler import scraper_scheduler
+from app.services.quotes_refresh_race import race_theme_quotes
+from app.services.strategy_quote_refresh import collect_akshare_theme_quotes
 from datetime import datetime, timezone
 
 # 速率限制器
@@ -144,7 +146,26 @@ async def refresh_theme_quotes(request: Request):
     async with scraper_scheduler.quotes_refresh_lock:
         scraper = EastMoneyScraper()
         try:
-            trade_date, themes_updated = await scraper.refresh_theme_quotes()
+
+            async def eastmoney_collect():
+                return await scraper.collect_theme_quotes()
+
+            async def akshare_collect():
+                # 全量题材：解析 AKShare 返回的全部板块行（与 eastmoney 全列表竞速）
+                return await collect_akshare_theme_quotes(only_codes=None)
+
+            async def save(themes):
+                await scraper._save_themes(themes)
+
+            result = await race_theme_quotes(
+                collectors=[
+                    ("eastmoney", eastmoney_collect),
+                    ("akshare", akshare_collect),
+                ],
+                save=save,
+            )
+            trade_date = result.trade_date
+            themes_updated = result.updated_count
         except Exception as exc:
             raise HTTPException(
                 status_code=502, detail=f"题材行情刷新失败：{exc}"

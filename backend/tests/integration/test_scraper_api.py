@@ -221,13 +221,16 @@ class TestScraperAPI:
         assert response.status_code == 200
         mock_repo.list_by_source.assert_called_once_with(source=None, limit=5, status=None)
 
+    @patch("app.api.scraper.race_theme_quotes", new_callable=AsyncMock)
     @patch("app.api.scraper.EastMoneyScraper")
     @patch("app.api.scraper.scraper_scheduler")
     def test_refresh_quotes_allowed_while_full_scrape_running(
-        self, mock_scheduler, mock_scraper_cls, client
+        self, mock_scheduler, mock_scraper_cls, mock_race, client
     ):
         """全量采集进行中时，轻量行情刷新仍可用。"""
         from datetime import date
+
+        from app.services.quotes_refresh_race import QuotesRaceResult
 
         mock_scheduler.is_quotes_refresh_running.return_value = False
         mock_scheduler.quotes_refresh_lock = MagicMock()
@@ -235,16 +238,21 @@ class TestScraperAPI:
         mock_scheduler.quotes_refresh_lock.__aexit__ = AsyncMock(return_value=None)
 
         scraper = AsyncMock()
-        scraper.refresh_theme_quotes = AsyncMock(return_value=(date(2026, 7, 27), 42))
         scraper.close = AsyncMock()
         mock_scraper_cls.return_value = scraper
+        mock_race.return_value = QuotesRaceResult(
+            source="eastmoney",
+            trade_date=date(2026, 7, 27),
+            themes=[{"code": f"BK{i:04d}"} for i in range(42)],
+            updated_count=42,
+        )
 
         response = client.post("/api/v1/scraper/refresh-quotes")
 
         assert response.status_code == 200
         data = response.json()
         assert data["themes_updated"] == 42
-        scraper.refresh_theme_quotes.assert_awaited()
+        mock_race.assert_awaited()
 
     @patch("app.api.scraper.scraper_scheduler")
     def test_refresh_quotes_conflict_when_quotes_refresh_running(
