@@ -20,6 +20,9 @@ const {
   fetchScraperRace,
   cancelScraperRace,
   runScraperRaceAndWait,
+  effectiveRaceCollectPct,
+  formatRaceSourcesStatus,
+  mapRaceProgressToDashboardPct,
 } = await import('./scraper')
 
 const sampleRace = (overrides: Partial<{
@@ -341,5 +344,61 @@ describe('scraper API', () => {
       null,
       expect.any(Object)
     )
+  })
+})
+
+describe('race progress helpers', () => {
+  const label = (id: string) => (id === 'akshare' ? 'AKShare' : '东方财富')
+
+  it('effectiveRaceCollectPct ignores completed sources while others run', () => {
+    expect(
+      effectiveRaceCollectPct([
+        { id: 'akshare', status: 'completed', progress_pct: 100 },
+        { id: 'eastmoney', status: 'running', progress_pct: 12 },
+      ])
+    ).toBe(12)
+  })
+
+  it('effectiveRaceCollectPct returns 100 when all sources completed', () => {
+    expect(
+      effectiveRaceCollectPct([
+        { id: 'akshare', status: 'completed', progress_pct: 100 },
+        { id: 'eastmoney', status: 'completed', progress_pct: 100 },
+      ])
+    ).toBe(100)
+  })
+
+  it('mapRaceProgressToDashboardPct caps collect phase at 70%', () => {
+    expect(
+      mapRaceProgressToDashboardPct({
+        phase: 'collecting',
+        progress_pct: 100,
+        sources: [
+          { id: 'akshare', status: 'completed', progress_pct: 100 },
+          { id: 'eastmoney', status: 'running', progress_pct: 40 },
+        ],
+      })
+    ).toBe(28)
+  })
+
+  it('formatRaceSourcesStatus explains waiting for primary after fallback completes', () => {
+    const { pendingLabel, message } = formatRaceSourcesStatus(
+      {
+        phase: 'collecting',
+        status: 'racing',
+        progress_pct: 100,
+        winner: null,
+        sources: [
+          { id: 'akshare', status: 'completed', progress_pct: 100 },
+          { id: 'eastmoney', status: 'running', progress_pct: 15 },
+        ],
+      },
+      '23 秒',
+      label
+    )
+
+    expect(pendingLabel).toBe('等待 东方财富 15%')
+    expect(message).toMatch(/AKShare 已采完，正在等待 东方财富 完整采集/)
+    expect(message).toMatch(/东方财富 采集中 15%/)
   })
 })

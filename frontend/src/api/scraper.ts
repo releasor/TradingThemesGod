@@ -82,6 +82,97 @@ const RACE_WAIT_TIMEOUT_MS = 45 * 60 * 1000
 
 const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
 
+/** 竞速采集阶段的有效进度：仅统计仍在 running 的源，避免 AKShare 先到 100% 误导整体进度。 */
+export function effectiveRaceCollectPct(sources: ScraperRaceSource[]): number {
+  const running = sources.filter((item) => item.status === 'running')
+  if (running.length > 0) {
+    return Math.max(...running.map((item) => item.progress_pct))
+  }
+  if (sources.some((item) => item.status === 'completed')) {
+    return 100
+  }
+  return 0
+}
+
+export function mapRaceProgressToDashboardPct(race: Pick<ScraperRace, 'phase' | 'progress_pct' | 'sources'>): number {
+  const collectPct =
+    race.phase === 'collecting' && race.sources?.length
+      ? effectiveRaceCollectPct(race.sources)
+      : race.progress_pct
+  return Math.round(Math.min(70, Math.max(0, collectPct) * 0.7))
+}
+
+export function formatRaceSourcesStatus(
+  race: Pick<ScraperRace, 'phase' | 'status' | 'progress_pct' | 'winner' | 'sources'>,
+  elapsed: string,
+  sourceLabel: (id: string) => string
+): { pendingLabel: string; message: string } {
+  const sources = race.sources ?? []
+  const running = sources.filter((item) => item.status === 'running')
+  const completed = sources.filter((item) => item.status === 'completed')
+  const failed = sources.filter((item) => item.status === 'failed')
+
+  const partFor = (item: ScraperRaceSource) => {
+    const label = sourceLabel(item.id)
+    if (item.status === 'running') {
+      return `${label} 采集中 ${Math.round(item.progress_pct)}%`
+    }
+    if (item.status === 'completed') {
+      return `${label} 已完成`
+    }
+    if (item.status === 'failed') {
+      return `${label} 失败`
+    }
+    if (item.status === 'cancelled') {
+      return `${label} 已取消`
+    }
+    return `${label} 等待中`
+  }
+
+  const parts = sources.map(partFor).join(' · ')
+  const winnerLabel = race.winner ? sourceLabel(race.winner) : null
+  const pct = Math.round(race.progress_pct)
+
+  if (race.phase === 'committing') {
+    return {
+      pendingLabel: '落库',
+      message: winnerLabel
+        ? `已选定 ${winnerLabel}，落库中 ${pct}%（已耗时 ${elapsed}）...`
+        : `落库中 ${pct}%（已耗时 ${elapsed}）...`,
+    }
+  }
+
+  if (running.length === 1 && completed.length > 0) {
+    const active = running[0]
+    const activeLabel = sourceLabel(active.id)
+    const doneLabels = completed.map((item) => sourceLabel(item.id)).join('、')
+    return {
+      pendingLabel: `等待 ${activeLabel} ${Math.round(active.progress_pct)}%`,
+      message: `${doneLabels} 已采完，正在等待 ${activeLabel} 完整采集（含成分股）… ${parts}（已耗时 ${elapsed}）`,
+    }
+  }
+
+  if (running.length > 0) {
+    const active = [...running].sort((a, b) => b.progress_pct - a.progress_pct)[0]
+    return {
+      pendingLabel: `竞速 · ${sourceLabel(active.id)} ${Math.round(active.progress_pct)}%`,
+      message: `多源竞速中：${parts}（已耗时 ${elapsed}）...`,
+    }
+  }
+
+  if (failed.length > 0 && completed.length === 0) {
+    return {
+      pendingLabel: '多源竞速',
+      message: `多源竞速失败：${parts}（已耗时 ${elapsed}）`,
+    }
+  }
+
+  return {
+    pendingLabel: '多源竞速',
+    message: `多源竞速中 ${pct}%（已耗时 ${elapsed}）...`,
+  }
+}
+
 function isAxiosTimeoutError(error: unknown): boolean {
   const err = error as { code?: string; message?: string }
   return err?.code === 'ECONNABORTED' || Boolean(err?.message?.includes('timeout'))

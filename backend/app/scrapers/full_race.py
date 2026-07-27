@@ -100,8 +100,12 @@ class RaceState:
     def refresh_collect_progress(self) -> None:
         if self.phase in ("committing", "done") or self.status == "committing":
             return
-        progresses = [s.progress_pct for s in self.sources]
-        self.progress_pct = max(progresses) if progresses else 0.0
+        running = [s.progress_pct for s in self.sources if s.status == "running"]
+        if running:
+            self.progress_pct = max(running)
+            return
+        completed = [s.progress_pct for s in self.sources if s.status == "completed"]
+        self.progress_pct = max(completed) if completed else 0.0
 
 
 class FullRaceManager:
