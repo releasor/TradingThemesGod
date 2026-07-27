@@ -824,7 +824,14 @@ export function ThemeDashboard() {
       })
       if (signal.aborted) return
       if (race.status === 'failed') {
-        const message = `全量更新失败：${race.error || '未知错误'}`
+        const { message: statusMessage } = formatRaceSourcesStatus(
+          race,
+          formatRefreshDurationMs(Date.now() - startedAt),
+          (id) => sourceLabelFor(id, dashboardScraperSources)
+        )
+        const message =
+          statusMessage || `全量更新失败：${race.error || '未知错误'}`
+        setRefreshPendingLabel('多源竞速失败')
         setUpdateResult({ type: 'error', message })
         toast.error(message)
         return

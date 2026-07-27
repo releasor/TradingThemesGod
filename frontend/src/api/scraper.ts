@@ -102,8 +102,33 @@ export function mapRaceProgressToDashboardPct(race: Pick<ScraperRace, 'phase' | 
   return Math.round(Math.min(70, Math.max(0, collectPct) * 0.7))
 }
 
+/** 将竞速源底层异常压缩为可读短句。 */
+export function shortenRaceSourceError(error: string | null | undefined, limit = 120): string {
+  const text = (error ?? '').trim()
+  if (!text) return '未知错误'
+  const lower = text.toLowerCase()
+  if (lower.includes('remotedisconnected') || lower.includes('connection aborted')) {
+    return '上游提前断开连接'
+  }
+  if (
+    lower.includes('connecttimeout') ||
+    lower.includes('connect timeout') ||
+    lower.includes('timed out')
+  ) {
+    const hostMatch = text.match(/host=['"]?([^'",\s)]+)/i)
+    return hostMatch ? `连接超时（${hostMatch[1]}）` : '连接超时'
+  }
+  if (lower.includes('max retries exceeded')) {
+    return '请求重试耗尽（上游不可达）'
+  }
+  if (lower.includes('proxyerror') || (lower.includes('proxy') && lower.includes('error'))) {
+    return '代理/网络错误'
+  }
+  return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`
+}
+
 export function formatRaceSourcesStatus(
-  race: Pick<ScraperRace, 'phase' | 'status' | 'progress_pct' | 'winner' | 'sources'>,
+  race: Pick<ScraperRace, 'phase' | 'status' | 'progress_pct' | 'winner' | 'sources' | 'error'>,
   elapsed: string,
   sourceLabel: (id: string) => string
 ): { pendingLabel: string; message: string } {
@@ -121,7 +146,7 @@ export function formatRaceSourcesStatus(
       return `${label} 已完成`
     }
     if (item.status === 'failed') {
-      return `${label} 失败`
+      return `${label} 失败：${shortenRaceSourceError(item.error)}`
     }
     if (item.status === 'cancelled') {
       return `${label} 已取消`
@@ -132,6 +157,12 @@ export function formatRaceSourcesStatus(
   const parts = sources.map(partFor).join(' · ')
   const winnerLabel = race.winner ? sourceLabel(race.winner) : null
   const pct = Math.round(race.progress_pct)
+  const failedSummary =
+    failed.length > 0
+      ? failed
+          .map((item) => `${sourceLabel(item.id)}：${shortenRaceSourceError(item.error)}`)
+          .join('；')
+      : ''
 
   if (race.phase === 'committing') {
     return {
@@ -142,13 +173,21 @@ export function formatRaceSourcesStatus(
     }
   }
 
+  if (race.status === 'failed' || (failed.length > 0 && running.length === 0 && completed.length === 0)) {
+    const detail = race.error?.trim() || failedSummary || parts
+    return {
+      pendingLabel: '多源竞速失败',
+      message: `全量更新失败：${detail}（已耗时 ${elapsed}）`,
+    }
+  }
+
   if (running.length === 1 && completed.length > 0) {
     const active = running[0]
     const activeLabel = sourceLabel(active.id)
     const doneLabels = completed.map((item) => sourceLabel(item.id)).join('、')
     return {
       pendingLabel: `等待 ${activeLabel} ${Math.round(active.progress_pct)}%`,
-      message: `${doneLabels} 已采完，正在等待 ${activeLabel} 完整采集（含成分股）… ${parts}（已耗时 ${elapsed}）`,
+      message: `${doneLabels} 已采完，正在等待 ${activeLabel} 完整采集（含成分股）。${parts}（已耗时 ${elapsed}）`,
     }
   }
 
@@ -157,13 +196,6 @@ export function formatRaceSourcesStatus(
     return {
       pendingLabel: `竞速 · ${sourceLabel(active.id)} ${Math.round(active.progress_pct)}%`,
       message: `多源竞速中：${parts}（已耗时 ${elapsed}）...`,
-    }
-  }
-
-  if (failed.length > 0 && completed.length === 0) {
-    return {
-      pendingLabel: '多源竞速',
-      message: `多源竞速失败：${parts}（已耗时 ${elapsed}）`,
     }
   }
 

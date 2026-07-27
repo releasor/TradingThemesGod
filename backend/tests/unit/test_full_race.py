@@ -144,7 +144,10 @@ async def test_both_fail_status_failed():
     assert state["status"] == "failed"
     assert state["winner"] is None
     assert state["error"]
+    assert "全部数据源失败" in state["error"]
+    assert "a:" in state["error"] and "b:" in state["error"]
     assert all(sc.commit_calls == 0 for sc in scrapers.values())
+    assert all(item["status"] == "failed" and item["error"] for item in state["sources"])
 
 
 @pytest.mark.asyncio

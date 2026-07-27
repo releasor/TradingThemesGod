@@ -42,6 +42,48 @@ def _is_fallback_only(draft: FullScrapeDraft) -> bool:
     return bool(draft.themes) and not draft.stocks_by_code
 
 
+def _shorten_source_error(error: str | None, *, limit: int = 160) -> str:
+    """将底层异常压缩为可读短句（连接超时、HTTP 状态等）。"""
+    text = (error or "").strip()
+    if not text:
+        return "未知错误"
+    lower = text.lower()
+    if "remotedisconnected" in lower or "connection aborted" in lower:
+        return "上游提前断开连接"
+    if "connecttimeout" in lower or "connect timeout" in lower or "timed out" in lower:
+        host = ""
+        for marker in ("host='", 'host="', "host="):
+            idx = lower.find(marker)
+            if idx >= 0:
+                start = idx + len(marker)
+                end = start
+                while end < len(text) and text[end] not in "', )":
+                    end += 1
+                host = text[start:end]
+                break
+        return f"连接超时{f'（{host}）' if host else ''}"
+    if "max retries exceeded" in lower:
+        return "请求重试耗尽（上游不可达）"
+    if "proxyerror" in lower or ("proxy" in lower and "error" in lower):
+        return "代理/网络错误"
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
+
+
+def _aggregate_source_errors(sources: list[SourceRaceState]) -> str:
+    """汇总各源失败原因，供 race.error 与前端展示。"""
+    parts: list[str] = []
+    for src in sources:
+        if src.status == "failed":
+            parts.append(f"{src.id}: {_shorten_source_error(src.error)}")
+        elif src.status not in ("completed", "cancelled") and src.error:
+            parts.append(f"{src.id}: {_shorten_source_error(src.error)}")
+    if parts:
+        return "全部数据源失败 — " + "；".join(parts)
+    return "全部数据源失败"
+
+
 def default_full_race_sources() -> list[str]:
     """看板可选且实现 collect_full 的数据源。"""
     sources: list[str] = []
@@ -338,9 +380,13 @@ class FullRaceManager:
 
             state.status = "failed"
             state.phase = "done"
-            state.error = "all sources failed"
+            state.error = _aggregate_source_errors(state.sources)
             state.progress_pct = max(state.progress_pct, 100.0)
-            logger.error("full_race_all_failed", race_id=race_id)
+            logger.error(
+                "full_race_all_failed",
+                race_id=race_id,
+                error=state.error,
+            )
 
         finally:
             for scraper in scrapers.values():

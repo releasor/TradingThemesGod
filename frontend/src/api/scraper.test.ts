@@ -23,6 +23,7 @@ const {
   effectiveRaceCollectPct,
   formatRaceSourcesStatus,
   mapRaceProgressToDashboardPct,
+  shortenRaceSourceError,
 } = await import('./scraper')
 
 const sampleRace = (overrides: Partial<{
@@ -400,5 +401,79 @@ describe('race progress helpers', () => {
     expect(pendingLabel).toBe('等待 东方财富 15%')
     expect(message).toMatch(/AKShare 已采完，正在等待 东方财富 完整采集/)
     expect(message).toMatch(/东方财富 采集中 15%/)
+  })
+
+  it('shortenRaceSourceError compresses connect timeouts', () => {
+    expect(
+      shortenRaceSourceError(
+        "HTTPSConnectionPool(host='79.push2.eastmoney.com', port=443): Max retries exceeded (Caused by ConnectTimeoutError(...))"
+      )
+    ).toBe('连接超时（79.push2.eastmoney.com）')
+  })
+
+  it('shortenRaceSourceError compresses remote disconnects', () => {
+    expect(
+      shortenRaceSourceError(
+        "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+      )
+    ).toBe('上游提前断开连接')
+  })
+
+  it('formatRaceSourcesStatus does not duplicate failed source text', () => {
+    const { message } = formatRaceSourcesStatus(
+      {
+        phase: 'collecting',
+        status: 'racing',
+        progress_pct: 10,
+        winner: null,
+        sources: [
+          {
+            id: 'akshare',
+            status: 'failed',
+            progress_pct: 100,
+            error: "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))",
+          },
+          { id: 'eastmoney', status: 'running', progress_pct: 10 },
+        ],
+      },
+      '43 秒',
+      label
+    )
+
+    expect(message).toMatch(/AKShare 失败：上游提前断开连接/)
+    expect(message).toMatch(/东方财富 采集中 10%/)
+    expect(message.match(/上游提前断开连接/g)?.length).toBe(1)
+  })
+
+  it('formatRaceSourcesStatus surfaces failed source reasons', () => {
+    const { pendingLabel, message } = formatRaceSourcesStatus(
+      {
+        phase: 'done',
+        status: 'failed',
+        progress_pct: 100,
+        winner: null,
+        error: '全部数据源失败 — eastmoney: 连接超时；akshare: 连接超时',
+        sources: [
+          {
+            id: 'eastmoney',
+            status: 'failed',
+            progress_pct: 100,
+            error: "ConnectTimeoutError host='push2.eastmoney.com'",
+          },
+          {
+            id: 'akshare',
+            status: 'failed',
+            progress_pct: 100,
+            error: "ConnectTimeoutError host='79.push2.eastmoney.com'",
+          },
+        ],
+      },
+      '43 秒',
+      label
+    )
+
+    expect(pendingLabel).toBe('多源竞速失败')
+    expect(message).toMatch(/全量更新失败：全部数据源失败/)
+    expect(message).toMatch(/连接超时/)
   })
 })
