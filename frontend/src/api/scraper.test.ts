@@ -109,7 +109,11 @@ describe('scraper API', () => {
 
     const result = await runScraperAndWait('eastmoney', { pollInterval: 0 })
 
-    expect(mockPost).toHaveBeenCalledWith('/scraper/run/eastmoney', { params: {} })
+    expect(mockPost).toHaveBeenCalledWith(
+      '/scraper/run/eastmoney',
+      { params: {} },
+      expect.objectContaining({ signal: undefined })
+    )
     expect(mockGet).toHaveBeenCalledTimes(2)
     expect(result.status).toBe('completed')
   })
@@ -162,7 +166,11 @@ describe('scraper API', () => {
     ).rejects.toThrow(/超时/)
 
     expect(mockPost).toHaveBeenCalledTimes(1)
-    expect(mockPost).toHaveBeenCalledWith('/scraper/run/eastmoney', { params: {} })
+    expect(mockPost).toHaveBeenCalledWith(
+      '/scraper/run/eastmoney',
+      { params: {} },
+      expect.objectContaining({ signal: undefined })
+    )
   })
 
   it('passes AbortSignal to refreshThemeQuotes', async () => {
