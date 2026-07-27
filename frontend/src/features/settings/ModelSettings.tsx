@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  ArrowLeft,
   Bot,
   Check,
   Copy,
@@ -17,8 +16,8 @@ import {
   Wifi,
   Zap,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { AuthNav } from '@/components/AuthNav'
+import { AppCardNav } from '@/components/AppCardNav'
+import { SettingsSubnav } from '@/components/SettingsSubnav'
 import { GlowCard } from '@/components/GlowCard'
 import { cn } from '@/lib/utils'
 import {
@@ -158,7 +157,6 @@ function inputClassName(extra?: string) {
 }
 
 export function ModelSettings() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<number | undefined>()
   const [form, setForm] = useState<ModelProviderInput>(emptyForm)
@@ -249,37 +247,25 @@ export function ModelSettings() {
         className="pointer-events-none absolute -right-24 top-32 h-72 w-72 rounded-full bg-primary/5 blur-3xl"
       />
 
-      <motion.header
-        {...pageMotion}
-        className="sticky top-3 z-20 mx-3 mt-3 rounded-2xl border border-border/60 bg-background/75 shadow-lg shadow-black/5 backdrop-blur-xl sm:mx-4 sm:mt-4"
-      >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.96 }}
-              aria-label="返回首页"
-              onClick={() => navigate('/')}
-              className="rounded-xl border border-border/60 p-2 transition-colors hover:bg-accent"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </motion.button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Settings className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">模型设置</h1>
-              <p className="text-sm text-muted-foreground">配置图谱分析使用的模型服务</p>
-            </div>
+      <AppCardNav />
+
+      <div className="mx-auto w-full max-w-none space-y-3 px-3 pt-4 sm:px-4 lg:px-5 xl:px-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Settings className="h-5 w-5" />
           </div>
-          <AuthNav />
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">模型设置</h1>
+            <p className="text-sm text-muted-foreground">配置图谱分析使用的模型服务</p>
+          </div>
         </div>
-      </motion.header>
+        <SettingsSubnav />
+      </div>
 
       <motion.main
         {...pageMotion}
         transition={{ ...pageMotion.transition, delay: 0.06 }}
-        className="relative mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[280px_1fr]"
+        className="relative mx-auto grid w-full max-w-none gap-6 px-3 py-6 sm:px-4 lg:grid-cols-[280px_1fr] lg:px-5 xl:px-6"
       >
         <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
           <GlowCard animated className="overflow-hidden">
@@ -331,7 +317,8 @@ export function ModelSettings() {
                       >
                         <span
                           className={cn(
-                            'absolute inset-y-0 left-0 w-1 rounded-r-full bg-primary transition-opacity duration-300',
+                            // 暗色主题 --primary 接近白，勿用 bg-primary，否则像一条白竖线
+                            'absolute inset-y-0 left-0 w-1 rounded-r-full bg-sky-500 transition-opacity duration-300',
                             selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'
                           )}
                         />

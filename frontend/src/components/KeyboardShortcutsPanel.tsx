@@ -6,22 +6,7 @@
 import { useState, useEffect, memo } from 'react'
 import { X, Keyboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-/** 快捷键定义 */
-interface Shortcut {
-  key: string
-  description: string
-  modifiers?: string[]
-}
-
-/** 快捷键列表 */
-const shortcuts: Shortcut[] = [
-  { key: 'R', description: '刷新看板' },
-  { key: 'T', description: '打开题材库' },
-  { key: '/', description: '聚焦搜索' },
-  { key: '?', description: '显示快捷键帮助' },
-  { key: 'Esc', description: '关闭弹窗' },
-]
+import { KEYBOARD_SHORTCUTS } from '@/components/keyboardShortcuts'
 
 /** 快捷键提示面板属性 */
 interface KeyboardShortcutsPanelProps {
@@ -83,7 +68,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({ isO
 
         {/* 快捷键列表 */}
         <div className="mt-4 space-y-3">
-          {shortcuts.map((shortcut) => (
+          {KEYBOARD_SHORTCUTS.map((shortcut) => (
             <div
               key={shortcut.key}
               className="flex items-center justify-between"
