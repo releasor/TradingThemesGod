@@ -27,6 +27,12 @@ vi.mock('@/api/scraper', () => ({
   runScraperAndWait: vi.fn(),
 }))
 
+vi.mock('@/api/news', () => ({
+  fetchNews: vi.fn(),
+  fetchNewsSources: vi.fn(),
+  refreshNews: vi.fn(),
+}))
+
 vi.mock('@/api/short-term', () => ({
   fetchShortTermOverview: vi.fn(),
   fetchFirstToSecondCandidates: vi.fn(),
@@ -64,6 +70,7 @@ import {
   fetchThemes,
 } from '@/api/theme'
 import { fetchSystemStats } from '@/api/stats'
+import { refreshNews } from '@/api/news'
 import { fetchDashboardScraperSources, fetchLatestSuccessfulRun, refreshThemeQuotes, runScraperWithFallback } from '@/api/scraper'
 import {
   fetchFirstToSecondCandidates,
@@ -73,6 +80,7 @@ import {
   refreshShortTermData,
   refreshShortTermSignals,
 } from '@/api/short-term'
+import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/components/charts/ThemeRiseFallBar', () => ({
   ThemeRiseFallBar: ({
@@ -183,6 +191,7 @@ function renderDashboard() {
 describe('ThemeDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAuthStore.setState({ token: null, user: null })
     vi.mocked(fetchThemeRanking).mockResolvedValue({
       items: mockThemes,
       limit: 2,
@@ -378,17 +387,111 @@ describe('ThemeDashboard', () => {
 
     await waitFor(() => {
       expect(refreshThemeQuotes).toHaveBeenCalledTimes(1)
-      expect(refreshShortTermData).toHaveBeenCalledWith({ period: 'today' })
+      expect(refreshShortTermData).toHaveBeenCalledWith(
+        { period: 'today' },
+        expect.any(AbortSignal)
+      )
     })
     expect(await screen.findByText(/策略卡实时数据已更新/)).toBeInTheDocument()
   })
 
-  it('进入页面不会自动快刷看板，除非打开自动刷新', async () => {
+  it('无自动刷新入口，进入页面不会自动快刷', async () => {
     renderDashboard()
 
     expect(await screen.findByRole('heading', { name: '人工智能' })).toBeInTheDocument()
     expect(refreshThemeQuotes).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: '自动刷新' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '自动刷新' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('全量更新数据源')).not.toBeInTheDocument()
+  })
+
+  it('轻量刷新在登录后调用短线信号与一进二，且不刷新资讯', async () => {
+    const user = userEvent.setup()
+    useAuthStore.setState({
+      token: 'test-token',
+      user: { id: 1, username: 'tester', created_at: '2026-07-01T00:00:00Z' },
+    })
+    renderDashboard()
+    await screen.findByRole('heading', { name: '人工智能' })
+
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    await waitFor(() => {
+      expect(refreshShortTermSignals).toHaveBeenCalled()
+      expect(fetchShortTermSectors).toHaveBeenCalled()
+      expect(refreshFirstToSecondCandidates).toHaveBeenCalled()
+    })
+    expect(refreshNews).not.toHaveBeenCalled()
+  })
+
+  it('取消刷新显示取消文案且不覆盖已提交板块', async () => {
+    const user = userEvent.setup()
+    let resolveRise!: (value: Awaited<ReturnType<typeof fetchThemes>>) => void
+    const risePromise = new Promise<Awaited<ReturnType<typeof fetchThemes>>>((resolve) => {
+      resolveRise = resolve
+    })
+
+    renderDashboard()
+    expect(await screen.findByRole('heading', { name: '人工智能' })).toBeInTheDocument()
+
+    vi.mocked(fetchThemes).mockImplementation(async (params) => {
+      if (params.sort_by === 'rise_fall_pct') {
+        return risePromise
+      }
+      return {
+        items: mockThemes,
+        total: 279,
+        page: 1,
+        page_size: 1,
+        total_pages: 279,
+      }
+    })
+    vi.mocked(fetchThemeRanking).mockResolvedValue({
+      items: [
+        {
+          ...mockThemes[0],
+          name: '已提交热度',
+        },
+      ],
+      limit: 1,
+    })
+
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    expect(await screen.findByRole('button', { name: '取消' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchThemeRanking.mock.calls.length).toBeGreaterThan(1)
+    })
+    expect(await screen.findByRole('heading', { name: '已提交热度' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '取消' }))
+    expect(await screen.findByText('已取消，已保留成功板块')).toBeInTheDocument()
+
+    resolveRise({
+      items: [
+        {
+          id: 99,
+          name: '不应覆盖涨幅榜',
+          code: 'X099',
+          heat_index: 1,
+          rise_fall_pct: 9.9,
+          stock_count: 1,
+          tags: null,
+          category: null,
+          description: null,
+          source: 'eastmoney',
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('不应覆盖涨幅榜')).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('heading', { name: '已提交热度' })).toBeInTheDocument()
+    expect(refreshNews).not.toHaveBeenCalled()
   })
 
   it('手动刷新后显示行情更新时间', async () => {
@@ -488,14 +591,16 @@ describe('ThemeDashboard', () => {
       expect(runScraperWithFallback).not.toHaveBeenCalled()
     })
     expect(
-      await screen.findByText(/部分刷新完成：题材行情 495 个；策略卡/)
+      await screen.findByText(/部分刷新完成：题材行情 495 个/)
     ).toBeInTheDocument()
     const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
     expect(
       within(controls).getByText(
-        /已更新：题材行情 495 个；策略卡。未完成：短线信号（未登录）。更新于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}，耗时 \d+ 秒/
+        /已更新：题材行情 495 个.*策略卡.*未完成：短线信号（未登录）。更新于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}，耗时 \d+ 秒/
       )
     ).toBeInTheDocument()
+    expect(refreshFirstToSecondCandidates).toHaveBeenCalled()
+    expect(refreshNews).not.toHaveBeenCalled()
   })
 
   it('点击全量更新时触发爬虫并刷新看板', async () => {
@@ -518,7 +623,10 @@ describe('ThemeDashboard', () => {
 
     const successControls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
     expect(await within(successControls).findByText(/东方财富全量更新成功，共更新 126 条数据/)).toBeInTheDocument()
-    expect(runScraperWithFallback).toHaveBeenCalledWith(['eastmoney', 'akshare'])
+    expect(runScraperWithFallback).toHaveBeenCalledWith(
+      ['eastmoney', 'akshare'],
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(vi.mocked(fetchThemeRanking).mock.calls.length).toBeGreaterThan(rankingCallsBeforeUpdate)
     expect(vi.mocked(fetchMarketSignals).mock.calls.length).toBeGreaterThan(1)
     expect(vi.mocked(fetchIndicatorSignals).mock.calls.length).toBeGreaterThan(1)
@@ -577,7 +685,7 @@ describe('ThemeDashboard', () => {
     expect(await within(controls).findByText(/东方财富全量更新成功，共更新 126 条数据/)).toBeInTheDocument()
   })
 
-  it('uses selected scraper source for full update', async () => {
+  it('全量更新固定多源顺序，无数据源下拉', async () => {
     const user = userEvent.setup()
     vi.mocked(runScraperWithFallback).mockResolvedValue({
       run_id: 12,
@@ -587,15 +695,17 @@ describe('ThemeDashboard', () => {
       finished_at: '2026-07-16T02:03:04Z',
       items_scraped: 88,
       error_message: null,
-      attempted_sources: ['akshare', 'eastmoney'],
+      attempted_sources: ['eastmoney', 'akshare'],
     })
     renderDashboard()
-    await screen.findByLabelText('全量更新数据源')
+    expect(screen.queryByLabelText('全量更新数据源')).not.toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText('全量更新数据源'), 'akshare')
     await user.click(screen.getByRole('button', { name: '全量更新' }))
 
-    expect(runScraperWithFallback).toHaveBeenCalledWith(['akshare', 'eastmoney'])
+    expect(runScraperWithFallback).toHaveBeenCalledWith(
+      ['eastmoney', 'akshare'],
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
     expect(await within(controls).findByText(/AKShare全量更新成功，共更新 88 条数据/)).toBeInTheDocument()
   })
@@ -677,11 +787,14 @@ describe('ThemeDashboard', () => {
     await user.click(screen.getByRole('button', { name: '刷新' }))
 
     await waitFor(() => {
-      expect(refreshShortTermData).toHaveBeenCalledWith({
-        period: 'custom',
-        startDate: '2026-06-01',
-        endDate: '2026-06-30',
-      })
+      expect(refreshShortTermData).toHaveBeenCalledWith(
+        {
+          period: 'custom',
+          startDate: '2026-06-01',
+          endDate: '2026-06-30',
+        },
+        expect.any(AbortSignal)
+      )
     })
     expect(screen.getByText('连板接力')).toBeInTheDocument()
 
@@ -772,7 +885,10 @@ describe('ThemeDashboard', () => {
     await user.click(screen.getByRole('button', { name: '刷新' }))
 
     await waitFor(() => {
-      expect(refreshShortTermData).toHaveBeenCalledWith({ period: 'current_week' })
+      expect(refreshShortTermData).toHaveBeenCalledWith(
+        { period: 'current_week' },
+        expect.any(AbortSignal)
+      )
     })
     expect(await screen.findByText(/实时行情刷新失败/)).toBeInTheDocument()
     expect(screen.queryByText(/正在拉取实时行情/)).not.toBeInTheDocument()

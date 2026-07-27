@@ -35,6 +35,7 @@ interface ScraperSourceListResponse {
 interface WaitOptions {
   pollInterval?: number
   timeout?: number
+  signal?: AbortSignal
 }
 
 export interface ScraperRunWithAttempts extends ScraperRun {
@@ -75,14 +76,24 @@ export async function refreshThemeQuotes(signal?: AbortSignal): Promise<ThemeQuo
   return data
 }
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    const err = new Error('Aborted')
+    err.name = 'AbortError'
+    throw err
+  }
+}
+
 async function pollScraperRun(
   runId: number,
-  { pollInterval = 2000, timeout = 10 * 60 * 1000 }: WaitOptions = {}
+  { pollInterval = 2000, timeout = 10 * 60 * 1000, signal }: WaitOptions = {}
 ): Promise<ScraperRun> {
   const deadline = Date.now() + timeout
   while (Date.now() <= deadline) {
+    throwIfAborted(signal)
     await sleep(pollInterval)
-    const { data: run } = await apiClient.get<ScraperRun>(`/scraper/status/${runId}`)
+    throwIfAborted(signal)
+    const { data: run } = await apiClient.get<ScraperRun>(`/scraper/status/${runId}`, { signal })
     if (run.status !== 'running') return run
   }
   throw new Error(
@@ -93,33 +104,40 @@ async function pollScraperRun(
 /** 触发采集任务并轮询到最终状态。已在运行时后端会返回同一 run，直接附着轮询。 */
 export async function runScraperAndWait(
   source: string,
-  { pollInterval = 2000, timeout = 20 * 60 * 1000 }: WaitOptions = {}
+  { pollInterval = 2000, timeout = 20 * 60 * 1000, signal }: WaitOptions = {}
 ): Promise<ScraperRun> {
-  const { data: startedRun } = await apiClient.post<ScraperRun>(`/scraper/run/${source}`, {
-    params: {},
-  })
+  throwIfAborted(signal)
+  const { data: startedRun } = await apiClient.post<ScraperRun>(
+    `/scraper/run/${source}`,
+    { params: {} },
+    { signal }
+  )
 
   if (startedRun.status !== 'running') return startedRun
-  return pollScraperRun(startedRun.run_id, { pollInterval, timeout })
+  return pollScraperRun(startedRun.run_id, { pollInterval, timeout, signal })
 }
 
 /** 按顺序尝试多个数据源；超时不切源（避免误报成功且后台任务仍锁住轻量刷新）。 */
 export async function runScraperWithFallback(
   sources: string[],
-  { pollInterval = 2000, timeout = 20 * 60 * 1000 }: WaitOptions = {}
+  { pollInterval = 2000, timeout = 20 * 60 * 1000, signal }: WaitOptions = {}
 ): Promise<ScraperRunWithAttempts> {
   const attemptedSources: string[] = []
   let lastError: Error | null = null
 
   for (const source of sources) {
+    throwIfAborted(signal)
     attemptedSources.push(source)
     try {
-      const run = await runScraperAndWait(source, { pollInterval, timeout })
+      const run = await runScraperAndWait(source, { pollInterval, timeout, signal })
       if (run.status === 'completed') {
         return { ...run, attempted_sources: attemptedSources }
       }
       lastError = new Error(run.error_message || `${source} 全量更新失败`)
     } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw error
+      }
       const err = error instanceof Error ? error : new Error(String(error))
       // 超时：该源多半仍在跑，切源会让界面显示成功但 refresh-quotes 继续 409
       if (err.message.includes('超时')) {

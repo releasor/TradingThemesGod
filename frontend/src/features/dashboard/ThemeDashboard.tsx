@@ -3,7 +3,7 @@
  * 展示热门题材排名，支持加载、错误和空状态。
  */
 
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -16,26 +16,31 @@ import {
 import {
   fetchFirstToSecondCandidates,
   fetchShortTermOverview,
+  fetchShortTermSectors,
   refreshFirstToSecondCandidates,
   refreshShortTermData,
   refreshShortTermSignals,
 } from '@/api/short-term'
-import { fetchLatestSuccessfulRun, fetchDashboardScraperSources, refreshThemeQuotes, runScraperWithFallback } from '@/api/scraper'
+import {
+  fetchLatestSuccessfulRun,
+  fetchDashboardScraperSources,
+  refreshThemeQuotes,
+  runScraperWithFallback,
+} from '@/api/scraper'
+import { fetchSystemStats } from '@/api/stats'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useRefreshTimer, formatRefreshDurationMs, quoteSourceLabel } from '@/hooks/useRefreshTimer'
 import { ThemeCard } from '@/components/ThemeCard'
 import { ThemeCardSkeleton } from '@/components/ThemeCardSkeleton'
 import { QuickStats } from '@/components/QuickStats'
-import { fetchSystemStats } from '@/api/stats'
 import { ThemeRiseFallBar } from '@/components/charts/ThemeRiseFallBar'
 import { LoadingBar } from '@/components/LoadingBar'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorDisplay } from '@/components/ErrorDisplay'
-import { AutoRefreshButton } from '@/components/AutoRefreshButton'
+import { DashboardRefreshControls } from '@/components/DashboardRefreshControls'
 import { AppCardNav } from '@/components/AppCardNav'
 import { DASHBOARD_REFRESH_EVENT } from '@/components/GlobalKeyboardShortcuts'
-import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ToastContainer, useToast } from '@/components/Toast'
 import { MarketSignalSection } from '@/components/MarketSignalSection'
 import { BoardUpgradeReference } from '@/components/BoardUpgradeReference'
@@ -46,10 +51,12 @@ import { GlowCard } from '@/components/GlowCard'
 import { strategyCardQueryKey } from '@/features/dashboard/strategyCardQuery'
 import {
   SECTION_IDS,
+  type SectionId,
   formatSectionRefreshedAt,
   readSectionRefreshedAt,
+  writeSectionRefreshedAt,
 } from '@/features/dashboard/sectionRefresh'
-import { isCancelledError, refetchIgnoringCancel } from '@/lib/react-query'
+import { isCancelledError } from '@/lib/react-query'
 import type {
   ShortTermOverviewResponse,
   ShortTermPeriod,
@@ -62,10 +69,18 @@ function formatServerTime(value: string): string {
 }
 
 type UpdateResult = {
-  type: 'progress' | 'success' | 'error'
+  type: 'progress' | 'success' | 'error' | 'info'
   message: string
 } | null
 
+type RefreshSession = {
+  controller: AbortController
+  mode: 'light' | 'full'
+}
+
+type SectionTimesState = Record<SectionId, string | null>
+
+const FULL_UPDATE_SOURCES = ['eastmoney', 'akshare'] as const
 const latestScraperRunQueryKey = (source: string) =>
   ['latest-successful-scraper-run', source] as const
 const SHORT_TERM_PERIOD_LABELS: Record<ShortTermPeriod, string> = {
@@ -99,6 +114,18 @@ function formatRefreshProgress(done: string[], pending: string | null, elapsed: 
   return `${donePart}正在更新：${pending}（已耗时 ${elapsed}）...`
 }
 
+function initialSectionTimes(): SectionTimesState {
+  return {
+    [SECTION_IDS.heatRanking]: readSectionRefreshedAt(SECTION_IDS.heatRanking),
+    [SECTION_IDS.riseRanking]: readSectionRefreshedAt(SECTION_IDS.riseRanking),
+    [SECTION_IDS.strategyCard]: readSectionRefreshedAt(SECTION_IDS.strategyCard),
+    [SECTION_IDS.shortTermRadar]: readSectionRefreshedAt(SECTION_IDS.shortTermRadar),
+    [SECTION_IDS.firstToSecond]: readSectionRefreshedAt(SECTION_IDS.firstToSecond),
+    [SECTION_IDS.marketSignals]: readSectionRefreshedAt(SECTION_IDS.marketSignals),
+    [SECTION_IDS.indicatorSignals]: readSectionRefreshedAt(SECTION_IDS.indicatorSignals),
+  }
+}
+
 export function ThemeDashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -115,21 +142,24 @@ export function ThemeDashboard() {
   const [lastStrategyOverview, setLastStrategyOverview] =
     useState<ShortTermOverviewResponse | null>(null)
   const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false)
-  const [isFirstToSecondRefreshing, setIsFirstToSecondRefreshing] = useState(false)
-  const [selectedScraperSource, setSelectedScraperSource] = useState('eastmoney')
+  const [isStrategyRefreshing, setIsStrategyRefreshing] = useState(false)
+  const [refreshingSections, setRefreshingSections] = useState<Partial<Record<SectionId, boolean>>>(
+    {}
+  )
+  const [sectionTimes, setSectionTimes] = useState<SectionTimesState>(initialSectionTimes)
   const lightRefreshDoneRef = useRef<string[]>([])
   const lightRefreshPendingRef = useRef<string | null>('题材行情')
+  const sessionRef = useRef<RefreshSession | null>(null)
 
-  // Task 4 placeholder labels; Task 5 will wire live per-section updates
   const sectionRefreshedAtLabels = useMemo(
     () => ({
-      heatRanking: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.heatRanking)),
-      riseRanking: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.riseRanking)),
-      strategyCard: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.strategyCard)),
-      shortTermRadar: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.shortTermRadar)),
-      firstToSecond: formatSectionRefreshedAt(readSectionRefreshedAt(SECTION_IDS.firstToSecond)),
+      heatRanking: formatSectionRefreshedAt(sectionTimes[SECTION_IDS.heatRanking]),
+      riseRanking: formatSectionRefreshedAt(sectionTimes[SECTION_IDS.riseRanking]),
+      strategyCard: formatSectionRefreshedAt(sectionTimes[SECTION_IDS.strategyCard]),
+      shortTermRadar: formatSectionRefreshedAt(sectionTimes[SECTION_IDS.shortTermRadar]),
+      firstToSecond: formatSectionRefreshedAt(sectionTimes[SECTION_IDS.firstToSecond]),
     }),
-    []
+    [sectionTimes]
   )
 
   const handleThemeClick = useCallback(
@@ -146,7 +176,6 @@ export function ThemeDashboard() {
     data: riseRanking,
     isLoading: isRiseRankingLoading,
     isFetching: isRiseRankingFetching,
-    refetch: refetchRiseRanking,
   } = useQuery({
     queryKey: ['theme-rise-ranking', 20],
     queryFn: () =>
@@ -158,11 +187,7 @@ export function ThemeDashboard() {
       }),
     staleTime: 2 * 60 * 1000,
   })
-  const {
-    data: themeCount,
-    isFetching: isThemeCountFetching,
-    refetch: refetchThemeCount,
-  } = useQuery({
+  const { data: themeCount, isFetching: isThemeCountFetching } = useQuery({
     queryKey: ['theme-count'],
     queryFn: () =>
       fetchThemes({
@@ -173,10 +198,7 @@ export function ThemeDashboard() {
       }),
     staleTime: 2 * 60 * 1000,
   })
-  const {
-    data: systemStats,
-    refetch: refetchSystemStats,
-  } = useQuery({
+  const { data: systemStats } = useQuery({
     queryKey: ['system-stats'],
     queryFn: fetchSystemStats,
     staleTime: 2 * 60 * 1000,
@@ -186,7 +208,6 @@ export function ThemeDashboard() {
     isLoading: isMarketSignalsLoading,
     isError: isMarketSignalsError,
     isFetching: isMarketSignalsFetching,
-    refetch: refetchMarketSignals,
   } = useQuery({
     queryKey: ['market-signals'],
     queryFn: fetchMarketSignals,
@@ -197,7 +218,6 @@ export function ThemeDashboard() {
     isLoading: isIndicatorSignalsLoading,
     isError: isIndicatorSignalsError,
     isFetching: isIndicatorSignalsFetching,
-    refetch: refetchIndicatorSignals,
   } = useQuery({
     queryKey: ['indicator-signals'],
     queryFn: fetchIndicatorSignals,
@@ -242,7 +262,6 @@ export function ThemeDashboard() {
     isError: isDatabaseStrategyError,
     isPlaceholderData: isDatabaseStrategyPlaceholder,
     error: databaseStrategyError,
-    refetch: refetchDatabaseStrategyOverview,
   } = useQuery({
     queryKey: databaseStrategyKey,
     queryFn: () => fetchShortTermOverview(strategyQueryParams),
@@ -277,61 +296,17 @@ export function ThemeDashboard() {
   const isStrategyPreview =
     !liveStrategyOverview && Boolean(databaseStrategyOverview?.strategy_card)
   const strategyOverviewForCard = useMemo(() => {
-    return (
-      liveStrategyOverview ??
-      databaseStrategyOverview ??
-      lastStrategyOverview
-    )
+    return liveStrategyOverview ?? databaseStrategyOverview ?? lastStrategyOverview
   }, [databaseStrategyOverview, lastStrategyOverview, liveStrategyOverview])
-  const refreshStrategyDataMutation = useMutation({
-    mutationFn: (params: typeof strategyQueryParams) => refreshShortTermData(params),
-    onMutate: () => {
-      setPeriodStatus({ type: 'progress', message: '正在拉取实时行情并更新策略卡...' })
-    },
-    onSuccess: (data, params) => {
-      const liveKey = strategyCardQueryKey(
-        'live',
-        params.period,
-        params.period === 'custom' ? (params.startDate ?? null) : null,
-        params.period === 'custom' ? (params.endDate ?? null) : null
-      )
-      queryClient.setQueryData(liveKey, data)
-      setLastStrategyOverview(data)
-      const meta = data.refresh_meta
-      const degraded = Boolean(meta?.quote_message) || meta?.quote_source === 'database'
-      const timing = meta?.elapsed_ms ? `，耗时 ${formatRefreshDurationMs(meta.elapsed_ms)}` : ''
-      const source = meta && !degraded ? `，数据源 ${quoteSourceLabel(meta.quote_source)}` : ''
-      const attempts =
-        meta && meta.quote_attempts.length > 1
-          ? `（${meta.quote_attempts.map(quoteSourceLabel).join(' → ')}）`
-          : ''
-      setPeriodStatus({
-        type: degraded ? 'error' : 'success',
-        message: degraded
-          ? meta?.quote_message ||
-            `实时行情不可用，已回退数据库数据${attempts}`
-          : `${SHORT_TERM_PERIOD_LABELS[params.period]}策略卡实时数据已更新${timing}${source}${attempts}`,
-      })
-    },
-    onError: (error) => {
-      setPeriodStatus({
-        type: 'error',
-        message: `实时行情刷新失败：${shortTermErrorMessage(error)}`,
-      })
-    },
-  })
   const isStrategyPeriodLoading =
-    refreshStrategyDataMutation.isPending ||
+    isStrategyRefreshing ||
     (isDatabaseStrategyFetching && !databaseOverviewMatches && !liveStrategyOverview)
-  const { elapsedLabel: strategyRefreshElapsed } = useRefreshTimer(
-    refreshStrategyDataMutation.isPending
-  )
+  const { elapsedLabel: strategyRefreshElapsed } = useRefreshTimer(isStrategyRefreshing)
 
   const {
     data: firstToSecondCandidates,
     isLoading: isFirstToSecondLoading,
     isFetching: isFirstToSecondFetching,
-    refetch: refetchFirstToSecondCandidates,
   } = useQuery({
     queryKey: ['first-to-second-candidates'],
     queryFn: () => fetchFirstToSecondCandidates({}),
@@ -345,128 +320,168 @@ export function ThemeDashboard() {
     staleTime: 10 * 60 * 1000,
   })
 
-  useEffect(() => {
-    if (dashboardScraperSources.length === 0) return
-    const defaultSource =
-      dashboardScraperSources.find((item) => item.is_default)?.id ?? dashboardScraperSources[0].id
-    setSelectedScraperSource((current) =>
-      dashboardScraperSources.some((item) => item.id === current) ? current : defaultSource
-    )
-  }, [dashboardScraperSources])
-
-  const selectedScraperSourceLabel = useMemo(
-    () =>
-      dashboardScraperSources.find((item) => item.id === selectedScraperSource)?.label ??
-      selectedScraperSource,
-    [dashboardScraperSources, selectedScraperSource]
-  )
-
   const { data: latestSuccessfulUpdate, refetch: refetchLatestSuccessfulUpdate } = useQuery({
-    queryKey: latestScraperRunQueryKey(selectedScraperSource),
-    queryFn: async () =>
-      (await fetchLatestSuccessfulRun(selectedScraperSource))?.finished_at ?? null,
+    queryKey: latestScraperRunQueryKey('eastmoney'),
+    queryFn: async () => (await fetchLatestSuccessfulRun('eastmoney'))?.finished_at ?? null,
     staleTime: 2 * 60 * 1000,
   })
 
   const { elapsedLabel: dashboardRefreshElapsed } = useRefreshTimer(isDashboardRefreshing)
   const { elapsedLabel: fullUpdateElapsed } = useRefreshTimer(isUpdating)
 
-  const refreshInFlightRef = useRef<Promise<void> | null>(null)
+  const setSectionBusy = useCallback((sectionId: SectionId, busy: boolean) => {
+    setRefreshingSections((prev) => {
+      if (Boolean(prev[sectionId]) === busy) return prev
+      return { ...prev, [sectionId]: busy }
+    })
+  }, [])
 
-  const refreshMainDashboard = useCallback(async () => {
-    if (refreshInFlightRef.current) {
-      return refreshInFlightRef.current
-    }
+  const clearSectionBusy = useCallback(() => {
+    setRefreshingSections({})
+    setIsStrategyRefreshing(false)
+  }, [])
 
-    const run = (async () => {
-      const tasks = [
-        refetchIgnoringCancel(refetch),
-        refetchIgnoringCancel(refetchRiseRanking),
-        refetchIgnoringCancel(refetchThemeCount),
-        refetchIgnoringCancel(refetchSystemStats),
-        refetchIgnoringCancel(refetchMarketSignals),
-        refetchIgnoringCancel(refetchIndicatorSignals),
-        ...(strategyPeriodEnabled
-          ? [refetchIgnoringCancel(refetchDatabaseStrategyOverview)]
-          : []),
-      ]
-      await Promise.all(tasks)
-      // 一进二需登录，失败不应卡住整页刷新
-      await refetchIgnoringCancel(refetchFirstToSecondCandidates).catch(() => undefined)
-    })()
-
-    refreshInFlightRef.current = run
-    try {
-      await run
-    } finally {
-      if (refreshInFlightRef.current === run) {
-        refreshInFlightRef.current = null
+  const commitSection = useCallback(
+    async <T,>(
+      sectionId: SectionId,
+      queryKey: unknown[],
+      fetcher: (signal: AbortSignal) => Promise<T>,
+      signal: AbortSignal
+    ): Promise<boolean> => {
+      setSectionBusy(sectionId, true)
+      try {
+        const data = await fetcher(signal)
+        if (signal.aborted) return false
+        queryClient.setQueryData(queryKey, data)
+        const iso = new Date().toISOString()
+        writeSectionRefreshedAt(sectionId, iso)
+        setSectionTimes((prev) => ({ ...prev, [sectionId]: iso }))
+        return true
+      } catch (e) {
+        if (isCancelledError(e) || signal.aborted) return false
+        throw e
+      } finally {
+        setSectionBusy(sectionId, false)
       }
-    }
-  }, [
-    refetch,
-    refetchDatabaseStrategyOverview,
-    refetchFirstToSecondCandidates,
-    refetchIndicatorSignals,
-    refetchMarketSignals,
-    refetchRiseRanking,
-    refetchSystemStats,
-    refetchThemeCount,
-    strategyPeriodEnabled,
-  ])
+    },
+    [queryClient, setSectionBusy]
+  )
 
-  const handleLightRefresh = useCallback(async (options?: { silent?: boolean }) => {
-    const startedAt = Date.now()
-    const done: string[] = []
-    const skipped: string[] = []
-    lightRefreshDoneRef.current = []
-    lightRefreshPendingRef.current = '题材行情'
-    setIsDashboardRefreshing(true)
-    if (!options?.silent) {
-      setUpdateResult({
-        type: 'progress',
-        message: formatRefreshProgress(done, '题材行情', '0 秒'),
-      })
-    }
+  const cancelRefresh = useCallback(() => {
+    sessionRef.current?.controller.abort()
+    sessionRef.current = null
+    setIsDashboardRefreshing(false)
+    setIsUpdating(false)
+    clearSectionBusy()
+    lightRefreshPendingRef.current = null
+    setUpdateResult({ type: 'info', message: '已取消，已保留成功板块' })
+  }, [clearSectionBusy])
 
-    const publishProgress = (pending: string | null) => {
+  const publishProgress = useCallback(
+    (done: string[], pending: string | null, startedAt: number, mode: 'light' | 'full') => {
       lightRefreshDoneRef.current = [...done]
       lightRefreshPendingRef.current = pending
-      if (options?.silent) return
+      if (mode === 'full' && !pending) return
       setUpdateResult({
         type: 'progress',
-        message: formatRefreshProgress(
-          done,
-          pending,
-          formatRefreshDurationMs(Date.now() - startedAt)
-        ),
+        message:
+          mode === 'full' && pending === null
+            ? formatRefreshProgress(done, null, formatRefreshDurationMs(Date.now() - startedAt))
+            : formatRefreshProgress(
+                done,
+                pending,
+                formatRefreshDurationMs(Date.now() - startedAt)
+              ),
       })
-    }
+    },
+    []
+  )
 
-    try {
-      let quotes
-      try {
-        quotes = await refreshThemeQuotes()
-      } catch (quotesError) {
-        if (apiErrorStatus(quotesError) === 409) {
-          // 另一路行情刷新进行中：自动刷新静默跳过，避免控制台与界面刷 409
-          if (options?.silent) {
-            setIsDashboardRefreshing(false)
-            lightRefreshPendingRef.current = null
-            return
+  const runSectionPipeline = useCallback(
+    async (
+      signal: AbortSignal,
+      done: string[],
+      skipped: string[],
+      startedAt: number,
+      mode: 'light' | 'full'
+    ) => {
+      const mark = (pending: string | null) => publishProgress(done, pending, startedAt, mode)
+
+      mark('热度榜 / 涨幅榜 / 信号')
+      const rankingResults = await Promise.allSettled([
+        commitSection(
+          SECTION_IDS.heatRanking,
+          ['theme-ranking', limit],
+          (s) => fetchThemeRanking(limit, s),
+          signal
+        ),
+        commitSection(
+          SECTION_IDS.riseRanking,
+          ['theme-rise-ranking', 20],
+          (s) =>
+            fetchThemes(
+              {
+                page: 1,
+                page_size: 20,
+                sort_by: 'rise_fall_pct',
+                sort_order: 'desc',
+              },
+              s
+            ),
+          signal
+        ),
+        commitSection(
+          SECTION_IDS.marketSignals,
+          ['market-signals'],
+          (s) => fetchMarketSignals(s),
+          signal
+        ),
+        commitSection(
+          SECTION_IDS.indicatorSignals,
+          ['indicator-signals'],
+          (s) => fetchIndicatorSignals(s),
+          signal
+        ),
+        (async () => {
+          try {
+            const data = await fetchThemes(
+              {
+                page: 1,
+                page_size: 1,
+                sort_by: 'heat_index',
+                sort_order: 'desc',
+              },
+              signal
+            )
+            if (signal.aborted) return false
+            queryClient.setQueryData(['theme-count'], data)
+            return true
+          } catch (e) {
+            if (isCancelledError(e) || signal.aborted) return false
+            throw e
           }
-          throw new Error(
-            shortTermErrorMessage(quotesError) ||
-              '行情刷新进行中，请稍后再试'
-          )
+        })(),
+        (async () => {
+          try {
+            const data = await fetchSystemStats(signal)
+            if (signal.aborted) return false
+            queryClient.setQueryData(['system-stats'], data)
+            return true
+          } catch (e) {
+            if (isCancelledError(e) || signal.aborted) return false
+            throw e
+          }
+        })(),
+      ])
+      if (signal.aborted) return
+      const rankingLabels = ['热度榜', '涨幅榜', '市场表现', '行情指标'] as const
+      rankingResults.slice(0, 4).forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value) {
+          done.push(rankingLabels[index])
+        } else if (result.status === 'rejected') {
+          skipped.push(`${rankingLabels[index]}失败：${shortTermErrorMessage(result.reason)}`)
         }
-        throw quotesError
-      }
-      const refreshedAt = quotes.refreshed_at || new Date().toISOString()
-      setLastUpdate(refreshedAt)
-      done.push(`题材行情 ${quotes.themes_updated} 个`)
-      await refreshMainDashboard()
-      publishProgress(strategyPeriodEnabled ? '策略卡' : token ? '短线信号' : null)
+      })
 
       if (strategyPeriodEnabled) {
         if (shortTermPeriod === 'custom' && (!customStartDate || !customEndDate)) {
@@ -476,42 +491,173 @@ export function ThemeDashboard() {
             message: '请先选择自定义日期范围后再刷新策略卡',
           })
         } else {
+          mark('策略卡')
+          setIsStrategyRefreshing(true)
+          setPeriodStatus({ type: 'progress', message: '正在拉取实时行情并更新策略卡...' })
           try {
-            await refreshStrategyDataMutation.mutateAsync(strategyQueryParams)
+            const data = await refreshShortTermData(strategyQueryParams, signal)
+            if (signal.aborted) return
+            const liveKey = strategyCardQueryKey(
+              'live',
+              strategyQueryParams.period,
+              strategyQueryParams.period === 'custom'
+                ? (strategyQueryParams.startDate ?? null)
+                : null,
+              strategyQueryParams.period === 'custom' ? (strategyQueryParams.endDate ?? null) : null
+            )
+            queryClient.setQueryData(liveKey, data)
+            setLastStrategyOverview(data)
+            const iso = new Date().toISOString()
+            writeSectionRefreshedAt(SECTION_IDS.strategyCard, iso)
+            setSectionTimes((prev) => ({ ...prev, [SECTION_IDS.strategyCard]: iso }))
             done.push('策略卡')
+            const meta = data.refresh_meta
+            const degraded = Boolean(meta?.quote_message) || meta?.quote_source === 'database'
+            const timing = meta?.elapsed_ms
+              ? `，耗时 ${formatRefreshDurationMs(meta.elapsed_ms)}`
+              : ''
+            const source =
+              meta && !degraded ? `，数据源 ${quoteSourceLabel(meta.quote_source)}` : ''
+            const attempts =
+              meta && meta.quote_attempts.length > 1
+                ? `（${meta.quote_attempts.map(quoteSourceLabel).join(' → ')}）`
+                : ''
+            setPeriodStatus({
+              type: degraded ? 'error' : 'success',
+              message: degraded
+                ? meta?.quote_message || `实时行情不可用，已回退数据库数据${attempts}`
+                : `${SHORT_TERM_PERIOD_LABELS[strategyQueryParams.period]}策略卡实时数据已更新${timing}${source}${attempts}`,
+            })
           } catch (strategyError) {
+            if (isCancelledError(strategyError) || signal.aborted) return
             skipped.push(`策略卡失败：${shortTermErrorMessage(strategyError)}`)
-            if (!isCancelledError(strategyError) && !options?.silent) {
-              toast.error(`策略卡刷新失败：${shortTermErrorMessage(strategyError)}`)
-            }
+            setPeriodStatus({
+              type: 'error',
+              message: `实时行情刷新失败：${shortTermErrorMessage(strategyError)}`,
+            })
+            toast.error(`策略卡刷新失败：${shortTermErrorMessage(strategyError)}`)
+          } finally {
+            setIsStrategyRefreshing(false)
           }
         }
-        publishProgress(token && !options?.silent ? '短线信号' : null)
       }
 
-      // 手动刷新时继续刷短线信号；自动静默刷新跳过，避免每 30 秒打 AkShare
-      if (token && !options?.silent) {
-        publishProgress('短线信号')
+      if (signal.aborted) return
+
+      if (token) {
+        mark('短线信号')
+        setSectionBusy(SECTION_IDS.shortTermRadar, true)
         try {
-          const signals = await refreshShortTermSignals()
-          await queryClient.invalidateQueries({ queryKey: ['short-term-sectors'] })
-          await queryClient.invalidateQueries({ queryKey: ['short-term-overview'] })
+          const signals = await refreshShortTermSignals(undefined, signal)
+          if (signal.aborted) return
+          const sectorsOk = await commitSection(
+            SECTION_IDS.shortTermRadar,
+            ['short-term-sectors'],
+            (s) => fetchShortTermSectors(undefined, s),
+            signal
+          )
+          if (signal.aborted) return
           if (signals.status === 'failed') {
             skipped.push(signals.error_message || '短线信号失败')
-          } else {
+          } else if (sectorsOk) {
             done.push(
               `短线信号（涨停${signals.signal_count}/龙虎${signals.dragon_tiger_count}/轮动${signals.sector_count}）`
             )
             if (signals.degraded && signals.missing_sources.length > 0) {
               skipped.push(`短线源缺失：${signals.missing_sources.join('、')}`)
             }
+          } else {
+            skipped.push('短线信号（板块数据未更新）')
           }
         } catch (signalError) {
+          if (isCancelledError(signalError) || signal.aborted) return
           skipped.push(`短线信号失败：${shortTermErrorMessage(signalError)}`)
+        } finally {
+          setSectionBusy(SECTION_IDS.shortTermRadar, false)
         }
-      } else if (!token && !options?.silent) {
+      } else {
         skipped.push('短线信号（未登录）')
       }
+
+      if (signal.aborted) return
+
+      mark('一进二')
+      setSectionBusy(SECTION_IDS.firstToSecond, true)
+      try {
+        await refreshFirstToSecondCandidates({}, signal)
+        if (signal.aborted) return
+        const ok = await commitSection(
+          SECTION_IDS.firstToSecond,
+          ['first-to-second-candidates'],
+          (s) => fetchFirstToSecondCandidates({}, s),
+          signal
+        )
+        if (ok) done.push('一进二')
+        else if (!signal.aborted) skipped.push('一进二（未更新）')
+      } catch (firstError) {
+        if (isCancelledError(firstError) || signal.aborted) return
+        skipped.push(`一进二失败：${shortTermErrorMessage(firstError)}`)
+      } finally {
+        setSectionBusy(SECTION_IDS.firstToSecond, false)
+      }
+
+      mark(null)
+    },
+    [
+      commitSection,
+      customEndDate,
+      customStartDate,
+      limit,
+      publishProgress,
+      queryClient,
+      setSectionBusy,
+      shortTermPeriod,
+      strategyPeriodEnabled,
+      strategyQueryParams,
+      toast,
+      token,
+    ]
+  )
+
+  const handleLightRefresh = useCallback(async () => {
+    if (sessionRef.current) return
+
+    const controller = new AbortController()
+    const session: RefreshSession = { controller, mode: 'light' }
+    sessionRef.current = session
+    const { signal } = controller
+    const startedAt = Date.now()
+    const done: string[] = []
+    const skipped: string[] = []
+    lightRefreshDoneRef.current = []
+    lightRefreshPendingRef.current = '题材行情'
+    setIsDashboardRefreshing(true)
+    setUpdateResult({
+      type: 'progress',
+      message: formatRefreshProgress(done, '题材行情', '0 秒'),
+    })
+
+    try {
+      let quotes
+      try {
+        quotes = await refreshThemeQuotes(signal)
+      } catch (quotesError) {
+        if (isCancelledError(quotesError) || signal.aborted) return
+        if (apiErrorStatus(quotesError) === 409) {
+          throw new Error(
+            shortTermErrorMessage(quotesError) || '行情刷新进行中，请稍后再试'
+          )
+        }
+        throw quotesError
+      }
+      if (signal.aborted) return
+      const refreshedAt = quotes.refreshed_at || new Date().toISOString()
+      setLastUpdate(refreshedAt)
+      done.push(`题材行情 ${quotes.themes_updated} 个`)
+      publishProgress(done, strategyPeriodEnabled ? '策略卡' : token ? '短线信号' : '热度榜', startedAt, 'light')
+
+      await runSectionPipeline(signal, done, skipped, startedAt, 'light')
+      if (signal.aborted) return
 
       const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
       const refreshedLabel = formatServerTime(refreshedAt)
@@ -524,45 +670,37 @@ export function ThemeDashboard() {
         .join('。')
       lightRefreshPendingRef.current = null
       lightRefreshDoneRef.current = [...done]
-      setIsDashboardRefreshing(false)
       setUpdateResult({
         type: skipped.length > 0 && done.length === 0 ? 'error' : 'success',
         message: summary,
       })
-      if (!options?.silent) {
-        if (skipped.length > 0 && done.length > 0) {
-          toast.success(`部分刷新完成：${done.join('；')}`)
-        } else if (done.length > 0) {
-          toast.success(`已刷新：${done.join('；')}`)
-        }
+      if (skipped.length > 0 && done.length > 0) {
+        toast.success(`部分刷新完成：${done.join('；')}`)
+      } else if (done.length > 0) {
+        toast.success(`已刷新：${done.join('；')}`)
       }
     } catch (error) {
-      setIsDashboardRefreshing(false)
-      lightRefreshPendingRef.current = null
-      if (isCancelledError(error)) return
+      if (isCancelledError(error) || signal.aborted) return
       const message = error instanceof Error ? error.message : '未知错误'
-      const partial =
-        done.length > 0 ? `已更新：${done.join('；')}。` : ''
+      const partial = done.length > 0 ? `已更新：${done.join('；')}。` : ''
       setUpdateResult({
         type: 'error',
         message: `${partial}看板刷新失败：${message}`,
       })
-      if (!options?.silent) {
-        toast.error(`看板刷新失败：${message}`)
-      }
+      toast.error(`看板刷新失败：${message}`)
     } finally {
-      setIsDashboardRefreshing(false)
-      lightRefreshPendingRef.current = null
+      if (sessionRef.current === session) {
+        sessionRef.current = null
+        setIsDashboardRefreshing(false)
+        clearSectionBusy()
+        lightRefreshPendingRef.current = null
+      }
     }
   }, [
-    customEndDate,
-    customStartDate,
-    queryClient,
-    refreshMainDashboard,
-    refreshStrategyDataMutation,
-    shortTermPeriod,
+    clearSectionBusy,
+    publishProgress,
+    runSectionPipeline,
     strategyPeriodEnabled,
-    strategyQueryParams,
     toast,
     token,
   ])
@@ -570,7 +708,9 @@ export function ThemeDashboard() {
   useEffect(() => {
     if (!isDashboardRefreshing) return
     setUpdateResult((current) => {
-      if (current?.type === 'success' || current?.type === 'error') return current
+      if (current?.type === 'success' || current?.type === 'error' || current?.type === 'info') {
+        return current
+      }
       return {
         type: 'progress',
         message: formatRefreshProgress(
@@ -591,20 +731,24 @@ export function ThemeDashboard() {
   }, [fullUpdateElapsed, isUpdating])
 
   const updateDashboard = useCallback(async () => {
+    if (sessionRef.current) return
+
+    const controller = new AbortController()
+    const session: RefreshSession = { controller, mode: 'full' }
+    sessionRef.current = session
+    const { signal } = controller
     const startedAt = Date.now()
+    const done: string[] = []
+    const skipped: string[] = []
+
     setIsUpdating(true)
     setUpdateResult({
       type: 'progress',
-      message: `正在通过${selectedScraperSourceLabel}全量更新（已耗时 0 秒）...`,
+      message: '正在全量更新（已耗时 0 秒）...',
     })
     try {
-      const sourcesToTry = [
-        selectedScraperSource,
-        ...dashboardScraperSources
-          .map((item) => item.id)
-          .filter((id) => id !== selectedScraperSource),
-      ]
-      const run = await runScraperWithFallback(sourcesToTry)
+      const run = await runScraperWithFallback([...FULL_UPDATE_SOURCES], { signal })
+      if (signal.aborted) return
       if (run.status === 'failed') {
         const message = `全量更新失败：${run.error_message || '未知错误'}`
         setUpdateResult({ type: 'error', message })
@@ -612,11 +756,28 @@ export function ThemeDashboard() {
         return
       }
 
-      await refreshMainDashboard()
       const finishedAt = run.finished_at ?? new Date().toISOString()
       setLastUpdate(finishedAt)
       queryClient.setQueryData(latestScraperRunQueryKey(run.source), finishedAt)
       await refetchLatestSuccessfulUpdate()
+
+      setIsUpdating(false)
+      setIsDashboardRefreshing(true)
+      publishProgress(done, '题材行情', startedAt, 'light')
+
+      try {
+        const quotes = await refreshThemeQuotes(signal)
+        if (signal.aborted) return
+        done.push(`题材行情 ${quotes.themes_updated} 个`)
+        setLastUpdate(quotes.refreshed_at || finishedAt)
+      } catch (quotesError) {
+        if (isCancelledError(quotesError) || signal.aborted) return
+        skipped.push(`题材行情失败：${shortTermErrorMessage(quotesError)}`)
+      }
+
+      await runSectionPipeline(signal, done, skipped, startedAt, 'light')
+      if (signal.aborted) return
+
       const usedSourceLabel =
         dashboardScraperSources.find((item) => item.id === run.source)?.label ?? run.source
       const fallbackNote =
@@ -628,39 +789,43 @@ export function ThemeDashboard() {
               .join(' → ')}）`
           : ''
       const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+      const sectionSummary =
+        done.length > 0 || skipped.length > 0
+          ? `。${[
+              done.length > 0 ? `已更新：${done.join('；')}` : null,
+              skipped.length > 0 ? `未完成：${skipped.join('；')}` : null,
+            ]
+              .filter(Boolean)
+              .join('。')}`
+          : ''
       setUpdateResult({
         type: 'success',
-        message: `${usedSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据，耗时 ${elapsedSeconds} 秒${fallbackNote}`,
+        message: `${usedSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据，耗时 ${elapsedSeconds} 秒${fallbackNote}${sectionSummary}`,
       })
       toast.success(`${usedSourceLabel}全量更新成功，共更新 ${run.items_scraped} 条数据`)
     } catch (error) {
-      if (isCancelledError(error)) return
+      if (isCancelledError(error) || signal.aborted) return
       const message = error instanceof Error ? error.message : '未知错误'
       setUpdateResult({ type: 'error', message: `全量更新失败：${message}` })
       toast.error(`全量更新失败：${message}`)
     } finally {
-      setIsUpdating(false)
+      if (sessionRef.current === session) {
+        sessionRef.current = null
+        setIsUpdating(false)
+        setIsDashboardRefreshing(false)
+        clearSectionBusy()
+        lightRefreshPendingRef.current = null
+      }
     }
   }, [
+    clearSectionBusy,
     dashboardScraperSources,
+    publishProgress,
     queryClient,
-    refreshMainDashboard,
     refetchLatestSuccessfulUpdate,
-    selectedScraperSource,
-    selectedScraperSourceLabel,
+    runSectionPipeline,
     toast,
   ])
-
-  // 自动刷新：仅在用户打开「自动刷新」后按间隔快刷
-  const { isAutoRefresh, toggleAutoRefresh, refreshInterval, setRefreshInterval } = useAutoRefresh({
-    interval: 30000, // 默认 30 秒
-    onRefresh: () => {
-      void handleLightRefresh({ silent: true }).catch((error) => {
-        if (isCancelledError(error) || apiErrorStatus(error) === 409) return
-        console.error('自动刷新失败', error)
-      })
-    },
-  })
 
   // 全站快捷键 R：在看板页触发轻量刷新
   useEffect(() => {
@@ -703,8 +868,7 @@ export function ThemeDashboard() {
     (period: ShortTermPeriod) => {
       if (period === shortTermPeriod) return
       if (period === 'custom') {
-        const endDate =
-          databaseStrategyOverview?.end_date ?? dayjs().format('YYYY-MM-DD')
+        const endDate = databaseStrategyOverview?.end_date ?? dayjs().format('YYYY-MM-DD')
         setCustomEndDate((current) => current ?? endDate)
         setCustomStartDate((current) => current ?? defaultCustomStartDate(endDate))
       }
@@ -735,23 +899,6 @@ export function ThemeDashboard() {
     [shortTermPeriod]
   )
 
-  const handleFirstToSecondRefresh = useCallback(async () => {
-    setIsFirstToSecondRefreshing(true)
-    try {
-      await refreshFirstToSecondCandidates({})
-      await refetchIgnoringCancel(refetchFirstToSecondCandidates)
-      toast.success('一进二候选已实时刷新')
-    } catch (error) {
-      if (isCancelledError(error)) return
-      const message = error instanceof Error ? error.message : '未知错误'
-      toast.error(`一进二候选刷新失败：${message}`)
-    } finally {
-      setIsFirstToSecondRefreshing(false)
-    }
-  }, [refetchFirstToSecondCandidates, toast])
-  // Retained until Task 5 wires this into centralized refresh.
-  void handleFirstToSecondRefresh
-
   useEffect(() => {
     if (isDatabaseStrategyFetching) return
     if (liveStrategyOverview) return
@@ -778,7 +925,7 @@ export function ThemeDashboard() {
     liveStrategyOverview,
   ])
   const visiblePeriodStatus = useMemo<ShortTermPeriodStatus | null>(() => {
-    if (refreshStrategyDataMutation.isPending) {
+    if (isStrategyRefreshing) {
       return {
         type: 'progress',
         message: `正在拉取实时行情并更新策略卡（已耗时 ${strategyRefreshElapsed}，东方财富慢时将自动切换 AKShare）...`,
@@ -796,12 +943,14 @@ export function ThemeDashboard() {
     return periodStatus
   }, [
     isStrategyPeriodLoading,
+    isStrategyRefreshing,
     periodStatus,
-    refreshStrategyDataMutation.isPending,
     shortTermDateRange,
     shortTermPeriod,
     strategyRefreshElapsed,
   ])
+
+  const isBusy = isDashboardRefreshing || isUpdating
 
   return (
     <div className="min-h-screen">
@@ -815,6 +964,7 @@ export function ThemeDashboard() {
           isMarketSignalsFetching ||
           isIndicatorSignalsFetching ||
           isDashboardRefreshing ||
+          Boolean(refreshingSections[SECTION_IDS.firstToSecond]) ||
           isFirstToSecondFetching ||
           isUpdating
         }
@@ -836,20 +986,14 @@ export function ThemeDashboard() {
               data-testid="dashboard-data-controls"
               className="flex flex-wrap items-center gap-6"
             >
-              <AutoRefreshButton
-                isRefreshing={isDashboardRefreshing || refreshStrategyDataMutation.isPending}
+              <DashboardRefreshControls
+                isRefreshing={isDashboardRefreshing || isStrategyRefreshing}
                 isUpdating={isUpdating}
-                isAutoRefresh={isAutoRefresh}
-                onToggleAutoRefresh={toggleAutoRefresh}
-                refreshInterval={refreshInterval}
-                onSetRefreshInterval={setRefreshInterval}
                 onRefresh={() => void handleLightRefresh()}
                 onFullUpdate={() => void updateDashboard()}
-                scraperSources={dashboardScraperSources}
-                selectedScraperSource={selectedScraperSource}
-                onScraperSourceChange={setSelectedScraperSource}
+                onCancel={cancelRefresh}
                 refreshElapsedLabel={
-                  isDashboardRefreshing || refreshStrategyDataMutation.isPending
+                  isDashboardRefreshing || isStrategyRefreshing
                     ? dashboardRefreshElapsed || strategyRefreshElapsed
                     : undefined
                 }
@@ -879,6 +1023,7 @@ export function ThemeDashboard() {
           <div className="min-w-0" data-testid="dashboard-main-column">
             <ShortTermRadarSection
               refreshedAtLabel={sectionRefreshedAtLabels.shortTermRadar}
+              isSectionRefreshing={Boolean(refreshingSections[SECTION_IDS.shortTermRadar])}
               onSelectTheme={handleThemeClick}
             />
 
@@ -894,7 +1039,7 @@ export function ThemeDashboard() {
                   customEndDate={customEndDate ?? undefined}
                   onCustomDateRangeChange={handleCustomDateRangeChange}
                   periodStatus={visiblePeriodStatus}
-                  isPeriodLoading={isStrategyPeriodLoading || isDashboardRefreshing}
+                  isPeriodLoading={isStrategyPeriodLoading || isBusy}
                   isPreview={isStrategyPreview}
                   degraded={strategyOverviewForCard.degraded}
                   missingSources={strategyOverviewForCard.missing_sources}
@@ -916,16 +1061,16 @@ export function ThemeDashboard() {
                   </span>
                 </div>
                 <GlowCard>
-                <div className="p-3">
-                  {isLoading || isRiseRankingLoading ? (
-                    <div className="h-[380px] animate-pulse rounded-xl bg-muted" />
-                  ) : (
-                    <ThemeRiseFallBar
-                      themes={riseRanking?.items ?? []}
-                      onThemeClick={handleThemeClick}
-                    />
-                  )}
-                </div>
+                  <div className="p-3">
+                    {isLoading || isRiseRankingLoading ? (
+                      <div className="h-[380px] animate-pulse rounded-xl bg-muted" />
+                    ) : (
+                      <ThemeRiseFallBar
+                        themes={riseRanking?.items ?? []}
+                        onThemeClick={handleThemeClick}
+                      />
+                    )}
+                  </div>
                 </GlowCard>
               </section>
 
@@ -998,7 +1143,10 @@ export function ThemeDashboard() {
                   data={firstToSecondCandidates}
                   isLoading={isFirstToSecondLoading}
                   refreshedAtLabel={sectionRefreshedAtLabels.firstToSecond}
-                  isSectionRefreshing={isFirstToSecondRefreshing || isFirstToSecondFetching}
+                  isSectionRefreshing={
+                    Boolean(refreshingSections[SECTION_IDS.firstToSecond]) ||
+                    isFirstToSecondFetching
+                  }
                 />
               </aside>
             </div>

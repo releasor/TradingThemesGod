@@ -7,6 +7,16 @@ describe('react-query helpers', () => {
     error.name = 'CancelledError'
     expect(isCancelledError(error)).toBe(true)
     expect(isCancelledError(new Error('network'))).toBe(false)
+
+    const axiosCanceled = new Error('canceled')
+    axiosCanceled.name = 'CanceledError'
+    expect(isCancelledError(axiosCanceled)).toBe(true)
+
+    const abort = new Error('Aborted')
+    abort.name = 'AbortError'
+    expect(isCancelledError(abort)).toBe(true)
+
+    expect(isCancelledError({ code: 'ERR_CANCELED' })).toBe(true)
   })
 
   it('ignores cancelled refetch results', async () => {
