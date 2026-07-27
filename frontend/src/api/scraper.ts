@@ -75,7 +75,17 @@ interface RaceWaitOptions {
 
 const RACE_IN_PROGRESS = new Set(['racing', 'committing'])
 
+/** 单次竞速 HTTP 请求超时（全局 axios 默认仅 10s，全量采集期间轮询会被拖死） */
+const RACE_REQUEST_TIMEOUT_MS = 60_000
+/** 全量竞速整体等待上限（东财成分股采集常需 20–40 分钟） */
+const RACE_WAIT_TIMEOUT_MS = 45 * 60 * 1000
+
 const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
+
+function isAxiosTimeoutError(error: unknown): boolean {
+  const err = error as { code?: string; message?: string }
+  return err?.code === 'ECONNABORTED' || Boolean(err?.message?.includes('timeout'))
+}
 
 /** 获取看板可选的爬虫数据源列表。 */
 export async function fetchDashboardScraperSources(): Promise<ScraperSource[]> {
@@ -179,13 +189,19 @@ export async function runScraperWithFallback(
 
 /** 启动全量多源竞速。 */
 export async function startScraperRace(signal?: AbortSignal): Promise<ScraperRace> {
-  const { data } = await apiClient.post<ScraperRace>('/scraper/run-race', null, { signal })
+  const { data } = await apiClient.post<ScraperRace>('/scraper/run-race', null, {
+    signal,
+    timeout: RACE_REQUEST_TIMEOUT_MS,
+  })
   return data
 }
 
 /** 查询全量竞速状态与进度。 */
 export async function fetchScraperRace(raceId: string, signal?: AbortSignal): Promise<ScraperRace> {
-  const { data } = await apiClient.get<ScraperRace>(`/scraper/race/${raceId}`, { signal })
+  const { data } = await apiClient.get<ScraperRace>(`/scraper/race/${raceId}`, {
+    signal,
+    timeout: RACE_REQUEST_TIMEOUT_MS,
+  })
   return data
 }
 
@@ -194,7 +210,7 @@ export async function cancelScraperRace(raceId: string, signal?: AbortSignal): P
   const { data } = await apiClient.post<ScraperRace>(
     `/scraper/race/${raceId}/cancel`,
     null,
-    { signal }
+    { signal, timeout: RACE_REQUEST_TIMEOUT_MS }
   )
   return data
 }
@@ -203,7 +219,12 @@ export async function cancelScraperRace(raceId: string, signal?: AbortSignal): P
 export async function runScraperRaceAndWait(
   options: RaceWaitOptions = {}
 ): Promise<ScraperRace> {
-  const { pollInterval = 2000, timeout = 20 * 60 * 1000, signal, onProgress } = options
+  const {
+    pollInterval = 2000,
+    timeout = RACE_WAIT_TIMEOUT_MS,
+    signal,
+    onProgress,
+  } = options
   throwIfAborted(signal)
 
   const started = await startScraperRace(signal)
@@ -233,14 +254,25 @@ export async function runScraperRaceAndWait(
       throwIfAborted(signal)
       await sleep(pollInterval)
       throwIfAborted(signal)
-      const race = await fetchScraperRace(raceId, signal)
-      onProgress?.(race)
-      if (!RACE_IN_PROGRESS.has(race.status)) {
-        return race
+      try {
+        const race = await fetchScraperRace(raceId, signal)
+        onProgress?.(race)
+        if (!RACE_IN_PROGRESS.has(race.status)) {
+          return race
+        }
+      } catch (error) {
+        if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+          throw error
+        }
+        // 采集高峰时偶发单次轮询超时：跳过本轮，不中断整次全量
+        if (isAxiosTimeoutError(error) && Date.now() + pollInterval <= deadline) {
+          continue
+        }
+        throw error
       }
     }
     throw new Error(
-      `数据更新超时（竞速任务 ${raceId} 可能仍在后台运行）。请稍后再点「刷新」；全量采集结束前轻量刷新会被暂时锁定。`
+      `全量更新超时（竞速任务 ${raceId} 可能仍在后台运行，已等待 ${Math.round(timeout / 60000)} 分钟）。可稍后点「刷新」查看结果，或重新全量更新。`
     )
   } finally {
     signal?.removeEventListener('abort', cancelBestEffort)

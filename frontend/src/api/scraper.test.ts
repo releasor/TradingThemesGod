@@ -227,7 +227,7 @@ describe('scraper API', () => {
     expect(mockPost).toHaveBeenCalledWith(
       '/scraper/run-race',
       null,
-      expect.objectContaining({ signal: undefined })
+      expect.objectContaining({ signal: undefined, timeout: 60_000 })
     )
     expect(result.race_id).toBe('race-abc')
     expect(result.status).toBe('racing')
@@ -242,6 +242,7 @@ describe('scraper API', () => {
 
     expect(mockGet).toHaveBeenCalledWith('/scraper/race/race-abc', {
       signal: undefined,
+      timeout: 60_000,
     })
     expect(result.progress_pct).toBe(42)
   })
@@ -256,7 +257,7 @@ describe('scraper API', () => {
     expect(mockPost).toHaveBeenCalledWith(
       '/scraper/race/race-abc/cancel',
       null,
-      expect.objectContaining({ signal: undefined })
+      expect.objectContaining({ signal: undefined, timeout: 60_000 })
     )
     expect(result.status).toBe('cancelled')
   })
@@ -281,12 +282,35 @@ describe('scraper API', () => {
     expect(mockPost).toHaveBeenCalledWith(
       '/scraper/run-race',
       null,
-      expect.objectContaining({ signal: undefined })
+      expect.objectContaining({ signal: undefined, timeout: 60_000 })
     )
     expect(mockGet).toHaveBeenCalledTimes(2)
     expect(onProgress).toHaveBeenCalledTimes(3)
     expect(result.status).toBe('completed')
     expect(result.winner).toBe('eastmoney')
+  })
+
+  it('skips transient poll timeouts and continues waiting', async () => {
+    mockPost.mockResolvedValueOnce({ data: sampleRace() })
+    const timeoutError = Object.assign(new Error('timeout of 10000ms exceeded'), {
+      code: 'ECONNABORTED',
+    })
+    mockGet
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValueOnce({
+        data: sampleRace({
+          status: 'completed',
+          phase: 'done',
+          progress_pct: 100,
+          winner: 'eastmoney',
+          items_scraped: 50,
+        }),
+      })
+
+    const result = await runScraperRaceAndWait({ pollInterval: 0 })
+
+    expect(result.status).toBe('completed')
+    expect(mockGet).toHaveBeenCalledTimes(2)
   })
 
   it('calls cancelScraperRace when aborted during wait', async () => {
