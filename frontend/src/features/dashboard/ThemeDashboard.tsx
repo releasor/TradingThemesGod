@@ -26,7 +26,8 @@ import {
   fetchDashboardScraperSources,
   refreshThemeQuotes,
   runScraperRaceAndWait,
-  type ScraperRace,
+  formatRaceSourcesStatus,
+  mapRaceProgressToDashboardPct,
 } from '@/api/scraper'
 import { fetchSystemStats } from '@/api/stats'
 import { useAuthStore } from '@/stores/auth'
@@ -93,35 +94,6 @@ function sourceLabelFor(
   return sources.find((item) => item.id === sourceId)?.label ?? sourceId
 }
 
-function formatRaceProgressMessage(
-  race: Pick<ScraperRace, 'phase' | 'progress_pct' | 'winner' | 'sources'>,
-  elapsed: string,
-  sources: { id: string; label: string }[]
-): string {
-  const pct = Math.round(race.progress_pct)
-  const winnerLabel = race.winner ? sourceLabelFor(race.winner, sources) : null
-  const leading = [...(race.sources ?? [])]
-    .filter((item) => item.status === 'running' || item.status === 'completed')
-    .sort((a, b) => b.progress_pct - a.progress_pct)[0]
-  const leadingHint =
-    leading && leading.progress_pct > 0
-      ? `（${sourceLabelFor(leading.id, sources)} ${Math.round(leading.progress_pct)}%）`
-      : ''
-
-  if (race.phase === 'committing') {
-    return winnerLabel
-      ? `已选定 ${winnerLabel}，落库中 ${pct}%（已耗时 ${elapsed}）...`
-      : `落库中 ${pct}%（已耗时 ${elapsed}）...`
-  }
-  if (race.phase === 'selecting' && winnerLabel) {
-    return `已选定 ${winnerLabel} ${pct}%（已耗时 ${elapsed}）...`
-  }
-  if (winnerLabel) {
-    return `多源竞速中，领先 ${winnerLabel} ${pct}%（已耗时 ${elapsed}）...`
-  }
-  return `多源竞速中 ${pct}%${leadingHint}（已耗时 ${elapsed}）...`
-}
-
 const SHORT_TERM_PERIOD_LABELS: Record<ShortTermPeriod, string> = {
   today: '当日',
   current_week: '本周',
@@ -168,10 +140,6 @@ function sectionPhaseProgress(pending: string | null, racePhase = false): number
   const raw = base[pending] ?? 40
   if (!racePhase) return raw
   return Math.round(70 + (raw / 100) * 30)
-}
-
-function mapRaceProgressToOverall(racePct: number): number {
-  return Math.round(Math.min(70, Math.max(0, racePct) * 0.7))
 }
 
 function initialSectionTimes(): SectionTimesState {
@@ -263,7 +231,7 @@ export function ThemeDashboard() {
   })
   const { data: systemStats } = useQuery({
     queryKey: ['system-stats'],
-    queryFn: fetchSystemStats,
+    queryFn: ({ signal }) => fetchSystemStats(signal),
     staleTime: 2 * 60 * 1000,
   })
   const {
@@ -273,8 +241,9 @@ export function ThemeDashboard() {
     isFetching: isMarketSignalsFetching,
   } = useQuery({
     queryKey: ['market-signals'],
-    queryFn: fetchMarketSignals,
+    queryFn: ({ signal }) => fetchMarketSignals(signal),
     staleTime: 2 * 60 * 1000,
+    retry: 2,
   })
   const {
     data: indicatorSignals,
@@ -283,8 +252,9 @@ export function ThemeDashboard() {
     isFetching: isIndicatorSignalsFetching,
   } = useQuery({
     queryKey: ['indicator-signals'],
-    queryFn: fetchIndicatorSignals,
+    queryFn: ({ signal }) => fetchIndicatorSignals(signal),
     staleTime: 2 * 60 * 1000,
+    retry: 2,
   })
   const customRangeReady = Boolean(
     customStartDate && customEndDate && customStartDate <= customEndDate
@@ -413,9 +383,17 @@ export function ThemeDashboard() {
     ): Promise<boolean> => {
       setSectionBusy(sectionId, true)
       try {
-        const data = await fetcher(signal)
+        await queryClient.fetchQuery({
+          queryKey,
+          queryFn: ({ signal: querySignal }) => fetcher(signal ?? querySignal),
+          staleTime: 0,
+          retry: (failureCount, error) => {
+            if (isCancelledError(error) || signal.aborted) return false
+            return failureCount < 2
+          },
+          retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+        })
         if (signal.aborted) return false
-        queryClient.setQueryData(queryKey, data)
         const iso = new Date().toISOString()
         writeSectionRefreshedAt(sectionId, iso)
         setSectionTimes((prev) => ({ ...prev, [sectionId]: iso }))
@@ -753,8 +731,11 @@ export function ThemeDashboard() {
       })
       if (skipped.length > 0 && done.length > 0) {
         toast.success(`部分刷新完成：${done.join('；')}`)
+        toast.warning(`部分板块未更新：${skipped.join('；')}`)
       } else if (done.length > 0) {
         toast.success(`已刷新：${done.join('；')}`)
+      } else if (skipped.length > 0) {
+        toast.warning(`刷新未完成：${skipped.join('；')}`)
       }
     } catch (error) {
       if (isCancelledError(error) || signal.aborted) return
@@ -827,27 +808,17 @@ export function ThemeDashboard() {
         signal,
         onProgress: (nextRace) => {
           if (signal.aborted) return
-          const pct = mapRaceProgressToOverall(nextRace.progress_pct)
+          const pct = mapRaceProgressToDashboardPct(nextRace)
+          const { pendingLabel, message } = formatRaceSourcesStatus(
+            nextRace,
+            formatRefreshDurationMs(Date.now() - startedAt),
+            (id) => sourceLabelFor(id, dashboardScraperSources)
+          )
           setRefreshProgressPct(pct)
-          const leading = [...(nextRace.sources ?? [])]
-            .filter((item) => item.status === 'running' || item.status === 'completed')
-            .sort((a, b) => b.progress_pct - a.progress_pct)[0]
-          const pending =
-            nextRace.phase === 'committing'
-              ? '落库'
-              : leading && leading.progress_pct > 0
-                ? `竞速 · ${sourceLabelFor(leading.id, dashboardScraperSources)} ${Math.round(leading.progress_pct)}%`
-                : nextRace.winner
-                  ? `竞速（领先 ${sourceLabelFor(nextRace.winner, dashboardScraperSources)}）`
-                  : '多源竞速'
-          setRefreshPendingLabel(pending)
+          setRefreshPendingLabel(pendingLabel)
           setUpdateResult({
             type: 'progress',
-            message: formatRaceProgressMessage(
-              nextRace,
-              formatRefreshDurationMs(Date.now() - startedAt),
-              dashboardScraperSources
-            ),
+            message,
           })
         },
       })
@@ -914,6 +885,9 @@ export function ThemeDashboard() {
         message: `${usedSourceLabel}全量更新成功，共更新 ${itemsScraped} 条数据，耗时 ${elapsedSeconds} 秒${sectionSummary}`,
       })
       toast.success(`${usedSourceLabel}全量更新成功，共更新 ${itemsScraped} 条数据`)
+      if (skipped.length > 0) {
+        toast.warning(`部分板块未更新：${skipped.join('；')}`)
+      }
     } catch (error) {
       if (isCancelledError(error) || signal.aborted) return
       const message = error instanceof Error ? error.message : '未知错误'

@@ -45,7 +45,7 @@ export function MarketSignalSection({
           />
         )}
 
-        {!isLoading && isError && (
+        {!isLoading && isError && signals.length === 0 && (
           <div className="flex h-[380px] items-center justify-center text-sm text-destructive">
             {errorText}
           </div>
@@ -57,7 +57,7 @@ export function MarketSignalSection({
           </div>
         )}
 
-        {!isLoading && !isError && signals.length > 0 && (
+        {!isLoading && signals.length > 0 && (
           <ThemeRiseFallBar themes={signals} onThemeClick={onSelect} />
         )}
       </div>

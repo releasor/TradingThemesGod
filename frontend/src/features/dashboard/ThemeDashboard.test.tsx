@@ -19,13 +19,17 @@ vi.mock('@/api/stats', () => ({
   fetchSystemStats: vi.fn(),
 }))
 
-vi.mock('@/api/scraper', () => ({
-  fetchLatestSuccessfulRun: vi.fn(),
-  fetchDashboardScraperSources: vi.fn(),
-  refreshThemeQuotes: vi.fn(),
-  runScraperRaceAndWait: vi.fn(),
-  runScraperAndWait: vi.fn(),
-}))
+vi.mock('@/api/scraper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/scraper')>()
+  return {
+    ...actual,
+    fetchLatestSuccessfulRun: vi.fn(),
+    fetchDashboardScraperSources: vi.fn(),
+    refreshThemeQuotes: vi.fn(),
+    runScraperRaceAndWait: vi.fn(),
+    runScraperAndWait: vi.fn(),
+  }
+})
 
 vi.mock('@/api/news', () => ({
   refreshNews: vi.fn(),
@@ -362,6 +366,7 @@ describe('ThemeDashboard', () => {
         },
       ],
       excluded_count: 0,
+      source_status: {},
     })
     vi.mocked(fetchShortTermSectors).mockResolvedValue({
       trade_date: '2026-07-24',
@@ -389,6 +394,7 @@ describe('ThemeDashboard', () => {
       missing_sources: [],
       candidates: [],
       excluded_count: 0,
+      source_status: {},
     })
   })
 
@@ -502,7 +508,7 @@ describe('ThemeDashboard', () => {
   it('市场表现失败时不影响普通题材', async () => {
     vi.mocked(fetchMarketSignals).mockRejectedValue(new Error('Network error'))
     renderDashboard()
-    expect(await screen.findByText('市场表现加载失败')).toBeInTheDocument()
+    expect(await screen.findByText('市场表现加载失败', {}, { timeout: 15000 })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '人工智能' })).toBeInTheDocument()
   })
 
@@ -529,8 +535,8 @@ describe('ThemeDashboard', () => {
       expect(refreshThemeQuotes).toHaveBeenCalledTimes(1)
       expect(refreshShortTermSignals).toHaveBeenCalled()
       expect(refreshFirstToSecondCandidates).toHaveBeenCalled()
-      expect(fetchThemeRanking.mock.calls.length).toBeGreaterThan(1)
-      expect(fetchThemes.mock.calls.length).toBeGreaterThan(2)
+      expect(vi.mocked(fetchThemeRanking).mock.calls.length).toBeGreaterThan(1)
+      expect(vi.mocked(fetchThemes).mock.calls.length).toBeGreaterThan(2)
       expect(runScraperRaceAndWait).not.toHaveBeenCalled()
     })
     expect(refreshNews).not.toHaveBeenCalled()
