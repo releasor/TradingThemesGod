@@ -30,14 +30,23 @@ async def test_refresh_persists_valid_profile_and_relevant_events():
     providers = MagicMock()
     providers.get_default = AsyncMock(return_value=SimpleNamespace())
     adapter = MagicMock()
-    adapter.complete = AsyncMock(
-        return_value='{"profile":{"definition":"定义","core_logic":"逻辑","applications":["制造"],"catalysts":["政策"],"risks":["竞争"],"source_urls":["https://example.com/a"]},"events":[{"title":"政策发布","summary":"支持机器人应用","source_url":"https://example.com/a","published_at":"2026-07-20T08:00:00+08:00","relevance_score":88}]}'
+    adapter.complete_detailed = AsyncMock(
+        return_value=SimpleNamespace(
+            content='{"profile":{"definition":"定义","core_logic":"逻辑","applications":["制造"],"catalysts":["政策"],"risks":["竞争"],"source_urls":["https://example.com/a"]},"events":[{"title":"政策发布","summary":"支持机器人应用","source_url":"https://example.com/a","published_at":"2026-07-20T08:00:00+08:00","relevance_score":88}]}',
+            reasoning="先核对来源 URL，再抽取档案。",
+            raw_preview='{"choices":[{"message":{"content":"{...}"}}]}',
+        )
     )
     providers.adapter.return_value = adapter
     insights = MagicMock()
     insights.upsert_profile = AsyncMock()
     insights.upsert_events = AsyncMock(return_value=(1, 0))
-    service = ThemeInsightRefreshService(session, research, providers, news, insights)
+    catalyst = MagicMock()
+    catalyst.resolve_event_ids = AsyncMock(return_value=[11])
+    catalyst.classify_event_ids = AsyncMock(return_value=1)
+    service = ThemeInsightRefreshService(
+        session, research, providers, news, insights, catalyst
+    )
     service._theme_context = AsyncMock(
         return_value=(
             SimpleNamespace(id=1, name="机器人", description=None, tags=[]),
@@ -50,9 +59,13 @@ async def test_refresh_persists_valid_profile_and_relevant_events():
     assert result.profile_updated is True
     assert result.inserted_events == 1
     assert result.degraded is False
+    assert result.model_reasoning == "先核对来源 URL，再抽取档案。"
+    assert result.model_raw_response is not None
     insights.upsert_profile.assert_awaited_once()
     assert insights.upsert_profile.await_args.args[2][0]["published_at"] == published_at
     insights.upsert_events.assert_awaited_once()
+    catalyst.resolve_event_ids.assert_awaited_once()
+    catalyst.classify_event_ids.assert_awaited_once_with([11])
     session.commit.assert_awaited_once()
 
 
@@ -76,7 +89,12 @@ async def test_ai_failure_uses_keyword_event_fallback_without_overwriting_profil
     insights = MagicMock()
     insights.upsert_profile = AsyncMock()
     insights.upsert_events = AsyncMock(return_value=(1, 0))
-    service = ThemeInsightRefreshService(session, research, providers, news, insights)
+    catalyst = MagicMock()
+    catalyst.resolve_event_ids = AsyncMock(return_value=[11])
+    catalyst.classify_event_ids = AsyncMock(return_value=1)
+    service = ThemeInsightRefreshService(
+        session, research, providers, news, insights, catalyst
+    )
     service._theme_context = AsyncMock(
         return_value=(
             SimpleNamespace(id=1, name="机器人", description=None, tags=[]),
@@ -89,6 +107,8 @@ async def test_ai_failure_uses_keyword_event_fallback_without_overwriting_profil
     assert result.degraded is True
     assert result.inserted_events == 1
     assert result.failed_sources == ["DuckDuckGo"]
+    assert result.model_error is not None
+    assert "模型不可用" in result.model_error
     insights.upsert_profile.assert_not_awaited()
 
 
@@ -111,7 +131,12 @@ async def test_refresh_skips_profile_research_when_profile_is_fresh():
     insights = MagicMock()
     insights.upsert_profile = AsyncMock()
     insights.upsert_events = AsyncMock(return_value=(1, 0))
-    service = ThemeInsightRefreshService(session, research, providers, news, insights)
+    catalyst = MagicMock()
+    catalyst.resolve_event_ids = AsyncMock(return_value=[11])
+    catalyst.classify_event_ids = AsyncMock(return_value=1)
+    service = ThemeInsightRefreshService(
+        session, research, providers, news, insights, catalyst
+    )
     service._theme_context = AsyncMock(
         return_value=(SimpleNamespace(id=1, name="机器人", description=None), [])
     )
@@ -121,3 +146,40 @@ async def test_refresh_skips_profile_research_when_profile_is_fresh():
     research.research_profile.assert_not_awaited()
     insights.upsert_profile.assert_not_awaited()
     assert result.profile_updated is False
+
+
+@pytest.mark.asyncio
+async def test_refresh_swallows_catalyst_classification_errors():
+    session = AsyncMock()
+    source = ResearchSource(
+        "机器人订单发布",
+        "https://example.com/order",
+        "机器人企业发布新订单",
+        "示例网",
+    )
+    research = MagicMock()
+    research.research_profile = AsyncMock(return_value=[source])
+    research.research_driver_events = AsyncMock(return_value=[source])
+    news = MagicMock()
+    news.list_theme_candidates = AsyncMock(return_value=[])
+    providers = MagicMock()
+    providers.get_default = AsyncMock(side_effect=HTTPException(409, "模型不可用"))
+    insights = MagicMock()
+    insights.upsert_profile = AsyncMock()
+    insights.upsert_events = AsyncMock(return_value=(1, 0))
+    catalyst = MagicMock()
+    catalyst.resolve_event_ids = AsyncMock(side_effect=RuntimeError("db down"))
+    service = ThemeInsightRefreshService(
+        session, research, providers, news, insights, catalyst
+    )
+    service._theme_context = AsyncMock(
+        return_value=(
+            SimpleNamespace(id=1, name="机器人", description=None, tags=[]),
+            [],
+        )
+    )
+
+    result = await service.refresh(1)
+
+    assert result.inserted_events == 1
+    session.commit.assert_awaited_once()

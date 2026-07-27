@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -14,6 +15,8 @@ from app.domain.theme_insights import deduplicate_event_rows
 from app.models.stock import Stock
 from app.models.theme import Theme
 from app.models.theme_stock import ThemeStock
+from app.core.logging import get_logger
+from app.repositories.catalyst import CatalystRepository
 from app.repositories.news import NewsRepository
 from app.repositories.theme_insight import ThemeInsightRepository
 from app.schemas.theme_insight import (
@@ -26,6 +29,8 @@ from app.services.web_research import ResearchSource, WebResearchService
 
 SYSTEM_PROMPT = """你是严谨的中国 A 股题材研究员。只能依据输入来源生成 JSON，不得补充未提供的事实或 URL。返回 profile 和 events；事件 relevance_score 为 0 到 100。"""
 
+logger = get_logger(__name__)
+
 
 class ThemeInsightRefreshService:
     def __init__(
@@ -35,12 +40,14 @@ class ThemeInsightRefreshService:
         providers: ModelProviderService | None = None,
         news: NewsRepository | None = None,
         insights: ThemeInsightRepository | None = None,
+        catalyst: CatalystRepository | None = None,
     ):
         self.session = session
         self.research = research or WebResearchService()
         self.providers = providers
         self.news = news or NewsRepository(session)
         self.insights = insights or ThemeInsightRepository(session)
+        self.catalyst = catalyst or CatalystRepository(session)
 
     async def _theme_context(self, theme_id: int) -> tuple[Theme, list[Stock]]:
         theme = await self.session.get(Theme, theme_id)
@@ -70,14 +77,26 @@ class ThemeInsightRefreshService:
 
     async def _extract(
         self, theme: Theme, sources: list[ResearchSource]
-    ) -> ExtractedThemeInsights:
+    ) -> tuple[ExtractedThemeInsights, dict[str, str | None]]:
+        debug: dict[str, str | None] = {
+            "model_name": None,
+            "model_error": None,
+            "model_reasoning": None,
+            "model_raw_response": None,
+        }
         if self.providers is None:
             raise HTTPException(409, "请先在模型设置中配置并启用默认模型")
         provider = await self.providers.get_default()
-        text = await self.providers.adapter(provider).complete(
-            SYSTEM_PROMPT, self._prompt(theme, sources), reasoning=False
+        debug["model_name"] = getattr(provider, "model", None) or getattr(
+            provider, "name", None
         )
-        extracted = ExtractedThemeInsights.model_validate(parse_model_json(text))
+        # 开启 reasoning，便于把厂商返回的思考过程带回前端排障
+        result = await self.providers.adapter(provider).complete_detailed(
+            SYSTEM_PROMPT, self._prompt(theme, sources), reasoning=True
+        )
+        debug["model_reasoning"] = result.reasoning
+        debug["model_raw_response"] = result.raw_preview or result.content[:12000]
+        extracted = ExtractedThemeInsights.model_validate(parse_model_json(result.content))
         allowed = {source.url for source in sources}
         if extracted.profile and any(
             url not in allowed for url in extracted.profile.source_urls
@@ -88,11 +107,12 @@ class ThemeInsightRefreshService:
             for event in extracted.events
             if event.source_url in allowed and event.relevance_score >= 60
         ]
-        return extracted
+        return extracted, debug
 
     async def refresh(
         self, theme_id: int, *, refresh_profile: bool = True
     ) -> ThemeInsightRefreshResponse:
+        started = time.monotonic()
         theme, stocks = await self._theme_context(theme_id)
         reset_failures = getattr(self.research, "reset_failures", None)
         if callable(reset_failures):
@@ -131,8 +151,14 @@ class ThemeInsightRefreshService:
         if not sources:
             raise HTTPException(502, "未抓取到可验证的题材资料，原数据已保留")
         degraded = False
+        model_debug: dict[str, str | None] = {
+            "model_name": None,
+            "model_error": None,
+            "model_reasoning": None,
+            "model_raw_response": None,
+        }
         try:
-            extracted = await self._extract(theme, sources)
+            extracted, model_debug = await self._extract(theme, sources)
         except (
             httpx.HTTPError,
             HTTPException,
@@ -140,9 +166,20 @@ class ThemeInsightRefreshService:
             TypeError,
             ValidationError,
             ValueError,
-        ):
+        ) as exc:
             extracted = ExtractedThemeInsights()
             degraded = True
+            detail = getattr(exc, "detail", None)
+            model_debug["model_error"] = (
+                detail if isinstance(detail, str) else str(exc)
+            )[:4000]
+            # HTTPException(409) 等也可能在 get_default 时抛出，补模型名
+            if model_debug["model_name"] is None and self.providers is not None:
+                try:
+                    provider = await self.providers.get_default()
+                    model_debug["model_name"] = getattr(provider, "model", None)
+                except Exception:
+                    pass
 
         now = datetime.now(UTC)
         source_map = {source.url: source for source in sources}
@@ -197,7 +234,27 @@ class ThemeInsightRefreshService:
             ]
         event_rows = deduplicate_event_rows(event_rows)
         inserted, updated = await self.insights.upsert_events(theme.id, event_rows)
+        if event_rows:
+            try:
+                event_ids = await self.catalyst.resolve_event_ids(theme.id, event_rows)
+                if event_ids:
+                    await self.catalyst.classify_event_ids(event_ids)
+            except Exception:
+                logger.exception(
+                    "catalyst classification failed after insight upsert",
+                    theme_id=theme.id,
+                )
         await self.session.commit()
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        message = (
+            f"题材事件已使用关键词降级更新（模型失败：{model_debug['model_error']}）"
+            if degraded and model_debug.get("model_error")
+            else (
+                "题材事件已使用关键词降级更新"
+                if degraded
+                else "题材资料已更新"
+            )
+        )
         return ThemeInsightRefreshResponse(
             theme_id=theme.id,
             theme_name=theme.name,
@@ -215,6 +272,12 @@ class ThemeInsightRefreshService:
                 if isinstance(failed, str)
             ),
             degraded=degraded,
+            elapsed_ms=elapsed_ms,
             refreshed_at=now,
-            message=("题材事件已使用关键词降级更新" if degraded else "题材资料已更新"),
+            message=message,
+            model_name=model_debug.get("model_name"),
+            model_error=model_debug.get("model_error"),
+            model_reasoning=model_debug.get("model_reasoning"),
+            model_raw_response=model_debug.get("model_raw_response"),
+            source_count=len(sources),
         )

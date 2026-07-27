@@ -36,6 +36,16 @@ class ThemeDriverEvent(Base, TimestampMixin):
     crawled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    freshness: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unknown"
+    )
+    actor_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unknown"
+    )
+    classified_by: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    classified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     theme: Mapped["Theme"] = relationship(back_populates="driver_events")
 
@@ -55,5 +65,15 @@ class ThemeDriverEvent(Base, TimestampMixin):
         Index("idx_theme_driver_events_theme_id", "theme_id"),
         Index("idx_theme_driver_events_published_at", "published_at"),
         Index("idx_theme_driver_events_theme_published", "theme_id", "published_at"),
+        Index(
+            "idx_theme_driver_events_freshness_published",
+            "freshness",
+            "published_at",
+        ),
+        Index(
+            "idx_theme_driver_events_actor_published",
+            "actor_type",
+            "published_at",
+        ),
         {"comment": "题材驱动事件"},
     )
