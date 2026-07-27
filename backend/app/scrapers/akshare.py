@@ -421,11 +421,25 @@ class AKShareScraper(BaseScraper):
 
         logger.info(f"[{self.source_name}] 开始全量题材采集（概念板块，不落库）")
         report(10.0)
-        try:
-            frame = await asyncio.to_thread(ak.stock_board_concept_name_em)
-        except Exception as e:
-            logger.error(f"[{self.source_name}] 获取概念板块失败: {e}")
-            raise
+        last_error: Exception | None = None
+        frame = None
+        for attempt in range(1, 4):
+            if cancel is not None and cancel.is_set():
+                raise asyncio.CancelledError()
+            try:
+                frame = await asyncio.to_thread(ak.stock_board_concept_name_em)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"[{self.source_name}] 获取概念板块失败（第 {attempt}/3 次）: {e}"
+                )
+                if attempt < 3:
+                    await asyncio.sleep(1.5 * attempt)
+        if last_error is not None or frame is None:
+            logger.error(f"[{self.source_name}] 获取概念板块失败: {last_error}")
+            raise last_error or RuntimeError("获取概念板块失败")
 
         if cancel is not None and cancel.is_set():
             raise asyncio.CancelledError()
