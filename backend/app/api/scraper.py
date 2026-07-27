@@ -3,6 +3,8 @@
 提供爬虫运行触发、状态查询和历史记录查询。
 """
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -26,7 +28,6 @@ from app.scrapers.full_race import cancel_race, get_race, start_full_race
 from app.scrapers.scheduler import scraper_scheduler
 from app.services.quotes_refresh_race import race_theme_quotes
 from app.services.strategy_quote_refresh import collect_akshare_theme_quotes
-from datetime import datetime, timezone
 
 # 速率限制器
 limiter = Limiter(key_func=get_remote_address)
@@ -51,43 +52,6 @@ async def list_scraper_sources(
         for item in sources
     ]
     return ScraperSourceListResponse(sources=payload, count=len(payload))
-
-
-@router.post("/run-race", response_model=ScraperRaceResponse)
-@limiter.limit("5/minute")
-async def run_scraper_race(
-    request: Request,
-    body: ScraperRaceRequest = ScraperRaceRequest(),
-):
-    """启动全量多源竞速：并行 collect_full，仅胜出源 commit_full。"""
-    try:
-        race_id = await start_full_race(sources=body.sources)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    return ScraperRaceResponse.model_validate(await get_race(race_id))
-
-
-@router.get("/race/{race_id}", response_model=ScraperRaceResponse)
-async def get_scraper_race(race_id: str):
-    """查询全量竞速进度。"""
-    try:
-        return ScraperRaceResponse.model_validate(await get_race(race_id))
-    except KeyError:
-        raise HTTPException(status_code=404, detail="竞速任务不存在") from None
-
-
-@router.post("/race/{race_id}/cancel", response_model=ScraperRaceResponse)
-@limiter.limit("10/minute")
-async def cancel_scraper_race(request: Request, race_id: str):
-    """取消全量竞速。
-
-    尚未 committing 时不落库；已 committing 时尽力而为（落库可能仍完成）。
-    """
-    try:
-        return ScraperRaceResponse.model_validate(await cancel_race(race_id))
-    except KeyError:
-        raise HTTPException(status_code=404, detail="竞速任务不存在") from None
 
 
 @router.post("/run/{source}", response_model=ScraperRunResponse)

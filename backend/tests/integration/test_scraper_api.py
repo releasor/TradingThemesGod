@@ -3,23 +3,25 @@
 测试爬虫 API 端点的完整请求流程。
 """
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.schemas.scraper import (
-    ScraperRunResponse,
     ScraperRunListResponse,
+    ScraperRunResponse,
 )
+from app.scrapers.registry import register_default_scrapers
 
 
 @pytest.fixture
 def client():
-    """创建测试客户端（进入 lifespan 以注册默认爬虫）。"""
-    with TestClient(app) as test_client:
-        yield test_client
+    """创建测试客户端；手动注册爬虫，避免 lifespan 连库挂起。"""
+    register_default_scrapers()
+    return TestClient(app)
 
 
 @pytest.fixture
@@ -41,7 +43,7 @@ def sample_scraper_run_list(sample_scraper_run):
     """示例爬虫运行记录列表"""
     return ScraperRunListResponse(
         runs=[sample_scraper_run],
-        total=1,
+        count=1,
     )
 
 
@@ -77,20 +79,20 @@ class TestScraperAPI:
         self, mock_repo_class, mock_scheduler, client, sample_scraper_run
     ):
         """测试成功触发爬虫运行"""
-        # Mock scheduler
         mock_scheduler.run = AsyncMock(return_value=1)
 
-        # Mock repository
         mock_repo = AsyncMock()
-        mock_repo.get = AsyncMock(return_value=MagicMock(
-            id=1,
-            source="eastmoney",
-            status="completed",
-            started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-            finished_at=datetime(2026, 1, 15, 10, 5, 0, tzinfo=timezone.utc),
-            items_scraped=150,
-            error_message=None,
-        ))
+        mock_repo.get = AsyncMock(
+            return_value=MagicMock(
+                id=1,
+                source="eastmoney",
+                status="completed",
+                started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                finished_at=datetime(2026, 1, 15, 10, 5, 0, tzinfo=timezone.utc),
+                items_scraped=150,
+                error_message=None,
+            )
+        )
         mock_repo_class.return_value = mock_repo
 
         response = client.post("/api/v1/scraper/run/eastmoney")
@@ -119,7 +121,15 @@ class TestScraperAPI:
     ):
         """同数据源已在运行时复用现有 run，便于前端附着轮询。"""
         existing = MagicMock(
-            spec=["id", "source", "status", "started_at", "finished_at", "items_scraped", "error_message"]
+            spec=[
+                "id",
+                "source",
+                "status",
+                "started_at",
+                "finished_at",
+                "items_scraped",
+                "error_message",
+            ]
         )
         existing.id = 26
         existing.source = "eastmoney"
@@ -143,15 +153,17 @@ class TestScraperAPI:
     def test_get_scraper_status(self, mock_repo_class, client, sample_scraper_run):
         """测试获取爬虫运行状态"""
         mock_repo = AsyncMock()
-        mock_repo.get = AsyncMock(return_value=MagicMock(
-            id=1,
-            source="eastmoney",
-            status="completed",
-            started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-            finished_at=datetime(2026, 1, 15, 10, 5, 0, tzinfo=timezone.utc),
-            items_scraped=150,
-            error_message=None,
-        ))
+        mock_repo.get = AsyncMock(
+            return_value=MagicMock(
+                id=1,
+                source="eastmoney",
+                status="completed",
+                started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                finished_at=datetime(2026, 1, 15, 10, 5, 0, tzinfo=timezone.utc),
+                items_scraped=150,
+                error_message=None,
+            )
+        )
         mock_repo_class.return_value = mock_repo
 
         response = client.get("/api/v1/scraper/status/1")
@@ -177,17 +189,19 @@ class TestScraperAPI:
     def test_list_scraper_runs(self, mock_repo_class, client):
         """测试列出爬虫运行记录"""
         mock_repo = AsyncMock()
-        mock_repo.list_by_source = AsyncMock(return_value=[
-            MagicMock(
-                id=1,
-                source="eastmoney",
-                status="completed",
-                started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                finished_at=datetime(2026, 1, 15, 10, 5, 0, tzinfo=timezone.utc),
-                items_scraped=150,
-                error_message=None,
-            )
-        ])
+        mock_repo.list_by_source = AsyncMock(
+            return_value=[
+                MagicMock(
+                    id=1,
+                    source="eastmoney",
+                    status="completed",
+                    started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                    finished_at=datetime(2026, 1, 15, 10, 5, 0, tzinfo=timezone.utc),
+                    items_scraped=150,
+                    error_message=None,
+                )
+            ]
+        )
         mock_repo_class.return_value = mock_repo
 
         response = client.get("/api/v1/scraper/runs")
@@ -208,7 +222,9 @@ class TestScraperAPI:
         response = client.get("/api/v1/scraper/runs?source=sina")
 
         assert response.status_code == 200
-        mock_repo.list_by_source.assert_called_once_with(source="sina", limit=20, status=None)
+        mock_repo.list_by_source.assert_called_once_with(
+            source="sina", limit=20, status=None
+        )
 
     @patch("app.api.scraper.ScraperRunRepository")
     def test_list_scraper_runs_with_limit(self, mock_repo_class, client):
@@ -220,7 +236,9 @@ class TestScraperAPI:
         response = client.get("/api/v1/scraper/runs?limit=5")
 
         assert response.status_code == 200
-        mock_repo.list_by_source.assert_called_once_with(source=None, limit=5, status=None)
+        mock_repo.list_by_source.assert_called_once_with(
+            source=None, limit=5, status=None
+        )
 
     @patch("app.api.scraper.race_theme_quotes", new_callable=AsyncMock)
     @patch("app.api.scraper.EastMoneyScraper")
@@ -278,8 +296,18 @@ class TestScraperAPI:
             "phase": "collecting",
             "progress_pct": 0,
             "sources": [
-                {"id": "eastmoney", "status": "running", "progress_pct": 0, "error": None},
-                {"id": "akshare", "status": "running", "progress_pct": 0, "error": None},
+                {
+                    "id": "eastmoney",
+                    "status": "running",
+                    "progress_pct": 0,
+                    "error": None,
+                },
+                {
+                    "id": "akshare",
+                    "status": "running",
+                    "progress_pct": 0,
+                    "error": None,
+                },
             ],
             "winner": None,
             "error": None,
@@ -297,6 +325,7 @@ class TestScraperAPI:
 
     @patch("app.api.scraper.get_race", new_callable=AsyncMock)
     def test_get_race_success(self, mock_get, client):
+        """查询竞速状态返回 200。"""
         mock_get.return_value = {
             "race_id": "race-abc",
             "status": "committing",
@@ -323,103 +352,8 @@ class TestScraperAPI:
 
     @patch("app.api.scraper.get_race", new_callable=AsyncMock)
     def test_get_race_not_found(self, mock_get, client):
-        mock_get.side_effect = KeyError("missing")
-
-        response = client.get("/api/v1/scraper/race/missing")
-
-        assert response.status_code == 404
-        assert response.json()["detail"] == "竞速任务不存在"
-
-    @patch("app.api.scraper.cancel_race", new_callable=AsyncMock)
-    def test_cancel_race_success(self, mock_cancel, client):
-        mock_cancel.return_value = {
-            "race_id": "race-abc",
-            "status": "cancelled",
-            "phase": "done",
-            "progress_pct": 0,
-            "sources": [
-                {
-                    "id": "eastmoney",
-                    "status": "cancelled",
-                    "progress_pct": 0,
-                    "error": None,
-                }
-            ],
-            "winner": None,
-            "error": None,
-            "items_scraped": None,
-        }
-
-        response = client.post("/api/v1/scraper/race/race-abc/cancel")
-
-        assert response.status_code == 200
-        assert response.json()["status"] == "cancelled"
-        mock_cancel.assert_awaited_once_with("race-abc")
-
-    @patch("app.api.scraper.cancel_race", new_callable=AsyncMock)
-    def test_cancel_race_not_found(self, mock_cancel, client):
-        mock_cancel.side_effect = KeyError("missing")
-
-        response = client.post("/api/v1/scraper/race/missing/cancel")
-
-        assert response.status_code == 404
-        assert response.json()["detail"] == "竞速任务不存在"
-
-    @patch("app.api.scraper.start_full_race", new_callable=AsyncMock)
-    @patch("app.api.scraper.get_race", new_callable=AsyncMock)
-    def test_run_race_success(self, mock_get_race, mock_start, client):
-        """启动全量竞速返回 200。"""
-        mock_start.return_value = "race-abc"
-        mock_get_race.return_value = {
-            "race_id": "race-abc",
-            "status": "racing",
-            "phase": "collecting",
-            "progress_pct": 0.0,
-            "sources": [
-                {"id": "eastmoney", "status": "running", "progress_pct": 0.0, "error": None},
-                {"id": "akshare", "status": "running", "progress_pct": 0.0, "error": None},
-            ],
-            "winner": None,
-            "error": None,
-            "items_scraped": None,
-        }
-
-        response = client.post("/api/v1/scraper/run-race")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["race_id"] == "race-abc"
-        assert data["status"] == "racing"
-        assert len(data["sources"]) == 2
-        mock_start.assert_awaited()
-
-    @patch("app.api.scraper.get_race", new_callable=AsyncMock)
-    def test_get_race_success(self, mock_get_race, client):
-        """查询竞速状态返回 200。"""
-        mock_get_race.return_value = {
-            "race_id": "race-abc",
-            "status": "completed",
-            "phase": "done",
-            "progress_pct": 100.0,
-            "sources": [
-                {"id": "eastmoney", "status": "completed", "progress_pct": 100.0, "error": None},
-            ],
-            "winner": "eastmoney",
-            "error": None,
-            "items_scraped": 42,
-        }
-
-        response = client.get("/api/v1/scraper/race/race-abc")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["winner"] == "eastmoney"
-        assert data["items_scraped"] == 42
-
-    @patch("app.api.scraper.get_race", new_callable=AsyncMock)
-    def test_get_race_not_found(self, mock_get_race, client):
         """不存在的 race_id 返回 404。"""
-        mock_get_race.side_effect = KeyError("missing")
+        mock_get.side_effect = KeyError("missing")
 
         response = client.get("/api/v1/scraper/race/missing")
 
@@ -433,9 +367,14 @@ class TestScraperAPI:
             "race_id": "race-abc",
             "status": "cancelled",
             "phase": "done",
-            "progress_pct": 0.0,
+            "progress_pct": 0,
             "sources": [
-                {"id": "eastmoney", "status": "cancelled", "progress_pct": 0.0, "error": None},
+                {
+                    "id": "eastmoney",
+                    "status": "cancelled",
+                    "progress_pct": 0,
+                    "error": None,
+                }
             ],
             "winner": None,
             "error": None,
