@@ -18,6 +18,7 @@
     "dayjs": "^1.11.0",
     "echarts": "^6.1.0",
     "echarts-for-react": "3.0.6",
+    "gsap": "^3.15.0",
     "lucide-react": "^0.460.0",
     "motion": "^12.42.2",
     "ogl": "^1.0.11",
