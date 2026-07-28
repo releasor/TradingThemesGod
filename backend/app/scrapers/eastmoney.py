@@ -45,6 +45,11 @@ DEFAULT_PARAMS = {
 # 题材板块前缀
 THEME_BOARD_PREFIX = "BK"
 
+# 全量采集页级硬超时：单页请求最坏重试链约 2 域名 × 4 次 × 30s，
+# 不加 wait_for 时一个题材可卡住数分钟、整轮拖到数十分钟
+THEME_LIST_FETCH_TIMEOUT = 180.0
+THEME_STOCKS_FETCH_TIMEOUT = 45.0
+
 # 题材分类关键词映射（模块级常量，避免每次调用重建）
 THEME_CATEGORIES = {
     "新能源": ["锂电", "光伏", "风电", "储能", "新能源", "电池"],
@@ -608,7 +613,15 @@ class EastMoneyScraper(BaseScraper):
             theme_params.update(params)
 
         try:
-            theme_data = await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
+            theme_data = await asyncio.wait_for(
+                self.fetch_all_pages(EASTMONEY_API_BASE, theme_params),
+                timeout=THEME_LIST_FETCH_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[{self.source_name}] 获取题材列表超时（>{THEME_LIST_FETCH_TIMEOUT}s）"
+            )
+            raise
         except Exception as e:
             logger.error(f"[{self.source_name}] 获取题材列表失败: {e}")
             raise
@@ -638,8 +651,9 @@ class EastMoneyScraper(BaseScraper):
                     "fid": "f12",
                     "fs": f"b:{theme['code']}",
                 }
-                stock_data = await self.fetch_all_pages(
-                    EASTMONEY_API_BASE, stock_params
+                stock_data = await asyncio.wait_for(
+                    self.fetch_all_pages(EASTMONEY_API_BASE, stock_params),
+                    timeout=THEME_STOCKS_FETCH_TIMEOUT,
                 )
                 stock_trade_date = self._extract_trade_date(stock_data)
                 if stock_trade_date is not None and (
@@ -652,6 +666,11 @@ class EastMoneyScraper(BaseScraper):
                     stocks_by_code[theme["code"]] = stocks
             except asyncio.CancelledError:
                 raise
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"[{self.source_name}] 题材 {theme['code']} 成分股采集超时"
+                    f"（>{THEME_STOCKS_FETCH_TIMEOUT}s），跳过"
+                )
             except Exception as e:
                 logger.error(f"[{self.source_name}] 处理题材 {theme['code']} 失败: {e}")
             # 题材列表 8%，成分股采集占 8→99
