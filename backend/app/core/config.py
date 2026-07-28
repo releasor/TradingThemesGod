@@ -45,9 +45,34 @@ class Settings(BaseSettings):
     # 雪球公开信息访问配置（可选）
     XUEQIU_COOKIE: str = ""
 
+    # Tushare Pro（可选；未启用或未配置 token 时不参与全量竞速）
+    TUSHARE_ENABLED: bool = False
+    TUSHARE_TOKEN: str = ""
+    # 自定义 Pro HTTP 地址，留空则用官方默认
+    TUSHARE_API_URL: str = ""
+    # 概念列表接口尝试顺序（逗号分隔）：concept | ths_index | dc_index
+    TUSHARE_CONCEPT_APIS: str = "concept,ths_index,dc_index"
+    # concept(src=...) 参数，常见 ts / ths
+    TUSHARE_CONCEPT_SRC: str = "ts"
+    # ths_index(type=...) 参数，N=概念
+    TUSHARE_THS_INDEX_TYPE: str = "N"
+    TUSHARE_THS_INDEX_EXCHANGE: str = "A"
+    TUSHARE_MAX_RETRIES: int = 3
+
     # JWT 认证
     JWT_SECRET: str = "change-me-in-production"
     JWT_EXPIRE_DAYS: int = 7
+
+    def tushare_concept_api_list(self) -> list[str]:
+        """解析概念接口尝试顺序。"""
+        raw = (self.TUSHARE_CONCEPT_APIS or "").strip()
+        if not raw:
+            return ["concept", "ths_index", "dc_index"]
+        return [part.strip().lower() for part in raw.split(",") if part.strip()]
+
+    def tushare_ready(self) -> bool:
+        """是否启用且已配置 token。"""
+        return bool(self.TUSHARE_ENABLED) and bool((self.TUSHARE_TOKEN or "").strip())
 
     @property
     def database_url(self) -> str:

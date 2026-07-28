@@ -86,8 +86,13 @@ def _aggregate_source_errors(sources: list[SourceRaceState]) -> str:
 
 def default_full_race_sources() -> list[str]:
     """看板可选且实现 collect_full 的数据源。"""
+    from app.core.config import get_settings
+
+    settings = get_settings()
     sources: list[str] = []
     for item in list_registered_scraper_sources(dashboard_only=True):
+        if item.id == "tushare" and not settings.tushare_ready():
+            continue
         cls = scraper_registry.get(item.id)
         if cls is not None and callable(getattr(cls, "collect_full", None)):
             sources.append(item.id)

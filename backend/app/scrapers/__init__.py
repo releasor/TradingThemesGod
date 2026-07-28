@@ -11,6 +11,7 @@ from app.scrapers.eastmoney import EastMoneyScraper
 from app.scrapers.ths import TongHuaShunScraper
 from app.scrapers.sina import SinaFinanceScraper
 from app.scrapers.akshare import AKShareScraper
+from app.scrapers.tushare_scraper import TushareScraper
 
 __all__ = [
     "BaseScraper",
@@ -23,4 +24,5 @@ __all__ = [
     "TongHuaShunScraper",
     "SinaFinanceScraper",
     "AKShareScraper",
+    "TushareScraper",
 ]

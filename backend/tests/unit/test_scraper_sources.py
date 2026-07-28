@@ -11,13 +11,13 @@ def test_list_registered_scraper_sources_includes_catalog_entries():
     register_default_scrapers()
     sources = list_registered_scraper_sources()
     source_ids = {item.id for item in sources}
-    assert source_ids == {"eastmoney", "ths", "akshare", "sina"}
+    assert source_ids == {"eastmoney", "ths", "akshare", "sina", "tushare"}
 
 
 def test_list_dashboard_scraper_sources_filters_specialized_sources():
     register_default_scrapers()
     sources = list_registered_scraper_sources(dashboard_only=True)
-    assert [item.id for item in sources] == ["eastmoney", "akshare", "ths"]
+    assert [item.id for item in sources] == ["eastmoney", "akshare", "ths", "tushare"]
 
 
 def test_get_default_dashboard_source_prefers_eastmoney():

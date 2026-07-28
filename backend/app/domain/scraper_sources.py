@@ -37,6 +37,12 @@ SCRAPER_SOURCE_CATALOG: tuple[ScraperSourceMeta, ...] = (
         dashboard_selectable=True,
     ),
     ScraperSourceMeta(
+        id="tushare",
+        label="Tushare",
+        description="概念板块列表（全量竞速兜底，需 TUSHARE_ENABLED=true、TUSHARE_TOKEN 与积分权限）",
+        dashboard_selectable=True,
+    ),
+    ScraperSourceMeta(
         id="sina",
         label="新浪财经",
         description="单只股票新闻与事件（需指定股票代码）",

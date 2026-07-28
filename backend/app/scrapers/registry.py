@@ -62,9 +62,11 @@ def register_default_scrapers() -> None:
     from app.scrapers.eastmoney import EastMoneyScraper
     from app.scrapers.sina import SinaFinanceScraper
     from app.scrapers.ths import TongHuaShunScraper
+    from app.scrapers.tushare_scraper import TushareScraper
 
     scraper_registry.register("eastmoney", EastMoneyScraper)
     scraper_registry.register("ths", TongHuaShunScraper)
     scraper_registry.register("akshare", AKShareScraper)
     scraper_registry.register("sina", SinaFinanceScraper)
-    logger.info("已注册默认爬虫: eastmoney, ths, akshare, sina")
+    scraper_registry.register("tushare", TushareScraper)
+    logger.info("已注册默认爬虫: eastmoney, ths, akshare, sina, tushare")

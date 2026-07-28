@@ -70,8 +70,13 @@ class TestScraperAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 3
-        assert {item["id"] for item in data["sources"]} == {"eastmoney", "akshare", "ths"}
+        assert data["count"] == 4
+        assert {item["id"] for item in data["sources"]} == {
+            "eastmoney",
+            "akshare",
+            "ths",
+            "tushare",
+        }
 
     @patch("app.api.scraper.scraper_scheduler")
     @patch("app.api.scraper.ScraperRunRepository")

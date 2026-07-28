@@ -116,3 +116,6 @@ def test_register_default_scrapers(monkeypatch):
     assert scraper_registry.get("local_chain") is None
     assert scraper_registry.get("akshare") is AKShareScraper
     assert scraper_registry.get("sina") is SinaFinanceScraper
+    from app.scrapers.tushare_scraper import TushareScraper
+
+    assert scraper_registry.get("tushare") is TushareScraper
