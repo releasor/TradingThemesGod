@@ -187,7 +187,7 @@ export function formatRaceSourcesStatus(
     const doneLabels = completed.map((item) => sourceLabel(item.id)).join('、')
     return {
       pendingLabel: `等待 ${activeLabel} ${Math.round(active.progress_pct)}%`,
-      message: `${doneLabels} 已采完，正在等待 ${activeLabel} 完整采集（含成分股）。${parts}（已耗时 ${elapsed}）`,
+      message: `${doneLabels} 已采完，正在等待 ${activeLabel} 完整采集（含成分股）；若其超时将自动采用已完成源的数据。${parts}（已耗时 ${elapsed}）`,
     }
   }
 

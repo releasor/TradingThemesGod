@@ -31,6 +31,13 @@ logger = get_logger(__name__)
 
 CreateScraperFn = Callable[[str], Any]
 
+# 单源采集硬超时：东财全量正常需 20–40 分钟，单源超过该时长视为卡死
+FULL_RACE_SOURCE_TIMEOUT = 40 * 60.0
+# 已有兜底草稿（themes-only）后，再给含成分股源的宽限期；到期直接用兜底落库
+FULL_RACE_FALLBACK_GRACE = 90.0
+# 整体硬超时安全网：任何情况下竞速不超过该时长
+FULL_RACE_OVERALL_TIMEOUT = 45 * 60.0
+
 
 def _is_primary_valid(draft: FullScrapeDraft) -> bool:
     """主题与成分股均非空 → 可作为首选胜出草稿。"""
@@ -163,11 +170,17 @@ class FullRaceManager:
         *,
         create_scraper: CreateScraperFn | None = None,
         persist_run: bool = True,
+        source_timeout: float = FULL_RACE_SOURCE_TIMEOUT,
+        fallback_grace: float = FULL_RACE_FALLBACK_GRACE,
+        overall_timeout: float = FULL_RACE_OVERALL_TIMEOUT,
     ) -> None:
         self._races: dict[str, RaceState] = {}
         self._custom_factory = create_scraper is not None
         self._create_scraper = create_scraper or self._default_create_scraper
         self._persist_run = persist_run
+        self._source_timeout = source_timeout
+        self._fallback_grace = fallback_grace
+        self._overall_timeout = overall_timeout
 
     @staticmethod
     def _default_create_scraper(source: str) -> BaseScraper:
@@ -295,7 +308,9 @@ class FullRaceManager:
                     return _on_progress
 
                 task = asyncio.create_task(
-                    scraper.collect_full(
+                    self._collect_with_timeout(
+                        scraper,
+                        source,
                         cancel=cancel,
                         on_progress=_make_progress_cb(source_state, state),
                     ),
@@ -306,6 +321,9 @@ class FullRaceManager:
             state.refresh_collect_progress()
             pending: set[asyncio.Task[FullScrapeDraft]] = set(tasks)
             fallbacks: list[tuple[str, FullScrapeDraft]] = []
+            loop = asyncio.get_running_loop()
+            overall_deadline = loop.time() + self._overall_timeout
+            fallback_deadline: float | None = None
 
             while pending:
                 if state.cancel_requested and state.status == "cancelled":
@@ -315,8 +333,16 @@ class FullRaceManager:
                         await asyncio.gather(*pending, return_exceptions=True)
                     return
 
+                # asyncio.wait 带超时：兜底宽限期 / 整体超时到点时醒转处理
+                deadlines = [overall_deadline]
+                if fallback_deadline is not None:
+                    deadlines.append(fallback_deadline)
+                wait_timeout = max(0.0, min(deadlines) - loop.time())
+
                 done, pending = await asyncio.wait(
-                    pending, return_when=asyncio.FIRST_COMPLETED
+                    pending,
+                    timeout=wait_timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
 
                 for task in done:
@@ -326,6 +352,20 @@ class FullRaceManager:
                         draft = task.result()
                     except asyncio.CancelledError:
                         source_state.status = "cancelled"
+                        continue
+                    except asyncio.TimeoutError:
+                        source_state.status = "failed"
+                        source_state.error = (
+                            f"采集超时（单源超过 "
+                            f"{int(self._source_timeout // 60)} 分钟未完成）"
+                        )
+                        source_state.progress_pct = 100.0
+                        logger.warning(
+                            "full_race_collect_timeout",
+                            race_id=race_id,
+                            source=source,
+                            timeout=self._source_timeout,
+                        )
                         continue
                     except Exception as exc:
                         source_state.status = "failed"
@@ -356,11 +396,14 @@ class FullRaceManager:
 
                     if _is_fallback_only(draft):
                         fallbacks.append((source, draft))
+                        if fallback_deadline is None:
+                            fallback_deadline = loop.time() + self._fallback_grace
                         logger.info(
                             "full_race_fallback_held",
                             race_id=race_id,
                             source=source,
                             themes=len(draft.themes),
+                            grace=self._fallback_grace,
                         )
                         continue
 
@@ -371,6 +414,66 @@ class FullRaceManager:
                         race_id=race_id,
                         source=source,
                     )
+
+                now = loop.time()
+
+                # 兜底宽限期到：不再等卡死的源，直接用已采完的兜底数据落库
+                if (
+                    fallback_deadline is not None
+                    and now >= fallback_deadline
+                    and fallbacks
+                ):
+                    logger.warning(
+                        "full_race_fallback_grace_expired",
+                        race_id=race_id,
+                        grace=self._fallback_grace,
+                        pending_sources=[tasks[t] for t in pending],
+                    )
+                    await self._cancel_pending(pending, state)
+                    pending.clear()
+                    for src in state.sources:
+                        if src.status == "cancelled":
+                            src.status = "failed"
+                            src.error = (
+                                f"采集超时（兜底宽限 "
+                                f"{int(self._fallback_grace)} 秒内未完成）"
+                            )
+                    fallbacks.sort(
+                        key=lambda item: len(item[1].themes), reverse=True
+                    )
+                    source, draft = fallbacks[0]
+                    await self._commit_winner(state, scrapers, source, draft)
+                    return
+
+                # 整体硬超时：有兜底用兜底，否则失败，绝不无限挂起
+                if now >= overall_deadline:
+                    logger.error(
+                        "full_race_overall_timeout",
+                        race_id=race_id,
+                        timeout=self._overall_timeout,
+                        pending_sources=[tasks[t] for t in pending],
+                    )
+                    await self._cancel_pending(pending, state)
+                    pending.clear()
+                    for src in state.sources:
+                        if src.status == "cancelled":
+                            src.status = "failed"
+                            src.error = (
+                                f"采集超时（全量竞速超过 "
+                                f"{int(self._overall_timeout // 60)} 分钟未完成）"
+                            )
+                    if fallbacks:
+                        fallbacks.sort(
+                            key=lambda item: len(item[1].themes), reverse=True
+                        )
+                        source, draft = fallbacks[0]
+                        await self._commit_winner(state, scrapers, source, draft)
+                        return
+                    state.status = "failed"
+                    state.phase = "done"
+                    state.error = _aggregate_source_errors(state.sources)
+                    state.progress_pct = max(state.progress_pct, 100.0)
+                    return
 
             if state.cancel_requested or state.status == "cancelled":
                 state.status = "cancelled"
@@ -402,6 +505,20 @@ class FullRaceManager:
                     await close()
                 except Exception as exc:
                     logger.warning("full_race_scraper_close_failed", error=str(exc))
+
+    async def _collect_with_timeout(
+        self,
+        scraper: Any,
+        source: str,
+        *,
+        cancel: asyncio.Event,
+        on_progress: Callable[[float], None],
+    ) -> FullScrapeDraft:
+        """包一层单源硬超时：源卡死时抛 TimeoutError，不拖死整个竞速。"""
+        return await asyncio.wait_for(
+            scraper.collect_full(cancel=cancel, on_progress=on_progress),
+            timeout=self._source_timeout,
+        )
 
     async def _cancel_pending(
         self,
