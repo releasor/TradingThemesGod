@@ -27,19 +27,29 @@ async def race_theme_quotes(
     *,
     min_count: int = 1,
     cancel_event: asyncio.Event | None = None,
+    collector_timeout: float | None = 90.0,
 ) -> QuotesRaceResult:
     """并行启动多源采集；首个有效结果胜出并唯一落库。
 
     失败 / 空结果 / 低于 ``min_count`` 的源被跳过。
+    单个源超过 ``collector_timeout`` 秒未完成视为失败（None 表示不限时），
+    避免一个源卡死导致整个竞速无法结束。
     若在落库前 ``cancel_event`` 已置位，则不落库并抛出 ``CancelledError``。
     全部源失败时抛出 ``RuntimeError``。
     """
     if not collectors:
         raise RuntimeError("all quote collectors failed: no collectors")
 
+    async def _run_collector(
+        collector: Callable[[], Awaitable[tuple[date | None, list[dict]]]],
+    ) -> tuple[date | None, list[dict]]:
+        if collector_timeout is None:
+            return await collector()
+        return await asyncio.wait_for(collector(), timeout=collector_timeout)
+
     tasks: dict[asyncio.Task[tuple[date | None, list[dict]]], str] = {}
     for name, collector in collectors:
-        task = asyncio.create_task(collector(), name=name)
+        task = asyncio.create_task(_run_collector(collector), name=name)
         tasks[task] = name
 
     pending: set[asyncio.Task[tuple[date | None, list[dict]]]] = set(tasks)
@@ -76,6 +86,16 @@ async def race_theme_quotes(
                 name = tasks[task]
                 try:
                     trade_date, themes = task.result()
+                except asyncio.TimeoutError:
+                    failures.append(
+                        f"{name}: 采集超时（>{collector_timeout}s）"
+                    )
+                    logger.warning(
+                        "quotes_race_collector_timeout",
+                        source=name,
+                        timeout=collector_timeout,
+                    )
+                    continue
                 except Exception as exc:
                     failures.append(f"{name}: {exc}")
                     logger.warning(
