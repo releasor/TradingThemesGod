@@ -3,6 +3,7 @@
 提供题材查询、搜索、排名和分类接口。
 """
 
+import asyncio
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -48,6 +49,11 @@ def _insight_service(db: AsyncSession, current_user: User) -> ThemeInsightRefres
     return ThemeInsightRefreshService(
         db, providers=ModelProviderService(db, current_user.id)
     )
+
+
+# 详情页单题材刷新硬超时：略小于前端 axios 的 300s，
+# 保证后端先返回明确错误，而不是让前端裸超时且后台继续空转
+REFRESH_HARD_TIMEOUT_SECONDS = 285.0
 
 
 @router.post("/concept-graphs/refresh", response_model=ConceptGraphBatchResponse)
@@ -184,7 +190,15 @@ async def refresh_concept_graph(
     """抓取公开资料并使用默认模型增量刷新单个题材图谱。"""
     service = ConceptGraphRefreshService(user_id=current_user.id)
     try:
-        return await service.refresh(theme_id)
+        return await asyncio.wait_for(
+            service.refresh(theme_id),
+            timeout=REFRESH_HARD_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            504,
+            "图谱刷新超时（公开资料或模型响应过慢），原图谱已保留，请稍后重试",
+        ) from None
     finally:
         await service.research.middleware.close()
 
@@ -201,7 +215,16 @@ async def refresh_theme_insights(
     """抓取公开资料并增量刷新单个题材的介绍和驱动事件。"""
     service = _insight_service(db, current_user)
     try:
-        return await service.refresh(theme_id)
+        return await asyncio.wait_for(
+            service.refresh(theme_id),
+            timeout=REFRESH_HARD_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        await db.rollback()
+        raise HTTPException(
+            504,
+            "题材资料刷新超时（公开资料或模型响应过慢），已保留原有数据，请稍后重试",
+        ) from None
     finally:
         await service.research.middleware.close()
 

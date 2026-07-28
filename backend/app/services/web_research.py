@@ -132,10 +132,16 @@ class WebResearchService:
         timeout_seconds: int = 12,
         max_sources: int = 6,
         middleware: AntiScrapingMiddleware | None = None,
+        research_budget_seconds: float = 150.0,
+        fetch_concurrency: int = 4,
     ):
         self.timeout_seconds = timeout_seconds
         self.max_sources = max_sources
         self.middleware = middleware or AntiScrapingMiddleware()
+        # 整轮检索+抓取的硬预算：query 多、上游慢时按预算截断，
+        # 返回已拿到的部分结果，避免详情页刷新无限挂起
+        self.research_budget_seconds = research_budget_seconds
+        self.fetch_concurrency = max(1, fetch_concurrency)
         self.failed_sources: set[str] = set()
 
     def reset_failures(self) -> None:
@@ -244,25 +250,61 @@ class WebResearchService:
         return await self._research_queries(queries)
 
     async def _research_queries(self, queries: list[str]) -> list[ResearchSource]:
-        candidates: list[str] = []
-        for query in queries:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.research_budget_seconds
+        # 搜索阶段最多占用约一半预算，给正文抓取留足时间
+        search_deadline = loop.time() + self.research_budget_seconds * 0.5
+
+        async def _search_one(query: str) -> list[str]:
+            remaining = search_deadline - loop.time()
+            if remaining <= 0:
+                return []
             try:
-                for url in await self.search(query):
-                    if url not in candidates:
-                        candidates.append(url)
+                return await asyncio.wait_for(self.search(query), timeout=remaining)
+            except asyncio.TimeoutError:
+                return []
             except httpx.HTTPError:
-                continue
+                return []
+
+        # 多 query 并发检索；节流锁会序列化请求发起，慢 query 不再阻塞整体
+        search_results = await asyncio.gather(
+            *(_search_one(query) for query in queries)
+        )
+        candidates: list[str] = []
+        for urls in search_results:
+            for url in urls:
+                if url not in candidates:
+                    candidates.append(url)
+
+        semaphore = asyncio.Semaphore(self.fetch_concurrency)
+
+        async def _fetch_one(url: str) -> ResearchSource | None:
+            async with semaphore:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    return None
+                try:
+                    return await asyncio.wait_for(self.fetch(url), timeout=remaining)
+                except asyncio.TimeoutError:
+                    self.failed_sources.add(urlparse(url).hostname or url)
+                    return None
+                except (httpx.HTTPError, ValueError):
+                    self.failed_sources.add(urlparse(url).hostname or url)
+                    return None
+
+        # 抓取阶段：限流并发，凑够 max_sources 或预算耗尽即停（保留部分结果）
         sources: list[ResearchSource] = []
-        for url in candidates:
-            if len(sources) >= self.max_sources:
+        pending = list(candidates)
+        batch_size = self.fetch_concurrency * 2
+        while pending and len(sources) < self.max_sources:
+            if deadline - loop.time() <= 0:
                 break
-            try:
-                source = await self.fetch(url)
-            except (httpx.HTTPError, ValueError):
-                self.failed_sources.add(urlparse(url).hostname or url)
-                continue
-            if source:
-                sources.append(source)
+            batch, pending = pending[:batch_size], pending[batch_size:]
+            for source in await asyncio.gather(*(_fetch_one(u) for u in batch)):
+                if source is not None:
+                    sources.append(source)
+                    if len(sources) >= self.max_sources:
+                        break
         return sources
 
     async def research_profile(self, theme_name: str) -> list[ResearchSource]:
