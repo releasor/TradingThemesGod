@@ -115,6 +115,97 @@ async def collect_akshare_theme_quotes(
     return date.today(), themes
 
 
+def _fetch_board_last_rise(symbol: str) -> Decimal | None:
+    """拉取板块日 K 最近一根的涨跌幅（盘后列表接口常为 0 时的回退）。"""
+    end = date.today()
+    start = end.fromordinal(end.toordinal() - 12)
+    frame = ak.stock_board_concept_hist_em(
+        symbol=symbol,
+        period="daily",
+        start_date=start.strftime("%Y%m%d"),
+        end_date=end.strftime("%Y%m%d"),
+        adjust="",
+    )
+    if frame is None or getattr(frame, "empty", True):
+        return None
+    if "涨跌幅" not in getattr(frame, "columns", []):
+        return None
+    value = frame.iloc[-1].get("涨跌幅")
+    return _to_optional_decimal(value)
+
+
+async def backfill_signal_board_quotes_from_hist(
+    *,
+    concurrency: int = 4,
+) -> int:
+    """为行情指标/市场表现板回填最近交易日涨跌幅（全源同 code）。
+
+    东财概念列表盘后常返回全 0，但日 K 仍有昨收涨跌幅。
+    """
+    from sqlalchemy import or_, select
+
+    from app.core.database import AsyncSessionLocal
+    from app.domain.theme_classification import (
+        only_indicator_signals,
+        only_market_signals,
+    )
+    from app.models.theme import Theme
+    from app.scrapers.theme_upsert import apply_theme_quotes
+
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(Theme.code, Theme.name)
+                .where(
+                    Theme.deleted_at.is_(None),
+                    or_(only_market_signals(), only_indicator_signals()),
+                )
+                .distinct()
+            )
+        ).all()
+
+    targets = [(str(code), str(name or "")) for code, name in rows if code]
+    if not targets:
+        return 0
+
+    sem = asyncio.Semaphore(concurrency)
+    quotes: list[dict[str, Any]] = []
+
+    async def one(code: str, name: str) -> None:
+        async with sem:
+            rise = None
+            for symbol in (code, name):
+                if not symbol:
+                    continue
+                try:
+                    rise = await asyncio.to_thread(_fetch_board_last_rise, symbol)
+                except Exception as exc:
+                    logger.warning(
+                        "signal_board_hist_failed",
+                        code=code,
+                        symbol=symbol,
+                        error=str(exc),
+                    )
+                    continue
+                if rise is not None and rise != 0:
+                    break
+            if rise is None:
+                return
+            quotes.append(
+                {
+                    "code": code,
+                    "name": name or code,
+                    "rise_fall_pct": rise,
+                    "source": "akshare",
+                }
+            )
+
+    await asyncio.gather(*(one(code, name) for code, name in targets))
+    if not quotes:
+        return 0
+    return await apply_theme_quotes(quotes, preserve_nonzero_when_batch_zero=False)
+
+
 async def _collect_via_eastmoney(
     codes: set[str],
 ) -> tuple[date | None, list[dict[str, Any]]]:
@@ -171,7 +262,9 @@ async def _refresh_strategy_quotes_inner(
     scraper = EastMoneyScraper(middleware=middleware)
 
     async def save(themes: list[dict[str, Any]]) -> None:
-        await scraper._save_themes(themes)
+        from app.scrapers.theme_upsert import apply_theme_quotes
+
+        await apply_theme_quotes(themes)
 
     try:
         result = await race_theme_quotes(

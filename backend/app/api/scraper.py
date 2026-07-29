@@ -27,7 +27,10 @@ from app.scrapers.eastmoney import EastMoneyScraper
 from app.scrapers.full_race import cancel_race, get_race, start_full_race
 from app.scrapers.scheduler import scraper_scheduler
 from app.services.quotes_refresh_race import race_theme_quotes
-from app.services.strategy_quote_refresh import collect_akshare_theme_quotes
+from app.services.strategy_quote_refresh import (
+    backfill_signal_board_quotes_from_hist,
+    collect_akshare_theme_quotes,
+)
 
 # 速率限制器
 limiter = Limiter(key_func=get_remote_address)
@@ -143,6 +146,7 @@ async def refresh_theme_quotes(request: Request):
     """仅刷新题材列表涨跌幅/热度，不抓取成分股。
 
     与全量 eastmoney 采集解耦：全量进行中仍可刷新行情。
+    胜出行情按 code 回写到所有源（东财/AKShare 共用 BK）；盘后全 0 不覆盖已有涨跌幅。
     """
     if scraper_scheduler.is_quotes_refresh_running():
         raise HTTPException(status_code=409, detail="行情刷新进行中，请稍后再试")
@@ -150,6 +154,10 @@ async def refresh_theme_quotes(request: Request):
     async with scraper_scheduler.quotes_refresh_lock:
         scraper = EastMoneyScraper()
         try:
+            from app.scrapers.theme_upsert import (
+                apply_theme_quotes,
+                batch_quotes_are_all_zero,
+            )
 
             async def eastmoney_collect():
                 return await scraper.collect_theme_quotes()
@@ -159,7 +167,12 @@ async def refresh_theme_quotes(request: Request):
                 return await collect_akshare_theme_quotes(only_codes=None)
 
             async def save(themes):
-                await scraper._save_themes(themes)
+                updated = await apply_theme_quotes(themes)
+                # 盘后列表全 0：用板块日 K 回填行情指标/市场表现
+                if batch_quotes_are_all_zero(themes):
+                    hist_updated = await backfill_signal_board_quotes_from_hist()
+                    updated = max(updated, hist_updated)
+                return updated
 
             result = await race_theme_quotes(
                 collectors=[
@@ -190,7 +203,7 @@ async def run_scraper_race(
     request: Request,
     body: ScraperRaceRequest = ScraperRaceRequest(),
 ):
-    """启动全量多源竞速：并行 collect_full，仅胜出源 commit_full。"""
+    """启动全量多源竞速：并行 collect_full，各源完成后立即 commit_full。"""
     try:
         race_id = await start_full_race(sources=body.sources)
     except ValueError as e:
@@ -210,7 +223,13 @@ async def get_scraper_race(race_id: str):
         state = await get_race(race_id)
     except KeyError as e:
         raise HTTPException(status_code=404, detail="竞速任务不存在") from e
-    return ScraperRaceResponse.model_validate(state)
+    try:
+        return ScraperRaceResponse.model_validate(state)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=500,
+            detail=f"竞速状态序列化失败: {exc}",
+        ) from exc
 
 
 @router.post("/race/{race_id}/cancel", response_model=ScraperRaceResponse)
