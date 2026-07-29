@@ -41,6 +41,8 @@ export interface ThemeListParams {
   category?: string
   tags?: string
   q?: string
+  /** 看板活跃数据源；缺省后端按 eastmoney */
+  source?: string
 }
 
 /** 题材列表响应（带分页） */

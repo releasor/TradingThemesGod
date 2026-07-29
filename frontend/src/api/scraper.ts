@@ -53,6 +53,7 @@ export interface ScraperRaceSource {
   status: string
   progress_pct: number
   error?: string | null
+  items_scraped?: number | null
 }
 
 export interface ScraperRace {
@@ -62,6 +63,7 @@ export interface ScraperRace {
   progress_pct: number
   sources: ScraperRaceSource[]
   winner: string | null
+  committed_sources?: string[]
   error: string | null
   items_scraped?: number | null
 }
@@ -181,13 +183,13 @@ export function formatRaceSourcesStatus(
     }
   }
 
-  if (running.length === 1 && completed.length > 0) {
-    const active = running[0]
+  if (running.length >= 1 && completed.length > 0) {
+    const active = [...running].sort((a, b) => b.progress_pct - a.progress_pct)[0]
     const activeLabel = sourceLabel(active.id)
     const doneLabels = completed.map((item) => sourceLabel(item.id)).join('、')
     return {
-      pendingLabel: `等待 ${activeLabel} ${Math.round(active.progress_pct)}%`,
-      message: `${doneLabels} 已采完，正在等待 ${activeLabel} 完整采集（含成分股）；若其超时将自动采用已完成源的数据。${parts}（已耗时 ${elapsed}）`,
+      pendingLabel: `${doneLabels} 已写入 · ${activeLabel} ${Math.round(active.progress_pct)}%`,
+      message: `${doneLabels} 已写入，可切换查看；${activeLabel} 仍在采集。${parts}（已耗时 ${elapsed}）`,
     }
   }
 
@@ -195,7 +197,15 @@ export function formatRaceSourcesStatus(
     const active = [...running].sort((a, b) => b.progress_pct - a.progress_pct)[0]
     return {
       pendingLabel: `竞速 · ${sourceLabel(active.id)} ${Math.round(active.progress_pct)}%`,
-      message: `多源竞速中：${parts}（已耗时 ${elapsed}）...`,
+      message: `多源并行采集中：${parts}（已耗时 ${elapsed}）...`,
+    }
+  }
+
+  if (completed.length > 0 && running.length === 0) {
+    const doneLabels = completed.map((item) => sourceLabel(item.id)).join('、')
+    return {
+      pendingLabel: '多源写入完成',
+      message: `${doneLabels} 已写入（已耗时 ${elapsed}）`,
     }
   }
 
@@ -208,6 +218,24 @@ export function formatRaceSourcesStatus(
 function isAxiosTimeoutError(error: unknown): boolean {
   const err = error as { code?: string; message?: string }
   return err?.code === 'ECONNABORTED' || Boolean(err?.message?.includes('timeout'))
+}
+
+function axiosStatus(error: unknown): number | undefined {
+  const err = error as { response?: { status?: number } }
+  return err?.response?.status
+}
+
+/** 竞速轮询可重试：超时、网络抖动、5xx（后端瞬时过载/重启中间态） */
+function isRetriableRacePollError(error: unknown): boolean {
+  if (isAxiosTimeoutError(error)) return true
+  const status = axiosStatus(error)
+  if (status != null && status >= 500) return true
+  const err = error as { code?: string; message?: string }
+  return (
+    err?.code === 'ERR_NETWORK' ||
+    err?.code === 'ECONNRESET' ||
+    Boolean(err?.message?.includes('Network Error'))
+  )
 }
 
 /** 获取看板可选的爬虫数据源列表。 */
@@ -387,8 +415,14 @@ export async function runScraperRaceAndWait(
         if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
           throw error
         }
-        // 采集高峰时偶发单次轮询超时：跳过本轮，不中断整次全量
-        if (isAxiosTimeoutError(error) && Date.now() + pollInterval <= deadline) {
+        // 任务已不存在（常见于后端重启）：竞速内存态丢失，需重新全量
+        if (axiosStatus(error) === 404) {
+          throw new Error(
+            '全量竞速任务已中断（服务可能已重启）。请重新点击「全量更新」。'
+          )
+        }
+        // 采集高峰偶发超时 / 5xx：跳过本轮继续等，不把整次全量判失败
+        if (isRetriableRacePollError(error) && Date.now() + pollInterval <= deadline) {
           continue
         }
         throw error

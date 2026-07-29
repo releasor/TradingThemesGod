@@ -96,15 +96,37 @@ def test_regular_theme_code_is_not_classified_as_market_signal():
     assert is_indicator_signal("BK0683") is False
 
 
-def test_exclusion_condition_compiles_to_not_in():
-    compiled = _compile(exclude_market_signals())
+def test_name_based_classification_for_non_bk_sources():
+    assert is_indicator_signal("THS309265", "2026一季报预增") is True
+    assert is_indicator_signal("THS309267", "2026中报预增") is True
+    assert is_market_signal("THS309062", "同花顺中特估100") is True
+    assert is_market_signal("THS000001", "昨日涨停_含一字") is True
+    assert is_indicator_signal("THS000002", "百日新高") is True
+    assert is_market_signal("THS308718", "同花顺漂亮100") is False
+    assert is_indicator_signal("THS301558", "人工智能") is False
+    assert classify_board_kind("THS309265", "2026一季报预增") == "indicator"
+    assert classify_board_kind("THS309062", "同花顺中特估100") == "market"
+    assert classify_board_kind("THS301558", "人工智能") == "theme"
 
-    assert "NOT IN" in str(compiled)
-    codes = set(next(iter(compiled.params.values())))
-    assert "BK0815" in codes
-    assert STYLE_FACTOR_CODES <= codes
-    assert INDEX_BOARD_CODES <= codes
-    assert INDICATOR_CODES <= codes
+
+def test_exclusion_condition_compiles_with_code_and_name_markers():
+    compiled = _compile(exclude_market_signals())
+    sql = str(compiled)
+
+    assert "NOT" in sql
+    assert "LIKE" in sql.upper()
+    param_values = set()
+    for value in compiled.params.values():
+        if isinstance(value, (list, tuple, set)):
+            param_values.update(value)
+        else:
+            param_values.add(value)
+    assert "BK0815" in param_values
+    assert STYLE_FACTOR_CODES <= param_values
+    assert INDEX_BOARD_CODES <= param_values
+    assert INDICATOR_CODES <= param_values
+    assert any("昨日涨停" in str(v) for v in param_values)
+    assert any("季报预增" in str(v) for v in param_values)
 
 
 def test_inclusion_condition_compiles_to_in():
@@ -112,12 +134,12 @@ def test_inclusion_condition_compiles_to_in():
 
     sql = str(compiled)
     assert " IN " in sql
-    assert "NOT IN" not in sql
     codes = set(next(iter(compiled.params.values())))
     assert "BK0815" in codes
     assert STYLE_FACTOR_CODES <= codes
     assert INDEX_BOARD_CODES <= codes
     assert "BK1676" not in codes
+    assert any("中特估" in str(v) for v in compiled.params.values())
 
 
 def test_indicator_inclusion_condition_compiles_to_in():
@@ -125,10 +147,10 @@ def test_indicator_inclusion_condition_compiles_to_in():
 
     sql = str(compiled)
     assert " IN " in sql
-    assert "NOT IN" not in sql
     codes = set(next(iter(compiled.params.values())))
     assert INDICATOR_CODES == codes
     assert "BK0815" not in codes
+    assert any("中报预增" in str(v) for v in compiled.params.values())
 
 
 def test_classify_board_kind():

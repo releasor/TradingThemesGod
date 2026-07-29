@@ -3,7 +3,7 @@
 提供 Theme 的数据库查询操作。
 """
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -37,6 +37,14 @@ def _tag_contains(tag: str):
     return func.json_contains(Theme.tags, func.json_quote(tag)) == 1
 
 
+def _resolve_source(source: str | None) -> str:
+    """缺省活跃源：看板默认源。"""
+    from app.domain.scraper_sources import get_default_dashboard_source
+
+    resolved = (source or "").strip()
+    return resolved or get_default_dashboard_source()
+
+
 class ThemeRepository(BaseRepository):
     """题材仓储"""
 
@@ -51,6 +59,7 @@ class ThemeRepository(BaseRepository):
         sort_order: str = "desc",
         category: str | None = None,
         tags: str | None = None,
+        source: str | None = None,
     ) -> tuple[list[Theme], int]:
         """分页查询题材列表
 
@@ -61,13 +70,16 @@ class ThemeRepository(BaseRepository):
             sort_order: 排序方向
             category: 分类筛选
             tags: 标签筛选（逗号分隔）
+            source: 数据源过滤
 
         Returns:
             (题材列表, 总数)
         """
         # 基础查询：排除软删除
         base_query = select(Theme).where(
-            Theme.deleted_at.is_(None), exclude_market_signals()
+            Theme.deleted_at.is_(None),
+            Theme.source == _resolve_source(source),
+            exclude_market_signals(),
         )
 
         # 应用筛选
@@ -144,6 +156,7 @@ class ThemeRepository(BaseRepository):
         query: str,
         page: int = 1,
         page_size: int = 20,
+        source: str | None = None,
     ) -> tuple[list[Theme], int]:
         """搜索题材（名称和描述）
 
@@ -151,6 +164,7 @@ class ThemeRepository(BaseRepository):
             query: 搜索关键词
             page: 页码
             page_size: 每页数量
+            source: 数据源过滤
 
         Returns:
             (题材列表, 总数)
@@ -165,6 +179,7 @@ class ThemeRepository(BaseRepository):
         # 基础查询
         base_query = select(Theme).where(
             Theme.deleted_at.is_(None),
+            Theme.source == _resolve_source(source),
             exclude_market_signals(),
             search_condition,
         )
@@ -177,7 +192,7 @@ class ThemeRepository(BaseRepository):
             sort_order="desc",
         )
 
-    async def get_categories(self) -> list[str]:
+    async def get_categories(self, source: str | None = None) -> list[str]:
         """获取所有唯一分类
 
         Returns:
@@ -187,6 +202,7 @@ class ThemeRepository(BaseRepository):
             select(Theme.category)
             .where(
                 Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
                 exclude_market_signals(),
                 Theme.category.isnot(None),
             )
@@ -196,40 +212,62 @@ class ThemeRepository(BaseRepository):
         result = await self.session.execute(query)
         return [row[0] for row in result.all() if row[0]]
 
-    async def get_ranking(self, limit: int = 20) -> list[Theme]:
+    async def get_ranking(self, limit: int = 20, source: str | None = None) -> list[Theme]:
         """获取题材排名（按热度降序）
 
         Args:
             limit: 返回数量
+            source: 数据源过滤
 
         Returns:
             题材列表
         """
         query = (
             select(Theme)
-            .where(Theme.deleted_at.is_(None), exclude_market_signals())
+            .where(
+                Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
+                exclude_market_signals(),
+            )
             .order_by(desc(Theme.heat_index))
             .limit(limit)
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def get_market_signals(self) -> list[Theme]:
+    async def get_market_signals(self, source: str | None = None) -> list[Theme]:
         """获取独立展示的市场表现板块。"""
+        # 0 放最后，避免盘后全 0 时有效涨跌被挤到列表底部
         query = (
             select(Theme)
-            .where(Theme.deleted_at.is_(None), only_market_signals())
-            .order_by(desc(Theme.rise_fall_pct), desc(Theme.heat_index))
+            .where(
+                Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
+                only_market_signals(),
+            )
+            .order_by(
+                case((Theme.rise_fall_pct == 0, 1), else_=0),
+                desc(func.abs(Theme.rise_fall_pct)),
+                desc(Theme.heat_index),
+            )
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def get_indicator_signals(self) -> list[Theme]:
+    async def get_indicator_signals(self, source: str | None = None) -> list[Theme]:
         """获取独立展示的行情指标板块（新高、财报预告、破增发等）。"""
         query = (
             select(Theme)
-            .where(Theme.deleted_at.is_(None), only_indicator_signals())
-            .order_by(desc(Theme.rise_fall_pct), desc(Theme.heat_index))
+            .where(
+                Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
+                only_indicator_signals(),
+            )
+            .order_by(
+                case((Theme.rise_fall_pct == 0, 1), else_=0),
+                desc(func.abs(Theme.rise_fall_pct)),
+                desc(Theme.heat_index),
+            )
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -238,6 +276,7 @@ class ThemeRepository(BaseRepository):
         self,
         category: str | None = None,
         chunk_size: int = 200,
+        source: str | None = None,
     ):
         """流式获取所有题材（用于导出，避免一次性加载全部数据）
 
@@ -246,13 +285,18 @@ class ThemeRepository(BaseRepository):
         Args:
             category: 分类筛选
             chunk_size: 每批读取数量
+            source: 数据源过滤
 
         Yields:
             单个题材对象
         """
         query = (
             select(Theme)
-            .where(Theme.deleted_at.is_(None), exclude_market_signals())
+            .where(
+                Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
+                exclude_market_signals(),
+            )
             .order_by(Theme.id)
         )
 
@@ -333,30 +377,39 @@ class ThemeRepository(BaseRepository):
             sort_order="asc",
         )
 
-    async def list_by_codes(self, codes: set[str]) -> list[Theme]:
+    async def list_by_codes(
+        self, codes: set[str], source: str | None = None
+    ) -> list[Theme]:
         """按题材代码加载题材（不含成分股）。"""
         if not codes:
             return []
         result = await self.session.execute(
             select(Theme).where(
                 Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
                 Theme.code.in_(sorted(codes)),
             )
         )
         return list(result.scalars().all())
 
-    async def list_with_stock_quotes(self) -> list[Theme]:
+    async def list_with_stock_quotes(self, source: str | None = None) -> list[Theme]:
         """一次加载全部有效题材及其成分股最新行情。"""
         query = (
             select(Theme)
-            .where(Theme.deleted_at.is_(None), exclude_market_signals())
+            .where(
+                Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
+                exclude_market_signals(),
+            )
             .options(selectinload(Theme.stocks).selectinload(ThemeStock.stock))
             .order_by(Theme.id)
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def list_with_stock_quotes_by_codes(self, codes: set[str]) -> list[Theme]:
+    async def list_with_stock_quotes_by_codes(
+        self, codes: set[str], source: str | None = None
+    ) -> list[Theme]:
         """按题材代码加载成分股行情，供策略卡快照刷新使用。"""
         if not codes:
             return []
@@ -364,6 +417,7 @@ class ThemeRepository(BaseRepository):
             select(Theme)
             .where(
                 Theme.deleted_at.is_(None),
+                Theme.source == _resolve_source(source),
                 Theme.code.in_(sorted(codes)),
             )
             .options(selectinload(Theme.stocks).selectinload(ThemeStock.stock))
@@ -371,3 +425,14 @@ class ThemeRepository(BaseRepository):
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def distinct_sources_with_themes(self) -> list[str]:
+        """库中已有题材数据的 source 列表。"""
+        query = (
+            select(Theme.source)
+            .where(Theme.deleted_at.is_(None), Theme.source.isnot(None))
+            .distinct()
+            .order_by(Theme.source)
+        )
+        result = await self.session.execute(query)
+        return [row[0] for row in result.all() if row[0]]

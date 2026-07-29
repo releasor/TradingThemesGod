@@ -335,13 +335,11 @@ class TongHuaShunScraper(BaseScraper):
         saved_count = 0
         async with AsyncSessionLocal() as session:
             theme_codes = [t["code"] for t in themes if t.get("code")]
-            existing_result = await session.execute(
-                select(Theme).where(
-                    Theme.code.in_(theme_codes),
-                    Theme.deleted_at.is_(None),
-                )
+            from app.scrapers.theme_upsert import load_themes_map_for_source
+
+            existing_map = await load_themes_map_for_source(
+                session, source=self.source_name, codes=theme_codes
             )
-            existing_map = {t.code: t for t in existing_result.scalars().all()}
 
             for theme_data in themes:
                 try:

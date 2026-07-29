@@ -53,14 +53,23 @@ import { ShortTermRadarSection } from '@/components/short-term/ShortTermRadarSec
 import { GlowCard } from '@/components/GlowCard'
 import { strategyCardQueryKey } from '@/features/dashboard/strategyCardQuery'
 import {
+  DEFAULT_DASHBOARD_SOURCE,
+  readActiveDashboardSource,
+  writeActiveDashboardSource,
+} from '@/features/dashboard/activeSource'
+import { DashboardSourceSwitcher } from '@/features/dashboard/DashboardSourceSwitcher'
+import {
   SECTION_IDS,
   type SectionId,
   formatSectionRefreshedAt,
+  readLastFirstToSecondCache,
   readSectionRefreshedAt,
+  writeLastFirstToSecondCache,
   writeSectionRefreshedAt,
 } from '@/features/dashboard/sectionRefresh'
 import { isCancelledError } from '@/lib/react-query'
 import type {
+  FirstToSecondCandidateResponse,
   ShortTermOverviewResponse,
   ShortTermPeriod,
   ShortTermPeriodStatus,
@@ -178,9 +187,11 @@ export function ThemeDashboard() {
     {}
   )
   const [sectionTimes, setSectionTimes] = useState<SectionTimesState>(initialSectionTimes)
+  const [activeSource, setActiveSource] = useState(readActiveDashboardSource)
   const lightRefreshDoneRef = useRef<string[]>([])
   const lightRefreshPendingRef = useRef<string | null>('题材行情')
   const sessionRef = useRef<RefreshSession | null>(null)
+  const toastedCommittedRef = useRef<Set<string>>(new Set())
 
   const sectionRefreshedAtLabels = useMemo(
     () => ({
@@ -199,8 +210,8 @@ export function ThemeDashboard() {
   )
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['theme-ranking', limit],
-    queryFn: () => fetchThemeRanking(limit),
+    queryKey: ['theme-ranking', limit, activeSource],
+    queryFn: ({ signal }) => fetchThemeRanking(limit, signal, activeSource),
     staleTime: 2 * 60 * 1000, // 2 分钟
   })
   const {
@@ -208,25 +219,27 @@ export function ThemeDashboard() {
     isLoading: isRiseRankingLoading,
     isFetching: isRiseRankingFetching,
   } = useQuery({
-    queryKey: ['theme-rise-ranking', 20],
-    queryFn: () =>
+    queryKey: ['theme-rise-ranking', 20, activeSource],
+    queryFn: ({ signal }) =>
       fetchThemes({
         page: 1,
         page_size: 20,
         sort_by: 'rise_fall_pct',
         sort_order: 'desc',
-      }),
+        source: activeSource,
+      }, signal),
     staleTime: 2 * 60 * 1000,
   })
   const { data: themeCount, isFetching: isThemeCountFetching } = useQuery({
-    queryKey: ['theme-count'],
-    queryFn: () =>
+    queryKey: ['theme-count', activeSource],
+    queryFn: ({ signal }) =>
       fetchThemes({
         page: 1,
         page_size: 1,
         sort_by: 'heat_index',
         sort_order: 'desc',
-      }),
+        source: activeSource,
+      }, signal),
     staleTime: 2 * 60 * 1000,
   })
   const { data: systemStats } = useQuery({
@@ -240,8 +253,8 @@ export function ThemeDashboard() {
     isError: isMarketSignalsError,
     isFetching: isMarketSignalsFetching,
   } = useQuery({
-    queryKey: ['market-signals'],
-    queryFn: ({ signal }) => fetchMarketSignals(signal),
+    queryKey: ['market-signals', activeSource],
+    queryFn: ({ signal }) => fetchMarketSignals(signal, activeSource),
     staleTime: 2 * 60 * 1000,
     retry: 2,
   })
@@ -251,8 +264,8 @@ export function ThemeDashboard() {
     isError: isIndicatorSignalsError,
     isFetching: isIndicatorSignalsFetching,
   } = useQuery({
-    queryKey: ['indicator-signals'],
-    queryFn: ({ signal }) => fetchIndicatorSignals(signal),
+    queryKey: ['indicator-signals', activeSource],
+    queryFn: ({ signal }) => fetchIndicatorSignals(signal, activeSource),
     staleTime: 2 * 60 * 1000,
     retry: 2,
   })
@@ -345,7 +358,41 @@ export function ThemeDashboard() {
     queryFn: () => fetchFirstToSecondCandidates({}),
     staleTime: 60 * 1000,
     retry: 1,
+    placeholderData: keepPreviousData,
+    // 一进二刷新耗时长；避免焦点切回时并发 GET 把缓存刷成空
+    refetchOnWindowFocus: false,
   })
+  const [lastFirstToSecond, setLastFirstToSecond] = useState<
+    FirstToSecondCandidateResponse | undefined
+  >(() => readLastFirstToSecondCache<FirstToSecondCandidateResponse>())
+  const isFirstToSecondSectionBusy =
+    Boolean(refreshingSections[SECTION_IDS.firstToSecond]) || isFirstToSecondFetching
+
+  useEffect(() => {
+    if (!firstToSecondCandidates) return
+    const incomingEmpty = firstToSecondCandidates.candidates.length === 0
+    const hadCandidates = (lastFirstToSecond?.candidates.length ?? 0) > 0
+    // 刷新中短暂空结果不覆盖上次有效列表
+    if (incomingEmpty && hadCandidates && isFirstToSecondSectionBusy) return
+    setLastFirstToSecond(firstToSecondCandidates)
+    if (firstToSecondCandidates.candidates.length > 0) {
+      writeLastFirstToSecondCache(firstToSecondCandidates)
+    }
+  }, [firstToSecondCandidates, isFirstToSecondSectionBusy, lastFirstToSecond])
+
+  const firstToSecondForCard = useMemo(() => {
+    const current = firstToSecondCandidates
+    const last = lastFirstToSecond
+    if (
+      isFirstToSecondSectionBusy &&
+      current &&
+      current.candidates.length === 0 &&
+      (last?.candidates.length ?? 0) > 0
+    ) {
+      return last
+    }
+    return current ?? last
+  }, [firstToSecondCandidates, isFirstToSecondSectionBusy, lastFirstToSecond])
 
   const { data: dashboardScraperSources = [] } = useQuery({
     queryKey: ['dashboard-scraper-sources'],
@@ -353,9 +400,84 @@ export function ThemeDashboard() {
     staleTime: 10 * 60 * 1000,
   })
 
+  const sourceIdsKey = dashboardScraperSources.map((s) => s.id).join(',')
+  const { data: sourceMetaById = {} } = useQuery({
+    queryKey: ['dashboard-source-meta', sourceIdsKey],
+    enabled: dashboardScraperSources.length > 0,
+    staleTime: 60 * 1000,
+    queryFn: async ({ signal }) => {
+      const entries = await Promise.all(
+        dashboardScraperSources.map(async (src) => {
+          const [countRes, run] = await Promise.all([
+            fetchThemes(
+              {
+                page: 1,
+                page_size: 1,
+                sort_by: 'heat_index',
+                sort_order: 'desc',
+                source: src.id,
+              },
+              signal
+            ),
+            fetchLatestSuccessfulRun(src.id),
+          ])
+          return [
+            src.id,
+            {
+              themeCount: countRes.total,
+              lastRefreshedAt: run?.finished_at ?? null,
+            },
+          ] as const
+        })
+      )
+      return Object.fromEntries(entries) as Record<
+        string,
+        { themeCount: number; lastRefreshedAt: string | null }
+      >
+    },
+  })
+
+  const sourceSwitcherOptions = useMemo(
+    () =>
+      dashboardScraperSources.map((src) => ({
+        ...src,
+        themeCount: sourceMetaById[src.id]?.themeCount ?? null,
+        lastRefreshedAt: sourceMetaById[src.id]?.lastRefreshedAt ?? null,
+      })),
+    [dashboardScraperSources, sourceMetaById]
+  )
+
+  const activeSourceLabel = useMemo(() => {
+    const fromCatalog = dashboardScraperSources.find((item) => item.id === activeSource)?.label
+    if (fromCatalog) return fromCatalog
+    if (activeSource === DEFAULT_DASHBOARD_SOURCE) return '东方财富'
+    return activeSource
+  }, [activeSource, dashboardScraperSources])
+
+  const handleActiveSourceChange = useCallback(
+    (next: string) => {
+      setActiveSource(next)
+      writeActiveDashboardSource(next)
+      const label = sourceLabelFor(next, dashboardScraperSources)
+      const meta = sourceMetaById[next]
+      if (meta && meta.themeCount === 0) {
+        toast.warning(
+          `${label} 尚无题材数据（短线雷达也会为空）。请先全量更新后再查看该源。`
+        )
+        return
+      }
+      if (meta) {
+        toast.info(`已切换到 ${label}：题材榜/涨幅榜/短线雷达按该源展示（共 ${meta.themeCount} 个题材）`)
+        return
+      }
+      toast.info(`已切换到 ${label}`)
+    },
+    [dashboardScraperSources, sourceMetaById, toast]
+  )
+
   const { data: latestSuccessfulUpdate, refetch: refetchLatestSuccessfulUpdate } = useQuery({
-    queryKey: latestScraperRunQueryKey('eastmoney'),
-    queryFn: async () => (await fetchLatestSuccessfulRun('eastmoney'))?.finished_at ?? null,
+    queryKey: latestScraperRunQueryKey(activeSource),
+    queryFn: async () => (await fetchLatestSuccessfulRun(activeSource))?.finished_at ?? null,
     staleTime: 2 * 60 * 1000,
   })
 
@@ -460,13 +582,13 @@ export function ThemeDashboard() {
       const rankingResults = await Promise.allSettled([
         commitSection(
           SECTION_IDS.heatRanking,
-          ['theme-ranking', limit],
-          (s) => fetchThemeRanking(limit, s),
+          ['theme-ranking', limit, activeSource],
+          (s) => fetchThemeRanking(limit, s, activeSource),
           signal
         ),
         commitSection(
           SECTION_IDS.riseRanking,
-          ['theme-rise-ranking', 20],
+          ['theme-rise-ranking', 20, activeSource],
           (s) =>
             fetchThemes(
               {
@@ -474,6 +596,7 @@ export function ThemeDashboard() {
                 page_size: 20,
                 sort_by: 'rise_fall_pct',
                 sort_order: 'desc',
+                source: activeSource,
               },
               s
             ),
@@ -481,14 +604,14 @@ export function ThemeDashboard() {
         ),
         commitSection(
           SECTION_IDS.marketSignals,
-          ['market-signals'],
-          (s) => fetchMarketSignals(s),
+          ['market-signals', activeSource],
+          (s) => fetchMarketSignals(s, activeSource),
           signal
         ),
         commitSection(
           SECTION_IDS.indicatorSignals,
-          ['indicator-signals'],
-          (s) => fetchIndicatorSignals(s),
+          ['indicator-signals', activeSource],
+          (s) => fetchIndicatorSignals(s, activeSource),
           signal
         ),
         (async () => {
@@ -499,11 +622,12 @@ export function ThemeDashboard() {
                 page_size: 1,
                 sort_by: 'heat_index',
                 sort_order: 'desc',
+                source: activeSource,
               },
               signal
             )
             if (signal.aborted) return false
-            queryClient.setQueryData(['theme-count'], data)
+            queryClient.setQueryData(['theme-count', activeSource], data)
             return true
           } catch (e) {
             if (isCancelledError(e) || signal.aborted) return false
@@ -601,8 +725,8 @@ export function ThemeDashboard() {
           if (signal.aborted) return
           const sectorsOk = await commitSection(
             SECTION_IDS.shortTermRadar,
-            ['short-term-sectors'],
-            (s) => fetchShortTermSectors(undefined, s),
+            ['short-term-sectors', activeSource],
+            (s) => fetchShortTermSectors(undefined, s, activeSource),
             signal
           )
           if (signal.aborted) return
@@ -633,16 +757,18 @@ export function ThemeDashboard() {
       mark('一进二')
       setSectionBusy(SECTION_IDS.firstToSecond, true)
       try {
-        await refreshFirstToSecondCandidates({}, signal)
+        // POST 已返回完整结果：立刻写入缓存，刷新中继续展示上次数据
+        const refreshed = await refreshFirstToSecondCandidates({}, signal)
         if (signal.aborted) return
-        const ok = await commitSection(
-          SECTION_IDS.firstToSecond,
-          ['first-to-second-candidates'],
-          (s) => fetchFirstToSecondCandidates({}, s),
-          signal
-        )
-        if (ok) done.push('一进二')
-        else if (!signal.aborted) skipped.push('一进二（未更新）')
+        queryClient.setQueryData(['first-to-second-candidates'], refreshed)
+        setLastFirstToSecond(refreshed)
+        if (refreshed.candidates.length > 0) {
+          writeLastFirstToSecondCache(refreshed)
+        }
+        const iso = new Date().toISOString()
+        writeSectionRefreshedAt(SECTION_IDS.firstToSecond, iso)
+        setSectionTimes((prev) => ({ ...prev, [SECTION_IDS.firstToSecond]: iso }))
+        done.push('一进二')
       } catch (firstError) {
         if (isCancelledError(firstError) || signal.aborted) return
         skipped.push(`一进二失败：${shortTermErrorMessage(firstError)}`)
@@ -653,6 +779,7 @@ export function ThemeDashboard() {
       mark(null)
     },
     [
+      activeSource,
       commitSection,
       customEndDate,
       customStartDate,
@@ -799,6 +926,7 @@ export function ThemeDashboard() {
     setRefreshProgressPct(0)
     setRefreshPendingLabel('多源竞速')
     setRefreshDoneLabels([])
+    toastedCommittedRef.current = new Set()
     setUpdateResult({
       type: 'progress',
       message: '多源竞速中 0%（已耗时 0 秒）...',
@@ -820,6 +948,21 @@ export function ThemeDashboard() {
             type: 'progress',
             message,
           })
+          for (const src of nextRace.committed_sources ?? []) {
+            if (toastedCommittedRef.current.has(src)) continue
+            toastedCommittedRef.current.add(src)
+            toast.info(
+              `${sourceLabelFor(src, dashboardScraperSources)} 数据已就绪，可切换查看`
+            )
+          }
+          for (const item of nextRace.sources ?? []) {
+            if (item.status !== 'completed') continue
+            if (toastedCommittedRef.current.has(item.id)) continue
+            toastedCommittedRef.current.add(item.id)
+            toast.info(
+              `${sourceLabelFor(item.id, dashboardScraperSources)} 数据已就绪，可切换查看`
+            )
+          }
         },
       })
       if (signal.aborted) return
@@ -847,16 +990,25 @@ export function ThemeDashboard() {
       }
 
       const finishedAt = new Date().toISOString()
-      const winnerSource = race.winner ?? 'eastmoney'
+      const committed =
+        race.committed_sources?.length
+          ? race.committed_sources
+          : race.winner
+            ? [race.winner]
+            : [DEFAULT_DASHBOARD_SOURCE]
       setLastUpdate(finishedAt)
-      queryClient.setQueryData(latestScraperRunQueryKey(winnerSource), finishedAt)
+      for (const src of committed) {
+        queryClient.setQueryData(latestScraperRunQueryKey(src), finishedAt)
+      }
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-source-meta'] })
       await refetchLatestSuccessfulUpdate()
 
       // 竞速落库完成 → 继续分板块刷新，进度条保持确定进度（70%→100%）
       setRefreshProgressPct(70)
-      setRefreshDoneLabels([
-        `全量落库（${sourceLabelFor(winnerSource, dashboardScraperSources)}）`,
-      ])
+      const committedLabels = committed
+        .map((id) => sourceLabelFor(id, dashboardScraperSources))
+        .join('、')
+      setRefreshDoneLabels([`全量落库（${committedLabels}）`])
       publishProgress(done, '题材行情', startedAt, 'full')
 
       try {
@@ -872,7 +1024,7 @@ export function ThemeDashboard() {
       await runSectionPipeline(signal, done, skipped, startedAt, 'full')
       if (signal.aborted) return
 
-      const usedSourceLabel = sourceLabelFor(winnerSource, dashboardScraperSources)
+      const usedSourceLabel = committedLabels
       const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
       const itemsScraped = race.items_scraped ?? 0
       const sectionSummary =
@@ -1080,11 +1232,17 @@ export function ThemeDashboard() {
           totalThemes={themeCount?.total ?? 0}
           totalStocks={totalStocks}
           lastUpdate={formattedLastUpdate}
+          themeSourceLabel={activeSourceLabel}
           actions={
-            <div
+              <div
               data-testid="dashboard-data-controls"
               className="flex flex-wrap items-center gap-6"
             >
+              <DashboardSourceSwitcher
+                value={activeSource}
+                sources={sourceSwitcherOptions}
+                onChange={handleActiveSourceChange}
+              />
               <DashboardRefreshControls
                 isRefreshing={isDashboardRefreshing || isStrategyRefreshing}
                 isUpdating={isUpdating}
@@ -1120,6 +1278,8 @@ export function ThemeDashboard() {
               refreshedAtLabel={sectionRefreshedAtLabels.shortTermRadar}
               isSectionRefreshing={Boolean(refreshingSections[SECTION_IDS.shortTermRadar])}
               onSelectTheme={handleThemeClick}
+              source={activeSource}
+              sourceLabel={activeSourceLabel}
             />
 
             {strategyOverviewForCard?.strategy_card && (
@@ -1150,7 +1310,12 @@ export function ThemeDashboard() {
             >
               <section className="min-w-0">
                 <div className="mb-4 flex flex-wrap items-baseline gap-2">
-                  <h2 className="text-lg font-semibold text-foreground">涨跌幅 Top 20</h2>
+                  <h2 className="text-lg font-semibold text-foreground">
+                    涨跌幅 Top 20
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      · {activeSourceLabel}
+                    </span>
+                  </h2>
                   <span className="text-xs text-muted-foreground">
                     刷新于 {sectionRefreshedAtLabels.riseRanking}
                   </span>
@@ -1198,6 +1363,9 @@ export function ThemeDashboard() {
                 <div className="mb-3 flex flex-wrap items-baseline gap-2">
                   <h2 className="text-lg font-semibold text-foreground">
                     热门题材 Top {limit}
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      · {activeSourceLabel}
+                    </span>
                   </h2>
                   <span className="text-xs text-muted-foreground">
                     刷新于 {sectionRefreshedAtLabels.heatRanking}
@@ -1235,13 +1403,10 @@ export function ThemeDashboard() {
 
               <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
                 <BoardUpgradeReference
-                  data={firstToSecondCandidates}
-                  isLoading={isFirstToSecondLoading}
+                  data={firstToSecondForCard}
+                  isLoading={isFirstToSecondLoading && !firstToSecondForCard}
                   refreshedAtLabel={sectionRefreshedAtLabels.firstToSecond}
-                  isSectionRefreshing={
-                    Boolean(refreshingSections[SECTION_IDS.firstToSecond]) ||
-                    isFirstToSecondFetching
-                  }
+                  isSectionRefreshing={isFirstToSecondSectionBusy}
                 />
               </aside>
             </div>

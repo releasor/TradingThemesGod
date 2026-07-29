@@ -19,18 +19,25 @@ import type { StockListResponse } from '@/types/stock'
 /** 获取题材排名（按热度降序） */
 export async function fetchThemeRanking(
   limit = 20,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  source?: string
 ): Promise<ThemeRankingResponse> {
   const { data } = await apiClient.get<ThemeRankingResponse>('/themes/ranking', {
-    params: { limit },
+    params: { limit, source: source || undefined },
     signal,
   })
   return data
 }
 
 /** 获取独立展示的市场表现板块。 */
-export async function fetchMarketSignals(signal?: AbortSignal): Promise<ThemeRankingResponse> {
-  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/market-signals', { signal })
+export async function fetchMarketSignals(
+  signal?: AbortSignal,
+  source?: string
+): Promise<ThemeRankingResponse> {
+  const { data } = await apiClient.get<ThemeRankingResponse>('/themes/market-signals', {
+    params: { source: source || undefined },
+    signal,
+  })
   return {
     ...data,
     items: data.items.map((item) => ({
@@ -42,8 +49,12 @@ export async function fetchMarketSignals(signal?: AbortSignal): Promise<ThemeRan
 }
 
 /** 获取独立展示的行情指标板块（新高、财报预告、破增发等）。 */
-export async function fetchIndicatorSignals(signal?: AbortSignal): Promise<ThemeRankingResponse> {
+export async function fetchIndicatorSignals(
+  signal?: AbortSignal,
+  source?: string
+): Promise<ThemeRankingResponse> {
   const { data } = await apiClient.get<ThemeRankingResponse>('/themes/indicator-signals', {
+    params: { source: source || undefined },
     signal,
   })
   return {
@@ -68,6 +79,7 @@ export async function fetchThemes(
         q: params.q,
         page: params.page,
         page_size: params.page_size,
+        source: params.source || undefined,
       },
       signal,
     })
@@ -82,6 +94,7 @@ export async function fetchThemes(
       sort_order: params.sort_order,
       category: params.category || undefined,
       tags: params.tags || undefined,
+      source: params.source || undefined,
     },
     signal,
   })

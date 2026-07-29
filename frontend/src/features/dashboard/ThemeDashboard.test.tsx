@@ -220,6 +220,7 @@ function renderDashboard() {
 describe('ThemeDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     useAuthStore.getState().clearAuth()
     vi.mocked(fetchThemeRanking).mockResolvedValue({
       items: mockThemes,
@@ -465,7 +466,7 @@ describe('ThemeDashboard', () => {
     renderDashboard()
     const rankingGrid = await screen.findByTestId('dashboard-ranking-grid')
     expect(rankingGrid).toHaveClass('lg:grid-cols-2', 'xl:grid-cols-3')
-    expect(rankingGrid).toContainElement(screen.getByRole('heading', { name: '涨跌幅 Top 20' }))
+    expect(rankingGrid).toContainElement(screen.getByRole('heading', { name: /涨跌幅 Top 20/ }))
     expect(rankingGrid).toContainElement(
       within(rankingGrid).getByRole('heading', { name: '行情指标' })
     )
@@ -488,7 +489,7 @@ describe('ThemeDashboard', () => {
     const mainColumn = screen.getByTestId('dashboard-main-column')
     const newsSidebar = screen.getByTestId('dashboard-news-sidebar')
     expect(contentGrid).toHaveClass('xl:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]')
-    expect(mainColumn).toContainElement(screen.getByRole('heading', { name: '涨跌幅 Top 20' }))
+    expect(mainColumn).toContainElement(screen.getByRole('heading', { name: /涨跌幅 Top 20/ }))
     expect(newsSidebar).toContainElement(screen.getByRole('heading', { name: '实时资讯' }))
   })
 
@@ -684,36 +685,59 @@ describe('ThemeDashboard', () => {
     ).toBeInTheDocument()
   })
 
-  it('无数据源下拉，全量走多源竞速', async () => {
+  it('看板提供题材源切换，全量仍走多源竞速', async () => {
     const user = userEvent.setup()
     vi.mocked(runScraperRaceAndWait).mockResolvedValue(
       mockCompletedRace({ winner: 'akshare', items_scraped: 88 })
     )
     renderDashboard()
     expect(screen.queryByLabelText('全量更新数据源')).not.toBeInTheDocument()
+    expect(await screen.findByLabelText('切换题材数据源')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '全量更新' }))
 
     expect(runScraperRaceAndWait).toHaveBeenCalledWith(
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
-    const controls = within(screen.getByTestId('quick-stats')).getByTestId('dashboard-data-controls')
-    expect(within(controls).queryByRole('combobox')).not.toBeInTheDocument()
     const status = await screen.findByTestId('dashboard-refresh-status')
     expect(
       await within(status).findByText(/AKShare全量更新成功，共更新 88 条数据/)
     ).toBeInTheDocument()
   })
 
+  it('切换题材源后带 source 重新拉取榜单', async () => {
+    const user = userEvent.setup()
+    renderDashboard()
+    await user.click(await screen.findByLabelText('切换题材数据源'))
+    expect(await screen.findByTestId('dashboard-source-meta-akshare')).toBeInTheDocument()
+    await user.click(await screen.findByRole('option', { name: /AKShare/ }))
+
+    await waitFor(() => {
+      expect(fetchThemeRanking).toHaveBeenCalledWith(
+        expect.any(Number),
+        expect.anything(),
+        'akshare'
+      )
+    })
+    expect(fetchThemes).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'akshare' }),
+      expect.anything()
+    )
+  })
+
   it('单独按涨跌幅降序获取涨幅榜', async () => {
     renderDashboard()
     await waitFor(() => {
-      expect(fetchThemes).toHaveBeenCalledWith({
-        page: 1,
-        page_size: 20,
-        sort_by: 'rise_fall_pct',
-        sort_order: 'desc',
-      })
+      expect(fetchThemes).toHaveBeenCalledWith(
+        {
+          page: 1,
+          page_size: 20,
+          sort_by: 'rise_fall_pct',
+          sort_order: 'desc',
+          source: 'eastmoney',
+        },
+        expect.anything()
+      )
     })
   })
 

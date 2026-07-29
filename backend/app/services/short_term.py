@@ -508,7 +508,12 @@ class ShortTermService:
                 )
         return result
 
-    async def get_sectors(self, trade_date: date | None = None) -> SectorRotationResponse:
+    async def get_sectors(
+        self, trade_date: date | None = None, source: str | None = None
+    ) -> SectorRotationResponse:
+        from app.domain.scraper_sources import get_default_dashboard_source
+
+        resolved_source = (source or "").strip() or get_default_dashboard_source()
         resolved = self.resolve_trade_date(trade_date)
         repo = ShortTermSignalRepository(self.session)
         snapshots = await repo.list_snapshots(resolved)
@@ -527,15 +532,25 @@ class ShortTermService:
         theme_meta: dict[int, tuple[str, str]] = {}
         if theme_ids:
             themes = (
-                await self.session.scalars(select(Theme).where(Theme.id.in_(theme_ids)))
+                await self.session.scalars(
+                    select(Theme).where(
+                        Theme.id.in_(theme_ids),
+                        Theme.source == resolved_source,
+                        Theme.deleted_at.is_(None),
+                    )
+                )
             ).all()
             theme_meta = {
-                t.id: (t.name, classify_board_kind(t.code)) for t in themes
+                t.id: (t.name, classify_board_kind(t.code, t.name)) for t in themes
             }
 
         items: list[SectorRotationItem] = []
         for row in snapshots:
-            name, kind = theme_meta.get(row.theme_id, (f"题材{row.theme_id}", "theme"))
+            meta = theme_meta.get(row.theme_id)
+            if meta is None:
+                # 非当前题材源的快照行跳过
+                continue
+            name, kind = meta
             items.append(
                 SectorRotationItem(
                     theme_id=row.theme_id,
@@ -570,10 +585,12 @@ class ShortTermService:
                 for metric in item.missing_metrics
             }
         )
+        if not items:
+            missing = list(dict.fromkeys([*missing, f"source:{resolved_source}"]))
         return SectorRotationResponse(
             trade_date=resolved,
             items=items,
-            degraded=degraded,
+            degraded=degraded or not items,
             missing_sources=missing,
         )
 

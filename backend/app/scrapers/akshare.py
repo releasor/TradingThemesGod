@@ -457,16 +457,17 @@ class AKShareScraper(BaseScraper):
 
     async def _save_themes(self, themes: list[dict[str, Any]]) -> int:
         """幂等保存题材数据（与东财路径对齐的 Theme upsert）。"""
+        from app.scrapers.theme_upsert import batch_quotes_are_all_zero
+
         saved_count = 0
+        skip_zero_overwrite = batch_quotes_are_all_zero(themes)
         async with AsyncSessionLocal() as session:
             theme_codes = [t["code"] for t in themes if t.get("code")]
-            existing_result = await session.execute(
-                select(Theme).where(
-                    Theme.code.in_(theme_codes),
-                    Theme.deleted_at.is_(None),
-                )
+            from app.scrapers.theme_upsert import load_themes_map_for_source
+
+            existing_map = await load_themes_map_for_source(
+                session, source=self.source_name, codes=theme_codes
             )
-            existing_map = {t.code: t for t in existing_result.scalars().all()}
 
             for theme_data in themes:
                 try:
@@ -477,7 +478,16 @@ class AKShareScraper(BaseScraper):
                         if theme_data.get("heat_index") is not None:
                             theme.heat_index = theme_data["heat_index"]
                         if theme_data.get("rise_fall_pct") is not None:
-                            theme.rise_fall_pct = theme_data["rise_fall_pct"]
+                            new_rise = theme_data["rise_fall_pct"]
+                            if (
+                                skip_zero_overwrite
+                                and theme.rise_fall_pct is not None
+                                and theme.rise_fall_pct != 0
+                                and (new_rise is None or new_rise == 0)
+                            ):
+                                pass
+                            else:
+                                theme.rise_fall_pct = new_rise
                         if theme_data.get("stock_count") is not None:
                             theme.stock_count = theme_data["stock_count"]
                         if theme_data.get("category") is not None:

@@ -1,7 +1,7 @@
 """Tushare Pro 题材爬虫
 
 全量竞速：collect_full 拉取概念板块列表（themes-only），commit_full 落库题材。
-接口与 token 均从 Settings 读取（见 TUSHARE_* 环境变量）。
+启用与 Token 优先读 DB（设置 → 数据源），高级接口参数仍读 Settings（TUSHARE_*）。
 """
 
 from __future__ import annotations
@@ -49,12 +49,14 @@ class TushareScraper(BaseScraper):
         return get_settings()
 
     def _require_token(self) -> str:
-        settings = self._settings()
-        if not settings.TUSHARE_ENABLED:
-            raise RuntimeError("Tushare 未启用（请设置 TUSHARE_ENABLED=true）")
-        token = (settings.TUSHARE_TOKEN or "").strip()
+        from app.services.tushare_settings import get_cached_tushare_runtime
+
+        runtime = get_cached_tushare_runtime()
+        if not runtime.enabled:
+            raise RuntimeError("Tushare 未启用（请在设置 → 数据源中开启）")
+        token = (runtime.token or "").strip()
         if not token:
-            raise RuntimeError("未配置 TUSHARE_TOKEN，无法使用 Tushare 数据源")
+            raise RuntimeError("未配置 Tushare Token，无法使用该数据源")
         return token
 
     def _pro_api(self) -> Any:
@@ -175,6 +177,12 @@ class TushareScraper(BaseScraper):
         if cancel is not None and cancel.is_set():
             raise asyncio.CancelledError()
 
+        # 采集前刷新 DB/env 缓存，避免仅依赖进程启动时的 env
+        async with AsyncSessionLocal() as session:
+            from app.services.tushare_settings import TushareSettingsService
+
+            await TushareSettingsService(session).resolve_runtime()
+
         settings = self._settings()
         self._require_token()
         max_retries = max(1, int(settings.TUSHARE_MAX_RETRIES or 3))
@@ -227,13 +235,11 @@ class TushareScraper(BaseScraper):
         saved_count = 0
         async with AsyncSessionLocal() as session:
             theme_codes = [t["code"] for t in themes if t.get("code")]
-            existing_result = await session.execute(
-                select(Theme).where(
-                    Theme.code.in_(theme_codes),
-                    Theme.deleted_at.is_(None),
-                )
+            from app.scrapers.theme_upsert import load_themes_map_for_source
+
+            existing_map = await load_themes_map_for_source(
+                session, source=self.source_name, codes=theme_codes
             )
-            existing_map = {t.code: t for t in existing_result.scalars().all()}
 
             for theme_data in themes:
                 try:

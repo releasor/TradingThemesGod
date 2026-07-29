@@ -12,12 +12,15 @@ import pytest
 from app.core.config import Settings
 from app.scrapers.draft_types import FullScrapeDraft
 from app.scrapers.tushare_scraper import TushareScraper
+from app.services.tushare_settings import (
+    TushareRuntime,
+    clear_tushare_runtime_cache,
+    set_cached_tushare_runtime,
+)
 
 
 def _settings(**overrides: object) -> MagicMock:
     base = {
-        "TUSHARE_ENABLED": True,
-        "TUSHARE_TOKEN": "dummy-token",
         "TUSHARE_API_URL": "",
         "TUSHARE_CONCEPT_APIS": "concept,ths_index,dc_index",
         "TUSHARE_CONCEPT_SRC": "ts",
@@ -32,10 +35,14 @@ def _settings(**overrides: object) -> MagicMock:
         for part in str(base["TUSHARE_CONCEPT_APIS"]).split(",")
         if part.strip()
     ]
-    mock.tushare_ready.return_value = bool(base["TUSHARE_ENABLED"]) and bool(
-        str(base["TUSHARE_TOKEN"]).strip()
-    )
     return mock
+
+
+@pytest.fixture(autouse=True)
+def _clear_runtime_cache():
+    clear_tushare_runtime_cache()
+    yield
+    clear_tushare_runtime_cache()
 
 
 @pytest.fixture
@@ -79,25 +86,59 @@ def test_settings_tushare_not_ready_without_enable():
 
 @pytest.mark.asyncio
 async def test_collect_full_requires_enabled(scraper):
-    with patch("app.scrapers.tushare_scraper.get_settings") as settings:
-        settings.return_value = _settings(TUSHARE_ENABLED=False)
-        with pytest.raises(RuntimeError, match="TUSHARE_ENABLED"):
-            await scraper.collect_full()
+    set_cached_tushare_runtime(
+        TushareRuntime(enabled=False, token="dummy", from_db=True)
+    )
+    with (
+        patch("app.scrapers.tushare_scraper.get_settings") as settings,
+        patch("app.scrapers.tushare_scraper.AsyncSessionLocal") as session_cm,
+    ):
+        settings.return_value = _settings()
+        session = AsyncMock()
+        session_cm.return_value.__aenter__ = AsyncMock(return_value=session)
+        session_cm.return_value.__aexit__ = AsyncMock(return_value=None)
+        with patch(
+            "app.services.tushare_settings.TushareSettingsService.resolve_runtime",
+            new=AsyncMock(
+                return_value=TushareRuntime(enabled=False, token="dummy", from_db=True)
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="未启用"):
+                await scraper.collect_full()
 
 
 @pytest.mark.asyncio
 async def test_collect_full_requires_token(scraper):
-    with patch("app.scrapers.tushare_scraper.get_settings") as settings:
-        settings.return_value = _settings(TUSHARE_TOKEN="")
-        with pytest.raises(RuntimeError, match="TUSHARE_TOKEN"):
-            await scraper.collect_full()
+    set_cached_tushare_runtime(
+        TushareRuntime(enabled=True, token="", from_db=True)
+    )
+    with (
+        patch("app.scrapers.tushare_scraper.get_settings") as settings,
+        patch("app.scrapers.tushare_scraper.AsyncSessionLocal") as session_cm,
+    ):
+        settings.return_value = _settings()
+        session = AsyncMock()
+        session_cm.return_value.__aenter__ = AsyncMock(return_value=session)
+        session_cm.return_value.__aexit__ = AsyncMock(return_value=None)
+        with patch(
+            "app.services.tushare_settings.TushareSettingsService.resolve_runtime",
+            new=AsyncMock(
+                return_value=TushareRuntime(enabled=True, token="", from_db=True)
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="Token"):
+                await scraper.collect_full()
 
 
 @pytest.mark.asyncio
 async def test_collect_full_themes_only(scraper):
     frame = pd.DataFrame([{"code": "301558", "name": "人形机器人"}])
+    set_cached_tushare_runtime(
+        TushareRuntime(enabled=True, token="dummy-token", from_db=True)
+    )
     with (
         patch("app.scrapers.tushare_scraper.get_settings") as settings,
+        patch("app.scrapers.tushare_scraper.AsyncSessionLocal") as session_cm,
         patch.object(
             scraper,
             "_fetch_concept_frame_sync",
@@ -105,7 +146,18 @@ async def test_collect_full_themes_only(scraper):
         ),
     ):
         settings.return_value = _settings()
-        draft = await scraper.collect_full()
+        session = AsyncMock()
+        session_cm.return_value.__aenter__ = AsyncMock(return_value=session)
+        session_cm.return_value.__aexit__ = AsyncMock(return_value=None)
+        with patch(
+            "app.services.tushare_settings.TushareSettingsService.resolve_runtime",
+            new=AsyncMock(
+                return_value=TushareRuntime(
+                    enabled=True, token="dummy-token", from_db=True
+                )
+            ),
+        ):
+            draft = await scraper.collect_full()
 
     assert draft.source == "tushare"
     assert len(draft.themes) == 1
@@ -150,7 +202,8 @@ async def test_commit_full_saves_themes(scraper):
 async def test_collect_full_cancel_before_fetch(scraper):
     cancel = asyncio.Event()
     cancel.set()
-    with patch("app.scrapers.tushare_scraper.get_settings") as settings:
-        settings.return_value = _settings()
-        with pytest.raises(asyncio.CancelledError):
-            await scraper.collect_full(cancel=cancel)
+    set_cached_tushare_runtime(
+        TushareRuntime(enabled=True, token="dummy-token", from_db=True)
+    )
+    with pytest.raises(asyncio.CancelledError):
+        await scraper.collect_full(cancel=cancel)

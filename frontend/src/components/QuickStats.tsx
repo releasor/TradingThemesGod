@@ -11,6 +11,7 @@ interface QuickStatsProps {
   totalThemes: number
   totalStocks: number
   lastUpdate: string | null
+  themeSourceLabel?: string | null
   actions?: ReactNode
 }
 
@@ -18,6 +19,7 @@ export const QuickStats = memo(function QuickStats({
   totalThemes,
   totalStocks,
   lastUpdate,
+  themeSourceLabel,
   actions,
 }: QuickStatsProps) {
   return (
@@ -31,7 +33,9 @@ export const QuickStats = memo(function QuickStats({
           title="真实题材数量（已排除市场表现与行情指标板块）"
         >
           <Flame className="h-4 w-4 text-orange-500" />
-          <span className="text-muted-foreground">题材总数</span>
+          <span className="text-muted-foreground">
+            题材总数{themeSourceLabel ? `（${themeSourceLabel}）` : ''}
+          </span>
           <span className="font-semibold text-card-foreground">{totalThemes}</span>
         </div>
         <div className="flex items-center gap-2 text-sm" title="股票库去重总数，不是热门榜成分股加总">

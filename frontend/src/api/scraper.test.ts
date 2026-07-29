@@ -317,6 +317,42 @@ describe('scraper API', () => {
     expect(mockGet).toHaveBeenCalledTimes(2)
   })
 
+  it('skips transient 5xx poll errors and continues waiting', async () => {
+    mockPost.mockResolvedValueOnce({ data: sampleRace() })
+    const serverError = Object.assign(new Error('Request failed with status code 500'), {
+      response: { status: 500 },
+    })
+    mockGet
+      .mockRejectedValueOnce(serverError)
+      .mockResolvedValueOnce({
+        data: sampleRace({
+          status: 'completed',
+          phase: 'done',
+          progress_pct: 100,
+          winner: 'ths',
+          items_scraped: 374,
+        }),
+      })
+
+    const result = await runScraperRaceAndWait({ pollInterval: 0 })
+
+    expect(result.status).toBe('completed')
+    expect(result.winner).toBe('ths')
+    expect(mockGet).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops with a clear message when race poll returns 404', async () => {
+    mockPost.mockResolvedValueOnce({ data: sampleRace() })
+    const missing = Object.assign(new Error('Request failed with status code 404'), {
+      response: { status: 404 },
+    })
+    mockGet.mockRejectedValueOnce(missing)
+
+    await expect(runScraperRaceAndWait({ pollInterval: 0 })).rejects.toThrow(
+      /服务可能已重启/
+    )
+  })
+
   it('calls cancelScraperRace when aborted during wait', async () => {
     mockPost
       .mockResolvedValueOnce({ data: sampleRace() })
@@ -382,7 +418,7 @@ describe('race progress helpers', () => {
     ).toBe(28)
   })
 
-  it('formatRaceSourcesStatus explains waiting for primary after fallback completes', () => {
+  it('formatRaceSourcesStatus shows committed source while others still collect', () => {
     const { pendingLabel, message } = formatRaceSourcesStatus(
       {
         phase: 'collecting',
@@ -398,8 +434,9 @@ describe('race progress helpers', () => {
       label
     )
 
-    expect(pendingLabel).toBe('等待 东方财富 15%')
-    expect(message).toMatch(/AKShare 已采完，正在等待 东方财富 完整采集/)
+    expect(pendingLabel).toBe('AKShare 已写入 · 东方财富 15%')
+    expect(message).toMatch(/AKShare 已写入，可切换查看/)
+    expect(message).toMatch(/东方财富 仍在采集/)
     expect(message).toMatch(/东方财富 采集中 15%/)
   })
 

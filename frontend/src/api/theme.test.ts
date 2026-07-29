@@ -72,13 +72,37 @@ describe('fetchThemes', () => {
     )
   })
 
-  it('passes AbortSignal to fetchThemes', async () => {
+  it('passes source to list and search endpoints', async () => {
     mockGet.mockResolvedValue({ data: { items: [], total: 0 } })
-    const signal = new AbortController().signal
 
-    await fetchThemes({ page: 1, page_size: 20, sort_by: 'heat_index', sort_order: 'desc' }, signal)
+    await fetchThemes({
+      page: 1,
+      page_size: 20,
+      sort_by: 'heat_index',
+      sort_order: 'desc',
+      source: 'ths',
+    })
+    expect(mockGet).toHaveBeenCalledWith(
+      '/themes',
+      expect.objectContaining({
+        params: expect.objectContaining({ source: 'ths' }),
+      })
+    )
 
-    expect(mockGet).toHaveBeenCalledWith('/themes', expect.objectContaining({ signal }))
+    await fetchThemes({
+      page: 1,
+      page_size: 20,
+      sort_by: 'heat_index',
+      sort_order: 'desc',
+      q: 'AI',
+      source: 'akshare',
+    })
+    expect(mockGet).toHaveBeenCalledWith(
+      '/themes/search',
+      expect.objectContaining({
+        params: expect.objectContaining({ q: 'AI', source: 'akshare' }),
+      })
+    )
   })
 })
 
@@ -124,7 +148,10 @@ describe('fetchMarketSignals', () => {
 
     const result = await fetchMarketSignals()
 
-    expect(mockGet).toHaveBeenCalledWith('/themes/market-signals', { signal: undefined })
+    expect(mockGet).toHaveBeenCalledWith('/themes/market-signals', {
+      params: { source: undefined },
+      signal: undefined,
+    })
     expect(result).toEqual(response)
   })
 
@@ -172,7 +199,10 @@ describe('fetchIndicatorSignals', () => {
 
     const result = await fetchIndicatorSignals()
 
-    expect(mockGet).toHaveBeenCalledWith('/themes/indicator-signals', { signal: undefined })
+    expect(mockGet).toHaveBeenCalledWith('/themes/indicator-signals', {
+      params: { source: undefined },
+      signal: undefined,
+    })
     expect(result).toEqual(response)
   })
 

@@ -100,6 +100,9 @@ async def list_themes(
     sort_order: Literal["asc", "desc"] = Query(default="desc", description="排序方向"),
     category: str | None = Query(default=None, description="按分类筛选"),
     tags: str | None = Query(default=None, description="按标签筛选（逗号分隔）"),
+    source: str | None = Query(
+        default=None, description="数据源过滤；缺省为默认看板源 eastmoney"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """获取题材列表
@@ -114,12 +117,16 @@ async def list_themes(
         sort_order=sort_order,
         category=category,
         tags=tags,
+        source=source,
     )
 
 
 @router.get("/ranking", response_model=ThemeRankingResponse)
 async def get_theme_ranking(
     limit: int = Query(default=20, ge=1, le=100, description="返回数量"),
+    source: str | None = Query(
+        default=None, description="数据源过滤；缺省为默认看板源 eastmoney"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """获取题材排名
@@ -127,7 +134,7 @@ async def get_theme_ranking(
     按热度指数降序返回前 N 个题材。
     """
     service = ThemeService(db)
-    return await service.get_ranking(limit=limit)
+    return await service.get_ranking(limit=limit, source=source)
 
 
 @router.get("/categories", response_model=ThemeCategoriesResponse)
@@ -147,6 +154,9 @@ async def search_themes(
     q: str = Query(description="搜索关键词", min_length=1, max_length=100),
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
+    source: str | None = Query(
+        default=None, description="数据源过滤；缺省为默认看板源 eastmoney"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """搜索题材
@@ -158,25 +168,32 @@ async def search_themes(
         query=q,
         page=page,
         page_size=page_size,
+        source=source,
     )
 
 
 @router.get("/market-signals", response_model=ThemeRankingResponse)
 async def get_market_signals(
+    source: str | None = Query(
+        default=None, description="数据源过滤；缺省为默认看板源 eastmoney"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """获取独立于实际题材的市场表现板块。"""
     service = ThemeService(db)
-    return await service.get_market_signals()
+    return await service.get_market_signals(source=source)
 
 
 @router.get("/indicator-signals", response_model=ThemeRankingResponse)
 async def get_indicator_signals(
+    source: str | None = Query(
+        default=None, description="数据源过滤；缺省为默认看板源 eastmoney"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """获取独立于实际题材的行情指标板块（新高、财报预告、破增发等）。"""
     service = ThemeService(db)
-    return await service.get_indicator_signals()
+    return await service.get_indicator_signals(source=source)
 
 
 @router.post(

@@ -325,7 +325,24 @@ describe('short-term api', () => {
 
     expect(apiClient.get).toHaveBeenCalledWith(
       '/short-term/sectors',
-      expect.objectContaining({ signal, timeout: 30_000 })
+      expect.objectContaining({
+        signal,
+        timeout: 30_000,
+        params: { trade_date: '2026-07-21' },
+      })
+    )
+  })
+
+  it('passes source to fetchShortTermSectors', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], trade_date: '2026-07-21' } })
+
+    await fetchShortTermSectors(undefined, undefined, 'ths')
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/short-term/sectors',
+      expect.objectContaining({
+        params: { source: 'ths' },
+      })
     )
   })
 })

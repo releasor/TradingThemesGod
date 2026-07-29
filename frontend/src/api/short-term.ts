@@ -124,9 +124,16 @@ export async function refreshShortTermSignals(tradeDate?: string, signal?: Abort
   return data
 }
 
-export async function fetchShortTermSectors(tradeDate?: string, signal?: AbortSignal) {
+export async function fetchShortTermSectors(
+  tradeDate?: string,
+  signal?: AbortSignal,
+  source?: string
+) {
   const { data } = await apiClient.get<SectorRotationResponse>('/short-term/sectors', {
-    params: tradeDate ? { trade_date: tradeDate } : {},
+    params: {
+      ...(tradeDate ? { trade_date: tradeDate } : {}),
+      ...(source ? { source } : {}),
+    },
     timeout: 30_000,
     signal,
   })

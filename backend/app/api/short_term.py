@@ -63,10 +63,13 @@ async def refresh_short_term_signals(
 @router.get("/sectors", response_model=SectorRotationResponse)
 async def list_short_term_sectors(
     trade_date: date | None = Query(default=None, description="交易日"),
+    source: str | None = Query(
+        default=None, description="题材数据源过滤；缺省为默认看板源 eastmoney"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """主线/轮动题材列表（含生命周期与强度）。"""
-    return await ShortTermService(db).get_sectors(trade_date)
+    return await ShortTermService(db).get_sectors(trade_date, source=source)
 
 
 @router.get("/themes/{theme_id}/lifecycle", response_model=ThemeLifecycleResponse)

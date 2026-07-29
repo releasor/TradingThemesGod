@@ -76,8 +76,8 @@ async def _wait_terminal(manager: FullRaceManager, race_id: str, timeout: float 
 
 
 @pytest.mark.asyncio
-async def test_primary_wins_even_if_fallback_finished_first():
-    """fallback 先完成也应继续等待；primary（含成分股）后到仍胜出。"""
+async def test_both_sources_commit_when_fallback_finishes_first():
+    """fallback 先完成即 commit；primary 后到也 commit，互不取消。"""
     scrapers: dict[str, _FakeScraper] = {}
 
     def factory(source: str) -> _FakeScraper:
@@ -93,10 +93,11 @@ async def test_primary_wins_even_if_fallback_finished_first():
     state = await _wait_terminal(manager, race_id)
 
     assert state["status"] == "completed"
-    assert state["winner"] == "primary"
+    assert state["committed_sources"] == ["fallback", "primary"]
+    assert state["winner"] == "fallback"
     assert state["phase"] == "done"
     assert scrapers["primary"].commit_calls == 1
-    assert scrapers["fallback"].commit_calls == 0
+    assert scrapers["fallback"].commit_calls == 1
 
 
 @pytest.mark.asyncio
@@ -143,6 +144,7 @@ async def test_both_fail_status_failed():
 
     assert state["status"] == "failed"
     assert state["winner"] is None
+    assert state["committed_sources"] == []
     assert state["error"]
     assert "全部数据源失败" in state["error"]
     assert "a:" in state["error"] and "b:" in state["error"]
@@ -151,14 +153,14 @@ async def test_both_fail_status_failed():
 
 
 @pytest.mark.asyncio
-async def test_winner_only_commit_full_called_once():
+async def test_all_primaries_commit():
     scrapers: dict[str, _FakeScraper] = {}
 
     def factory(source: str) -> _FakeScraper:
         if source == "fast_primary":
             sc = _FakeScraper(source, draft=_primary_draft(source), delay=0.01)
         else:
-            sc = _FakeScraper(source, draft=_primary_draft(source), delay=0.2)
+            sc = _FakeScraper(source, draft=_primary_draft(source), delay=0.08)
         scrapers[source] = sc
         return sc
 
@@ -167,13 +169,14 @@ async def test_winner_only_commit_full_called_once():
     state = await _wait_terminal(manager, race_id)
 
     assert state["winner"] == "fast_primary"
-    assert state["items_scraped"] == 42
+    assert set(state["committed_sources"]) == {"fast_primary", "slow_primary"}
+    assert state["items_scraped"] == 84
     assert scrapers["fast_primary"].commit_calls == 1
-    assert scrapers["slow_primary"].commit_calls == 0
+    assert scrapers["slow_primary"].commit_calls == 1
 
 
 @pytest.mark.asyncio
-async def test_fallback_wins_when_primary_fails():
+async def test_fallback_commits_when_primary_fails():
     scrapers: dict[str, _FakeScraper] = {}
 
     def factory(source: str) -> _FakeScraper:
@@ -190,5 +193,6 @@ async def test_fallback_wins_when_primary_fails():
 
     assert state["status"] == "completed"
     assert state["winner"] == "fallback"
+    assert state["committed_sources"] == ["fallback"]
     assert scrapers["fallback"].commit_calls == 1
     assert scrapers["primary"].commit_calls == 0

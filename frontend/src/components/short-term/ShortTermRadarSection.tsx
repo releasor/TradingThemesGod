@@ -15,6 +15,9 @@ interface ShortTermRadarSectionProps {
   refreshedAtLabel: string
   isSectionRefreshing?: boolean
   onSelectTheme?: (themeId: number) => void
+  /** 看板活跃题材源；轮动快照按 Theme.source 过滤 */
+  source?: string
+  sourceLabel?: string
 }
 
 const BOARD_SECTIONS: {
@@ -145,12 +148,14 @@ export function ShortTermRadarSection({
   refreshedAtLabel,
   isSectionRefreshing = false,
   onSelectTheme,
+  source,
+  sourceLabel,
 }: ShortTermRadarSectionProps) {
   const navigate = useNavigate()
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['short-term-sectors'],
-    queryFn: () => fetchShortTermSectors(),
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ['short-term-sectors', source ?? 'eastmoney'],
+    queryFn: ({ signal }) => fetchShortTermSectors(undefined, signal, source),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   })
@@ -175,19 +180,20 @@ export function ShortTermRadarSection({
   const items = data?.items ?? []
   const hasAny = items.length > 0
   const showColumns = !isError || hasAny
+  const sourceSuffix = sourceLabel ? ` · ${sourceLabel}` : ''
 
   return (
     <section id="short-term-radar" aria-labelledby="short-term-radar-heading" className="mb-6">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Radar className="h-4 w-4 text-primary" />
         <h2 id="short-term-radar-heading" className="text-lg font-semibold text-foreground">
-          短线机会雷达
+          短线机会雷达{sourceSuffix}
         </h2>
         <span className="text-xs text-muted-foreground">刷新于 {refreshedAtLabel}</span>
         {data?.trade_date && (
           <span className="text-xs text-muted-foreground">交易日 {data.trade_date}</span>
         )}
-        {isSectionRefreshing && (
+        {(isSectionRefreshing || isFetching) && (
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <LoaderCircle className="h-3 w-3 animate-spin" />
             刷新中…
@@ -196,7 +202,7 @@ export function ShortTermRadarSection({
       </div>
 
       <p className="mb-3 text-xs text-muted-foreground">
-        与下方涨跌幅 / 行情指标 / 市场表现同一分类：题材、指标、市场表现各进各列。不构成投资建议。
+        按当前题材源过滤轮动快照；与下方涨跌幅 / 行情指标 / 市场表现同一分类。若该源暂无快照，请用顶部「刷新」重建短线信号。不构成投资建议。
       </p>
 
       {isError && !hasAny && (
@@ -210,7 +216,9 @@ export function ShortTermRadarSection({
 
       {!isLoading && !isError && !hasAny && (
         <div className="rounded-xl border border-border bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
-          暂无轮动快照，请使用顶部刷新
+          {sourceLabel
+            ? `${sourceLabel} 暂无轮动快照。请切换回已有快照的源，或点击顶部「刷新」按各源题材重建雷达。`
+            : '暂无轮动快照，请使用顶部刷新'}
         </div>
       )}
 

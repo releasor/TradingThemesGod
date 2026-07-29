@@ -73,6 +73,7 @@ class ThemeService:
         sort_order: str = "desc",
         category: str | None = None,
         tags: str | None = None,
+        source: str | None = None,
     ) -> ThemeListResponse:
         """获取题材列表（分页）
 
@@ -83,6 +84,7 @@ class ThemeService:
             sort_order: 排序方向
             category: 分类筛选
             tags: 标签筛选
+            source: 数据源过滤
 
         Returns:
             分页题材列表
@@ -94,6 +96,7 @@ class ThemeService:
             sort_order=sort_order,
             category=category,
             tags=tags,
+            source=source,
         )
 
         return ThemeListResponse(
@@ -179,6 +182,7 @@ class ThemeService:
         query: str,
         page: int = 1,
         page_size: int = 20,
+        source: str | None = None,
     ) -> ThemeListResponse:
         """搜索题材
 
@@ -186,6 +190,7 @@ class ThemeService:
             query: 搜索关键词
             page: 页码
             page_size: 每页数量
+            source: 数据源过滤
 
         Returns:
             搜索结果
@@ -194,6 +199,7 @@ class ThemeService:
             query=query,
             page=page,
             page_size=page_size,
+            source=source,
         )
 
         return ThemeListResponse(
@@ -224,32 +230,39 @@ class ThemeService:
 
         return result
 
-    async def get_ranking(self, limit: int = 20) -> ThemeRankingResponse:
+    async def get_ranking(
+        self, limit: int = 20, source: str | None = None
+    ) -> ThemeRankingResponse:
         """获取题材排名
 
         Args:
             limit: 返回数量
+            source: 数据源过滤
 
         Returns:
             排名列表
         """
-        themes = await self.repo.get_ranking(limit=limit)
+        themes = await self.repo.get_ranking(limit=limit, source=source)
         return ThemeRankingResponse(
             items=await self._briefs_with_lifecycle(themes),
             limit=limit,
         )
 
-    async def get_market_signals(self) -> ThemeRankingResponse:
+    async def get_market_signals(
+        self, source: str | None = None
+    ) -> ThemeRankingResponse:
         """获取独立展示的市场表现板块。"""
-        themes = await self.repo.get_market_signals()
+        themes = await self.repo.get_market_signals(source=source)
         return ThemeRankingResponse(
             items=[ThemeBrief.model_validate(theme) for theme in themes],
             limit=len(themes),
         )
 
-    async def get_indicator_signals(self) -> ThemeRankingResponse:
+    async def get_indicator_signals(
+        self, source: str | None = None
+    ) -> ThemeRankingResponse:
         """获取独立展示的行情指标板块。"""
-        themes = await self.repo.get_indicator_signals()
+        themes = await self.repo.get_indicator_signals(source=source)
         return ThemeRankingResponse(
             items=[ThemeBrief.model_validate(theme) for theme in themes],
             limit=len(themes),

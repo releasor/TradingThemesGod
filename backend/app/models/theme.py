@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,7 +38,7 @@ class Theme(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, comment="题材名称")
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, comment="题材代码")
+    code: Mapped[str] = mapped_column(String(50), nullable=False, comment="题材代码")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="题材描述")
     heat_index: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0, server_default="0", comment="热度指数"
@@ -52,7 +53,9 @@ class Theme(Base, TimestampMixin):
     tags: Mapped[Optional[list | dict]] = mapped_column(
         JSON, nullable=True, comment="标签列表"
     )
-    source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, comment="数据来源")
+    source: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="eastmoney", server_default="eastmoney", comment="数据来源"
+    )
 
     # 软删除字段
     deleted_at: Mapped[Optional[datetime]] = mapped_column(
@@ -78,9 +81,11 @@ class Theme(Base, TimestampMixin):
 
     # 表级配置：索引
     __table_args__ = (
+        UniqueConstraint("source", "code", name="uq_themes_source_code"),
         Index("idx_theme_name", "name"),
         Index("idx_theme_heat_index", "heat_index"),
         Index("idx_theme_category", "category"),
+        Index("ix_themes_code", "code"),
         Index("idx_themes_insights_last_attempted_at", "insights_last_attempted_at"),
         {"comment": "题材表"},
     )

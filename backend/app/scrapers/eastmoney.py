@@ -415,18 +415,19 @@ class EastMoneyScraper(BaseScraper):
         Returns:
             保存的记录数
         """
+        from app.scrapers.theme_upsert import batch_quotes_are_all_zero
+
         saved_count = 0
+        skip_zero_overwrite = batch_quotes_are_all_zero(themes)
 
         async with AsyncSessionLocal() as session:
             # 题材代码是唯一且稳定的标识，名称可能随来源调整
             theme_codes = [t["code"] for t in themes if t.get("code")]
-            existing_result = await session.execute(
-                select(Theme).where(
-                    Theme.code.in_(theme_codes),
-                    Theme.deleted_at.is_(None),
-                )
+            from app.scrapers.theme_upsert import load_themes_map_for_source
+
+            existing_map = await load_themes_map_for_source(
+                session, source=self.source_name, codes=theme_codes
             )
-            existing_map = {t.code: t for t in existing_result.scalars().all()}
 
             for theme_data in themes:
                 try:
@@ -439,7 +440,16 @@ class EastMoneyScraper(BaseScraper):
                         if theme_data["heat_index"] is not None:
                             theme.heat_index = theme_data["heat_index"]
                         if theme_data["rise_fall_pct"] is not None:
-                            theme.rise_fall_pct = theme_data["rise_fall_pct"]
+                            new_rise = theme_data["rise_fall_pct"]
+                            if (
+                                skip_zero_overwrite
+                                and theme.rise_fall_pct is not None
+                                and theme.rise_fall_pct != 0
+                                and (new_rise is None or new_rise == 0)
+                            ):
+                                pass
+                            else:
+                                theme.rise_fall_pct = new_rise
                         if theme_data["stock_count"] is not None:
                             theme.stock_count = theme_data["stock_count"]
                         theme.category = theme_data["category"]

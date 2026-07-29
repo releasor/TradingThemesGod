@@ -174,22 +174,62 @@ class SectorRotationService:
                 )
 
     async def _cover_theme_ids(self, trade_date: date, *, top_n: int) -> set[int]:
-        heat_rows = (
-            await self.session.scalars(
-                select(Theme.id)
-                .where(exclude_market_signals())
-                .order_by(desc(Theme.heat_index))
-                .limit(top_n)
-            )
-        ).all()
-        rise_rows = (
-            await self.session.scalars(
-                select(Theme.id)
-                .where(exclude_market_signals())
-                .order_by(desc(Theme.rise_fall_pct))
-                .limit(top_n)
-            )
-        ).all()
+        from app.domain.scraper_sources import (
+            get_default_dashboard_source,
+            list_registered_scraper_sources,
+        )
+
+        sources = [item.id for item in list_registered_scraper_sources(dashboard_only=True)]
+        if not sources:
+            sources = [get_default_dashboard_source()]
+
+        covered: set[int] = set()
+        for source in sources:
+            heat_rows = (
+                await self.session.scalars(
+                    select(Theme.id)
+                    .where(
+                        Theme.deleted_at.is_(None),
+                        Theme.source == source,
+                        exclude_market_signals(),
+                    )
+                    .order_by(desc(Theme.heat_index))
+                    .limit(top_n)
+                )
+            ).all()
+            rise_rows = (
+                await self.session.scalars(
+                    select(Theme.id)
+                    .where(
+                        Theme.deleted_at.is_(None),
+                        Theme.source == source,
+                        exclude_market_signals(),
+                    )
+                    .order_by(desc(Theme.rise_fall_pct))
+                    .limit(top_n)
+                )
+            ).all()
+            covered |= set(heat_rows) | set(rise_rows)
+            market_ids = (
+                await self.session.scalars(
+                    select(Theme.id).where(
+                        Theme.deleted_at.is_(None),
+                        Theme.source == source,
+                        only_market_signals(),
+                    )
+                )
+            ).all()
+            indicator_ids = (
+                await self.session.scalars(
+                    select(Theme.id).where(
+                        Theme.deleted_at.is_(None),
+                        Theme.source == source,
+                        only_indicator_signals(),
+                    )
+                )
+            ).all()
+            covered |= set(market_ids) | set(indicator_ids)
+
         signal_theme_ids = (
             await self.session.scalars(
                 select(DailyStockSignal.theme_id)
@@ -200,28 +240,8 @@ class SectorRotationService:
                 .distinct()
             )
         ).all()
-        # 行情指标 / 市场表现单独成组展示，重建时一并覆盖
-        market_ids = (
-            await self.session.scalars(
-                select(Theme.id).where(
-                    Theme.deleted_at.is_(None), only_market_signals()
-                )
-            )
-        ).all()
-        indicator_ids = (
-            await self.session.scalars(
-                select(Theme.id).where(
-                    Theme.deleted_at.is_(None), only_indicator_signals()
-                )
-            )
-        ).all()
-        return (
-            set(heat_rows)
-            | set(rise_rows)
-            | {tid for tid in signal_theme_ids if tid}
-            | set(market_ids)
-            | set(indicator_ids)
-        )
+        covered |= {tid for tid in signal_theme_ids if tid}
+        return covered
 
     async def _load_snapshots(
         self, theme_ids: set[int], start: date, end: date

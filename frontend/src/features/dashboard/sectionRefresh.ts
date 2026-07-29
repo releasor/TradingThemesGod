@@ -34,3 +34,23 @@ export function formatSectionRefreshedAt(iso: string | null): string {
   if (Number.isNaN(d.getTime())) return '暂无'
   return d.toLocaleTimeString('zh-CN', { hour12: false })
 }
+
+const FIRST_TO_SECOND_CACHE_KEY = 'dashboard-last-first-to-second'
+
+export function readLastFirstToSecondCache<T = unknown>(): T | undefined {
+  try {
+    const raw = sessionStorage.getItem(FIRST_TO_SECOND_CACHE_KEY)
+    if (!raw) return undefined
+    return JSON.parse(raw) as T
+  } catch {
+    return undefined
+  }
+}
+
+export function writeLastFirstToSecondCache(data: unknown): void {
+  try {
+    sessionStorage.setItem(FIRST_TO_SECOND_CACHE_KEY, JSON.stringify(data))
+  } catch {
+    /* ignore quota */
+  }
+}

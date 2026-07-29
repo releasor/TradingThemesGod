@@ -40,7 +40,12 @@ const sampleItem = {
   missing_metrics: [] as string[],
 }
 
-function renderRadar(props?: { refreshedAtLabel?: string; isSectionRefreshing?: boolean }) {
+function renderRadar(props?: {
+  refreshedAtLabel?: string
+  isSectionRefreshing?: boolean
+  source?: string
+  sourceLabel?: string
+}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -50,6 +55,8 @@ function renderRadar(props?: { refreshedAtLabel?: string; isSectionRefreshing?: 
         <ShortTermRadarSection
           refreshedAtLabel={props?.refreshedAtLabel ?? '暂无'}
           isSectionRefreshing={props?.isSectionRefreshing}
+          source={props?.source}
+          sourceLabel={props?.sourceLabel}
         />
       </MemoryRouter>
     </QueryClientProvider>
@@ -91,6 +98,25 @@ describe('ShortTermRadarSection', () => {
     })
     renderRadar()
     expect(await screen.findByText(/请使用顶部刷新/)).toBeInTheDocument()
+  })
+
+  it('requests sectors for the active theme source', async () => {
+    renderRadar({ source: 'ths', sourceLabel: '同花顺' })
+    await waitFor(() => {
+      expect(fetchShortTermSectors).toHaveBeenCalledWith(undefined, expect.anything(), 'ths')
+    })
+    expect(screen.getByRole('heading', { name: /短线机会雷达 · 同花顺/ })).toBeInTheDocument()
+  })
+
+  it('shows source-specific empty copy when no snapshots', async () => {
+    vi.mocked(fetchShortTermSectors).mockResolvedValue({
+      trade_date: '2026-07-24',
+      items: [],
+      degraded: true,
+      missing_sources: ['source:ths'],
+    })
+    renderRadar({ source: 'ths', sourceLabel: '同花顺' })
+    expect(await screen.findByText(/同花顺 暂无轮动快照/)).toBeInTheDocument()
   })
 
   it('highlights card on hover like news list', async () => {

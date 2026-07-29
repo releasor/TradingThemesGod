@@ -1,13 +1,13 @@
-"""全量多源竞速：并行 collect_full，仅胜出源 commit_full。
+"""全量多源竞速：并行 collect_full，各源完成后立即 commit_full。
 
 进程内内存状态（与调度器锁同级，不跨进程）。
 
 Race status: racing | committing | completed | failed | cancelled
-Phase: collecting | selecting | committing | done
+Phase: collecting | committing | done
 
 取消语义：
-- 尚未进入 committing：置 cancel、status=cancelled，不调用 commit_full。
-- 已进入 committing：尽力而为（落库可能仍完成，无法安全中断）。
+- 已 commit 的源保留；未完成的源取消采集，不再 commit。
+- 某源正在 commit 时取消：尽力而为（该源落库可能仍完成）。
 """
 
 from __future__ import annotations
@@ -33,20 +33,13 @@ CreateScraperFn = Callable[[str], Any]
 
 # 单源采集硬超时：东财全量正常需 20–40 分钟，单源超过该时长视为卡死
 FULL_RACE_SOURCE_TIMEOUT = 40 * 60.0
-# 已有兜底草稿（themes-only）后，再给含成分股源的宽限期；到期直接用兜底落库
-FULL_RACE_FALLBACK_GRACE = 90.0
 # 整体硬超时安全网：任何情况下竞速不超过该时长
 FULL_RACE_OVERALL_TIMEOUT = 45 * 60.0
 
 
-def _is_primary_valid(draft: FullScrapeDraft) -> bool:
-    """主题与成分股均非空 → 可作为首选胜出草稿。"""
-    return bool(draft.themes) and bool(draft.stocks_by_code)
-
-
-def _is_fallback_only(draft: FullScrapeDraft) -> bool:
-    """仅有题材、无成分股 → 仅作兜底（如 akshare themes-only）。"""
-    return bool(draft.themes) and not draft.stocks_by_code
+def _is_commit_worthy(draft: FullScrapeDraft) -> bool:
+    """有题材即可落库（含成分股完整源与 themes-only 兜底）。"""
+    return bool(draft.themes)
 
 
 def _shorten_source_error(error: str | None, *, limit: int = 160) -> str:
@@ -93,12 +86,12 @@ def _aggregate_source_errors(sources: list[SourceRaceState]) -> str:
 
 def default_full_race_sources() -> list[str]:
     """看板可选且实现 collect_full 的数据源。"""
-    from app.core.config import get_settings
+    from app.services.tushare_settings import get_cached_tushare_runtime
 
-    settings = get_settings()
+    runtime = get_cached_tushare_runtime()
     sources: list[str] = []
     for item in list_registered_scraper_sources(dashboard_only=True):
-        if item.id == "tushare" and not settings.tushare_ready():
+        if item.id == "tushare" and not runtime.ready:
             continue
         cls = scraper_registry.get(item.id)
         if cls is not None and callable(getattr(cls, "collect_full", None)):
@@ -112,6 +105,7 @@ class SourceRaceState:
     status: str = "pending"  # pending|running|completed|failed|cancelled
     progress_pct: float = 0.0
     error: str | None = None
+    items_scraped: int | None = None
 
 
 @dataclass
@@ -119,9 +113,10 @@ class RaceState:
     race_id: str
     sources: list[SourceRaceState]
     status: str = "racing"  # racing|committing|completed|failed|cancelled
-    phase: str = "collecting"  # collecting|selecting|committing|done
+    phase: str = "collecting"  # collecting|committing|done
     progress_pct: float = 0.0
-    winner: str | None = None
+    winner: str | None = None  # 首个成功 commit 的源（兼容旧字段）
+    committed_sources: list[str] = field(default_factory=list)
     error: str | None = None
     items_scraped: int | None = None
     cancel_requested: bool = False
@@ -140,10 +135,12 @@ class RaceState:
                     "status": s.status,
                     "progress_pct": s.progress_pct,
                     "error": s.error,
+                    "items_scraped": s.items_scraped,
                 }
                 for s in self.sources
             ],
             "winner": self.winner,
+            "committed_sources": list(self.committed_sources),
             "error": self.error,
             "items_scraped": self.items_scraped,
         }
@@ -151,15 +148,13 @@ class RaceState:
     def source_map(self) -> dict[str, SourceRaceState]:
         return {s.id: s for s in self.sources}
 
-    def refresh_collect_progress(self) -> None:
-        if self.phase in ("committing", "done") or self.status == "committing":
+    def refresh_progress(self) -> None:
+        """按各源进度刷新整体进度；全部终态时为 100。"""
+        if self.phase == "done":
+            self.progress_pct = 100.0
             return
-        running = [s.progress_pct for s in self.sources if s.status == "running"]
-        if running:
-            self.progress_pct = max(running)
-            return
-        completed = [s.progress_pct for s in self.sources if s.status == "completed"]
-        self.progress_pct = max(completed) if completed else 0.0
+        pcts = [s.progress_pct for s in self.sources]
+        self.progress_pct = sum(pcts) / len(pcts) if pcts else 0.0
 
 
 class FullRaceManager:
@@ -171,16 +166,17 @@ class FullRaceManager:
         create_scraper: CreateScraperFn | None = None,
         persist_run: bool = True,
         source_timeout: float = FULL_RACE_SOURCE_TIMEOUT,
-        fallback_grace: float = FULL_RACE_FALLBACK_GRACE,
         overall_timeout: float = FULL_RACE_OVERALL_TIMEOUT,
+        # 兼容旧测试参数名（已忽略）
+        fallback_grace: float | None = None,
     ) -> None:
         self._races: dict[str, RaceState] = {}
         self._custom_factory = create_scraper is not None
         self._create_scraper = create_scraper or self._default_create_scraper
         self._persist_run = persist_run
         self._source_timeout = source_timeout
-        self._fallback_grace = fallback_grace
         self._overall_timeout = overall_timeout
+        _ = fallback_grace
 
     @staticmethod
     def _default_create_scraper(source: str) -> BaseScraper:
@@ -200,6 +196,16 @@ class FullRaceManager:
         return await self.cancel_race(race_id)
 
     async def start_full_race(self, sources: list[str] | None = None) -> str:
+        # 全量前从 DB 刷新 Tushare 缓存，确保设置页刚保存的启用/Token 立刻生效
+        if sources is None:
+            try:
+                from app.services.tushare_settings import TushareSettingsService
+
+                async with AsyncSessionLocal() as session:
+                    await TushareSettingsService(session).resolve_runtime()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("full_race_tushare_cache_refresh_failed", error=str(exc))
+
         resolved = list(sources) if sources else default_full_race_sources()
         if not resolved:
             raise ValueError("没有可用的全量竞速数据源")
@@ -249,24 +255,28 @@ class FullRaceManager:
         if state.status in ("completed", "failed", "cancelled"):
             return state.to_dict()
 
-        if state.phase != "committing" and state.status != "committing":
-            # 尚未落库：标记取消，不 commit
-            state.status = "cancelled"
-            state.phase = "done"
+        # 尚未全部结束：标记取消；已 commit 的源保持 completed
+        if state.phase != "done":
             src_map = state.source_map()
             for source_id in state.cancel_events:
                 src = src_map.get(source_id)
                 if src is not None and src.status in ("pending", "running"):
                     src.status = "cancelled"
-            state.refresh_collect_progress()
-            logger.info("full_race_cancelled", race_id=race_id)
-        else:
-            # 已在 committing：尽力而为，落库可能仍完成
-            logger.warning(
-                "full_race_cancel_during_commit",
-                race_id=race_id,
-                note="already committing; commit may still finish",
-            )
+            if state.committed_sources:
+                # 已有落库：竞速视为成功完成（部分取消）
+                state.status = "completed"
+                state.phase = "done"
+                state.progress_pct = 100.0
+                logger.info(
+                    "full_race_cancelled_after_partial_commit",
+                    race_id=race_id,
+                    committed=state.committed_sources,
+                )
+            else:
+                state.status = "cancelled"
+                state.phase = "done"
+                state.refresh_progress()
+                logger.info("full_race_cancelled", race_id=race_id)
 
         return state.to_dict()
 
@@ -301,9 +311,10 @@ class FullRaceManager:
                     src: SourceRaceState, race: RaceState
                 ) -> Callable[[float], None]:
                     def _on_progress(pct: float) -> None:
-                        src.progress_pct = max(0.0, min(100.0, float(pct)))
+                        # 采集进度占 0–90，留 10% 给 commit
+                        src.progress_pct = max(0.0, min(90.0, float(pct) * 0.9))
                         if src.status == "running":
-                            race.refresh_collect_progress()
+                            race.refresh_progress()
 
                     return _on_progress
 
@@ -318,27 +329,20 @@ class FullRaceManager:
                 )
                 tasks[task] = source
 
-            state.refresh_collect_progress()
+            state.refresh_progress()
             pending: set[asyncio.Task[FullScrapeDraft]] = set(tasks)
-            fallbacks: list[tuple[str, FullScrapeDraft]] = []
             loop = asyncio.get_running_loop()
             overall_deadline = loop.time() + self._overall_timeout
-            fallback_deadline: float | None = None
 
             while pending:
-                if state.cancel_requested and state.status == "cancelled":
+                if state.cancel_requested and state.phase == "done":
                     for task in pending:
                         task.cancel()
                     if pending:
                         await asyncio.gather(*pending, return_exceptions=True)
                     return
 
-                # asyncio.wait 带超时：兜底宽限期 / 整体超时到点时醒转处理
-                deadlines = [overall_deadline]
-                if fallback_deadline is not None:
-                    deadlines.append(fallback_deadline)
-                wait_timeout = max(0.0, min(deadlines) - loop.time())
-
+                wait_timeout = max(0.0, overall_deadline - loop.time())
                 done, pending = await asyncio.wait(
                     pending,
                     timeout=wait_timeout,
@@ -351,7 +355,8 @@ class FullRaceManager:
                     try:
                         draft = task.result()
                     except asyncio.CancelledError:
-                        source_state.status = "cancelled"
+                        if source_state.status == "running":
+                            source_state.status = "cancelled"
                         continue
                     except asyncio.TimeoutError:
                         source_state.status = "failed"
@@ -379,74 +384,27 @@ class FullRaceManager:
                         )
                         continue
 
-                    source_state.status = "completed"
-                    source_state.progress_pct = 100.0
-                    state.refresh_collect_progress()
-
-                    if state.cancel_requested and state.status == "cancelled":
+                    if state.cancel_requested and state.phase == "done":
+                        if source_state.status == "running":
+                            source_state.status = "cancelled"
                         continue
 
-                    if _is_primary_valid(draft):
-                        await self._cancel_pending(pending, state)
-                        pending.clear()
-                        await self._commit_winner(
-                            state, scrapers, source, draft
-                        )
-                        return
-
-                    if _is_fallback_only(draft):
-                        fallbacks.append((source, draft))
-                        if fallback_deadline is None:
-                            fallback_deadline = loop.time() + self._fallback_grace
+                    if not _is_commit_worthy(draft):
+                        source_state.status = "failed"
+                        source_state.error = "empty draft (no themes)"
+                        source_state.progress_pct = 100.0
                         logger.info(
-                            "full_race_fallback_held",
+                            "full_race_collect_skipped",
                             race_id=race_id,
                             source=source,
-                            themes=len(draft.themes),
-                            grace=self._fallback_grace,
                         )
                         continue
 
-                    source_state.status = "failed"
-                    source_state.error = "empty draft (no themes)"
-                    logger.info(
-                        "full_race_collect_skipped",
-                        race_id=race_id,
-                        source=source,
-                    )
+                    # 各源采集完成后立即 commit，互不等待
+                    await self._commit_source(state, scrapers, source, draft)
 
                 now = loop.time()
-
-                # 兜底宽限期到：不再等卡死的源，直接用已采完的兜底数据落库
-                if (
-                    fallback_deadline is not None
-                    and now >= fallback_deadline
-                    and fallbacks
-                ):
-                    logger.warning(
-                        "full_race_fallback_grace_expired",
-                        race_id=race_id,
-                        grace=self._fallback_grace,
-                        pending_sources=[tasks[t] for t in pending],
-                    )
-                    await self._cancel_pending(pending, state)
-                    pending.clear()
-                    for src in state.sources:
-                        if src.status == "cancelled":
-                            src.status = "failed"
-                            src.error = (
-                                f"采集超时（兜底宽限 "
-                                f"{int(self._fallback_grace)} 秒内未完成）"
-                            )
-                    fallbacks.sort(
-                        key=lambda item: len(item[1].themes), reverse=True
-                    )
-                    source, draft = fallbacks[0]
-                    await self._commit_winner(state, scrapers, source, draft)
-                    return
-
-                # 整体硬超时：有兜底用兜底，否则失败，绝不无限挂起
-                if now >= overall_deadline:
+                if now >= overall_deadline and pending:
                     logger.error(
                         "full_race_overall_timeout",
                         race_id=race_id,
@@ -456,40 +414,47 @@ class FullRaceManager:
                     await self._cancel_pending(pending, state)
                     pending.clear()
                     for src in state.sources:
-                        if src.status == "cancelled":
-                            src.status = "failed"
-                            src.error = (
-                                f"采集超时（全量竞速超过 "
-                                f"{int(self._overall_timeout // 60)} 分钟未完成）"
-                            )
-                    if fallbacks:
-                        fallbacks.sort(
-                            key=lambda item: len(item[1].themes), reverse=True
-                        )
-                        source, draft = fallbacks[0]
-                        await self._commit_winner(state, scrapers, source, draft)
-                        return
-                    state.status = "failed"
-                    state.phase = "done"
-                    state.error = _aggregate_source_errors(state.sources)
-                    state.progress_pct = max(state.progress_pct, 100.0)
-                    return
+                        if src.status in ("pending", "running", "cancelled"):
+                            if src.id not in state.committed_sources:
+                                src.status = "failed"
+                                src.error = (
+                                    f"采集超时（全量竞速超过 "
+                                    f"{int(self._overall_timeout // 60)} 分钟未完成）"
+                                )
+                                src.progress_pct = 100.0
+                    break
 
-            if state.cancel_requested or state.status == "cancelled":
-                state.status = "cancelled"
-                state.phase = "done"
+                state.refresh_progress()
+
+            if state.phase == "done":
                 return
 
-            if fallbacks:
-                fallbacks.sort(key=lambda item: len(item[1].themes), reverse=True)
-                source, draft = fallbacks[0]
-                await self._commit_winner(state, scrapers, source, draft)
+            if state.committed_sources:
+                state.status = "completed"
+                state.phase = "done"
+                state.progress_pct = 100.0
+                state.items_scraped = sum(
+                    s.items_scraped or 0
+                    for s in state.sources
+                    if s.id in state.committed_sources
+                )
+                logger.info(
+                    "full_race_completed",
+                    race_id=race_id,
+                    committed=state.committed_sources,
+                    items_scraped=state.items_scraped,
+                )
+                return
+
+            if state.cancel_requested:
+                state.status = "cancelled"
+                state.phase = "done"
                 return
 
             state.status = "failed"
             state.phase = "done"
             state.error = _aggregate_source_errors(state.sources)
-            state.progress_pct = max(state.progress_pct, 100.0)
+            state.progress_pct = 100.0
             logger.error(
                 "full_race_all_failed",
                 race_id=race_id,
@@ -537,14 +502,20 @@ class FullRaceManager:
             if src.status in ("pending", "running"):
                 src.status = "cancelled"
 
-    async def _commit_winner(
+    async def _commit_source(
         self,
         state: RaceState,
         scrapers: dict[str, Any],
         source: str,
         draft: FullScrapeDraft,
     ) -> None:
-        if state.cancel_requested and state.status == "cancelled":
+        source_state = state.source_map()[source]
+        if (
+            state.cancel_requested
+            and state.phase == "done"
+            and not state.committed_sources
+        ):
+            source_state.status = "cancelled"
             logger.info(
                 "full_race_skip_commit_cancelled",
                 race_id=state.race_id,
@@ -552,45 +523,55 @@ class FullRaceManager:
             )
             return
 
-        state.phase = "selecting"
-        state.winner = source
-
-        if state.cancel_requested and state.status == "cancelled":
-            return
-
         state.status = "committing"
         state.phase = "committing"
-        state.progress_pct = 70.0
+        source_state.progress_pct = max(source_state.progress_pct, 90.0)
+        state.refresh_progress()
 
         scraper = scrapers[source]
         try:
             items = await scraper.commit_full(draft)
-            state.items_scraped = int(items)
-            state.progress_pct = 100.0
-            state.status = "completed"
-            state.phase = "done"
+            items_i = int(items)
+            source_state.status = "completed"
+            source_state.progress_pct = 100.0
+            source_state.items_scraped = items_i
+            source_state.error = None
+            if source not in state.committed_sources:
+                state.committed_sources.append(source)
+            if state.winner is None:
+                state.winner = source
+            state.items_scraped = (state.items_scraped or 0) + items_i
+            # 仍有其他源在跑时保持 racing/collecting，全部结束后再 completed
+            still_running = any(
+                s.status in ("pending", "running") for s in state.sources
+            )
+            if still_running:
+                state.status = "racing"
+                state.phase = "collecting"
             if self._persist_run:
-                await self._record_scraper_run(source, int(items))
+                await self._record_scraper_run(source, items_i)
             logger.info(
-                "full_race_completed",
+                "full_race_source_committed",
                 race_id=state.race_id,
-                winner=source,
-                items_scraped=items,
+                source=source,
+                items_scraped=items_i,
+                has_stocks=bool(draft.stocks_by_code),
             )
         except Exception as exc:
-            state.status = "failed"
-            state.phase = "done"
-            state.error = f"commit failed: {exc}"
-            state.progress_pct = 100.0
+            source_state.status = "failed"
+            source_state.error = f"commit failed: {exc}"
+            source_state.progress_pct = 100.0
             logger.error(
                 "full_race_commit_failed",
                 race_id=state.race_id,
                 source=source,
                 error=str(exc),
             )
+        finally:
+            state.refresh_progress()
 
     async def _record_scraper_run(self, source: str, items_scraped: int) -> None:
-        """为胜出源写一条 completed scraper_run，供看板兼容。"""
+        """为成功 commit 的源写一条 completed scraper_run。"""
         try:
             async with AsyncSessionLocal() as session:
                 repo = ScraperRunRepository(session)
