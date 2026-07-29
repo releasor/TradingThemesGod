@@ -45,6 +45,11 @@ const TradingCalendarSettings = lazy(() =>
     default: m.TradingCalendarSettings,
   }))
 )
+const IntegrationsSettings = lazy(() =>
+  import('@/features/settings/IntegrationsSettings').then((m) => ({
+    default: m.IntegrationsSettings,
+  }))
+)
 const AiStockAnalysis = lazy(() =>
   import('@/features/analysis/AiStockAnalysis').then((m) => ({
     default: m.AiStockAnalysis,
@@ -255,6 +260,16 @@ function App() {
                     <ErrorBoundary>
                       <ProtectedRoute>
                         <TradingCalendarSettings />
+                      </ProtectedRoute>
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/settings/integrations"
+                  element={
+                    <ErrorBoundary>
+                      <ProtectedRoute>
+                        <IntegrationsSettings />
                       </ProtectedRoute>
                     </ErrorBoundary>
                   }

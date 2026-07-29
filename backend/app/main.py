@@ -20,6 +20,7 @@ from app.api.errors import router as errors_router
 from app.api.health import router as health_router
 from app.api.mainline_graph import router as mainline_graph_router
 from app.api.market_calendar import router as market_calendar_router
+from app.api.integrations import router as integrations_router
 from app.api.mining import router as mining_router
 from app.api.model_provider import router as model_provider_router
 from app.api.news import router as news_router
@@ -93,6 +94,16 @@ async def lifespan(app: FastAPI):
             logger.warning("交易日历启动任务失败", error=str(exc))
 
     asyncio.create_task(_calendar_startup())
+
+    async def _tushare_startup() -> None:
+        try:
+            from app.services.tushare_settings import warm_tushare_runtime_cache
+
+            await warm_tushare_runtime_cache()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Tushare 配置缓存预热失败", error=str(exc))
+
+    asyncio.create_task(_tushare_startup())
 
     try:
         yield
@@ -237,6 +248,7 @@ def create_app() -> FastAPI:
     app.include_router(mining_router, prefix="/api/v1")
     app.include_router(mainline_graph_router, prefix="/api/v1")
     app.include_router(market_calendar_router, prefix="/api/v1")
+    app.include_router(integrations_router, prefix="/api/v1")
 
     # 全局异常处理器
     @app.exception_handler(Exception)

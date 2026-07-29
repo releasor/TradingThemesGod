@@ -31,6 +31,7 @@ from app.models.mainline_graph import (
     MainlineGraphVersion,
 )
 from app.models.trading_calendar import TradingCalendarDay, TradingCalendarMeta
+from app.models.tushare_settings import TushareSettings
 
 __all__ = [
     "Theme",
@@ -65,4 +66,5 @@ __all__ = [
     "MainlineGraphEdge",
     "TradingCalendarDay",
     "TradingCalendarMeta",
+    "TushareSettings",
 ]

@@ -33,13 +33,15 @@ export function AuthNav({ className = '' }: { className?: string }) {
 
   return (
     <div className={cn('flex items-center gap-1.5', className)} data-testid="auth-nav">
-      <span
-        className="hidden max-w-[7.5rem] truncate rounded-xl border border-border/70 bg-background/70 px-2.5 py-1.5 text-xs text-muted-foreground backdrop-blur-sm sm:inline-flex sm:items-center sm:gap-1.5 sm:text-sm"
-        title={user?.username}
+      <Link
+        to="/settings/account"
+        className="inline-flex h-9 max-w-[9rem] items-center gap-1.5 truncate rounded-xl border border-border/70 bg-background/70 px-2.5 text-xs text-muted-foreground backdrop-blur-sm hover:bg-accent sm:text-sm"
+        title={user?.username ? `${user.username} · 账号设置` : '账号设置'}
+        aria-label="打开账号设置"
       >
         <UserRound className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate text-foreground">{user?.username}</span>
-      </span>
+        <span className="hidden truncate text-foreground sm:inline">{user?.username}</span>
+      </Link>
       <button
         type="button"
         onClick={() => {

@@ -39,7 +39,7 @@ SCRAPER_SOURCE_CATALOG: tuple[ScraperSourceMeta, ...] = (
     ScraperSourceMeta(
         id="tushare",
         label="Tushare",
-        description="概念板块列表（全量竞速兜底，需 TUSHARE_ENABLED=true、TUSHARE_TOKEN 与积分权限）",
+        description="概念板块列表（全量竞速兜底，需在设置→数据源启用并配置 Token，或使用环境变量回退）",
         dashboard_selectable=True,
     ),
     ScraperSourceMeta(
