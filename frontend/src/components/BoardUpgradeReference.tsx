@@ -36,6 +36,8 @@ export const BoardUpgradeReference = memo(function BoardUpgradeReference({
   isSectionRefreshing = false,
 }: BoardUpgradeReferenceProps) {
   const candidates = data?.candidates ?? []
+  // 刷新中仍展示上次数据；仅在尚无任何数据时显示骨架
+  const showSkeleton = isLoading && candidates.length === 0
   return (
     <section
       data-testid="board-upgrade-reference"
@@ -70,8 +72,8 @@ export const BoardUpgradeReference = memo(function BoardUpgradeReference({
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="space-y-2 p-4">
+        {showSkeleton ? (
+          <div className="space-y-2 p-4" data-testid="board-upgrade-skeleton">
             <div className="h-20 animate-pulse rounded-xl bg-muted" />
             <div className="h-20 animate-pulse rounded-xl bg-muted" />
           </div>

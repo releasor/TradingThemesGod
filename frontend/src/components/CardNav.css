@@ -2,7 +2,7 @@
   position: sticky;
   top: 1rem;
   z-index: 40;
-  width: min(94%, 1040px);
+  width: min(88%, 820px);
   margin: 0 auto;
   box-sizing: border-box;
   color: hsl(var(--foreground));
@@ -289,7 +289,7 @@
 
 @media (max-width: 768px) {
   .card-nav-container {
-    width: 94%;
+    width: 90%;
     top: 0.75rem;
   }
 

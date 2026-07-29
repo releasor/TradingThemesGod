@@ -237,36 +237,28 @@ export function ModelSettings() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,hsl(var(--primary)/0.14),transparent)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-24 top-32 h-72 w-72 rounded-full bg-primary/5 blur-3xl"
-      />
-
+    <div className="min-h-screen">
       <AppCardNav />
 
-      <div className="mx-auto w-full max-w-none space-y-3 px-3 pt-4 sm:px-4 lg:px-5 xl:px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Settings className="h-5 w-5" />
+      <div className="mx-auto w-full max-w-none space-y-5 px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Settings className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">模型设置</h1>
+              <p className="text-sm text-muted-foreground">配置图谱分析使用的模型服务</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">模型设置</h1>
-            <p className="text-sm text-muted-foreground">配置图谱分析使用的模型服务</p>
-          </div>
+          <SettingsSubnav />
         </div>
-        <SettingsSubnav />
-      </div>
 
-      <motion.main
-        {...pageMotion}
-        transition={{ ...pageMotion.transition, delay: 0.06 }}
-        className="relative mx-auto grid w-full max-w-none gap-6 px-3 py-6 sm:px-4 lg:grid-cols-[280px_1fr] lg:px-5 xl:px-6"
-      >
+        <motion.div
+          {...pageMotion}
+          transition={{ ...pageMotion.transition, delay: 0.06 }}
+          className="grid w-full gap-6 lg:grid-cols-[280px_1fr]"
+        >
         <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
           <GlowCard animated className="overflow-hidden">
             <div className="p-4">
@@ -661,7 +653,8 @@ export function ModelSettings() {
             </div>
           </motion.form>
         </AnimatePresence>
-      </motion.main>
+        </motion.div>
+      </div>
     </div>
   )
 }

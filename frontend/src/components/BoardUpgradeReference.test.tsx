@@ -67,6 +67,29 @@ describe('BoardUpgradeReference', () => {
     expect(screen.getByText('刷新中…')).toBeInTheDocument()
   })
 
+  it('keeps last candidates visible while loading/refreshing', () => {
+    render(
+      <BoardUpgradeReference
+        data={response}
+        isLoading
+        refreshedAtLabel="10:30:00"
+        isSectionRefreshing
+      />
+    )
+
+    expect(screen.getByText('平安银行')).toBeInTheDocument()
+    expect(screen.getByText('刷新中…')).toBeInTheDocument()
+    expect(screen.queryByTestId('board-upgrade-skeleton')).not.toBeInTheDocument()
+  })
+
+  it('shows skeleton only when loading with no prior data', () => {
+    render(
+      <BoardUpgradeReference isLoading refreshedAtLabel="暂无" />
+    )
+
+    expect(screen.getByTestId('board-upgrade-skeleton')).toBeInTheDocument()
+  })
+
   it('shows an empty state when no candidates are available', () => {
     render(
       <BoardUpgradeReference

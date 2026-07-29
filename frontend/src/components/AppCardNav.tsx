@@ -48,6 +48,7 @@ export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
     links: [
       { label: '模型设置', href: '/settings/models', ariaLabel: '打开模型设置' },
       { label: '交易日历', href: '/settings/calendar', ariaLabel: '打开交易日历设置' },
+      { label: '数据源', href: '/settings/integrations', ariaLabel: '打开数据源设置' },
       { label: '快捷键', href: '/settings/shortcuts', ariaLabel: '查看键盘快捷键' },
       { label: '账号设置', href: '/settings/account', ariaLabel: '打开账号设置' },
     ],

@@ -65,6 +65,10 @@ describe('AppCardNav', () => {
       'href',
       '/settings/calendar'
     )
+    expect(screen.getByRole('link', { name: '打开数据源设置' })).toHaveAttribute(
+      'href',
+      '/settings/integrations'
+    )
     expect(screen.getByRole('link', { name: '查看键盘快捷键' })).toHaveAttribute(
       'href',
       '/settings/shortcuts'
