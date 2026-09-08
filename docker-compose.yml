@@ -34,6 +34,11 @@ services:
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost"]}'
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_EXPIRE_DAYS: ${JWT_EXPIRE_DAYS:-7}
+      # 优先用固定 Fernet key；未设置时落到持久卷文件，避免重建容器后模型凭据无法解密
+      MODEL_SECRET_KEY: ${MODEL_SECRET_KEY:-}
+      MODEL_SECRET_KEY_FILE: /data/model-secret.key
+    volumes:
+      - backend_secrets:/data
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
@@ -65,3 +70,4 @@ services:
 
 volumes:
   mysql_data:
+  backend_secrets:

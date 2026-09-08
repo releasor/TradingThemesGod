@@ -366,9 +366,14 @@ class ConceptGraphRefreshService:
             )
         try:
             added, updated, linked = await self._merge(theme, stocks, sources, graph)
-        except Exception:
+        except HTTPException:
             await self.session.rollback()
             raise
+        except Exception as exc:
+            await self.session.rollback()
+            raise HTTPException(
+                502, f"图谱写入失败：{model_error_message(exc)}"
+            ) from exc
         elapsed_ms = int((time.monotonic() - started) * 1000)
         return ConceptGraphRefreshResponse(
             theme_id=theme.id,
@@ -444,9 +449,14 @@ class ConceptGraphRefreshService:
                 added, updated, linked = await self._merge(
                     theme, stocks, sources, graph
                 )
-            except Exception:
+            except HTTPException:
                 await session.rollback()
                 raise
+            except Exception as exc:
+                await session.rollback()
+                raise HTTPException(
+                    502, f"图谱写入失败：{model_error_message(exc)}"
+                ) from exc
             finally:
                 self.session = None
 

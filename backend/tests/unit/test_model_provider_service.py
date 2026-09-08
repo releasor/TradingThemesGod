@@ -23,6 +23,7 @@ def test_secret_store_keeps_same_key_between_instances(tmp_path):
 
 def test_secret_store_default_key_lives_under_backend_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("MODEL_SECRET_KEY", raising=False)
+    monkeypatch.delenv("MODEL_SECRET_KEY_FILE", raising=False)
     monkeypatch.setattr(
         "app.services.secret_store._DEFAULT_KEY_FILE",
         tmp_path / "backend-model.key",
@@ -33,6 +34,17 @@ def test_secret_store_default_key_lives_under_backend_dir(tmp_path, monkeypatch)
 
     assert (tmp_path / "backend-model.key").exists()
     assert SecretStore().decrypt(encrypted) == "stable"
+
+
+def test_secret_store_respects_model_secret_key_file_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("MODEL_SECRET_KEY", raising=False)
+    key_file = tmp_path / "persist" / "model-secret.key"
+    monkeypatch.setenv("MODEL_SECRET_KEY_FILE", str(key_file))
+
+    encrypted = SecretStore().encrypt("docker-stable")
+
+    assert key_file.exists()
+    assert SecretStore().decrypt(encrypted) == "docker-stable"
 
 
 def test_list_tolerates_undecryptable_custom_headers(tmp_path):
@@ -66,6 +78,40 @@ def test_list_tolerates_undecryptable_custom_headers(tmp_path):
     assert response.custom_header_names == []
     assert response.api_key == "sk-demo"
     assert response.has_api_key is True
+
+
+def test_adapter_maps_undecryptable_api_key_to_http_409(tmp_path):
+    """重建容器丢失加密密钥时，应提示重新保存配置，而不是裸 500。"""
+    from types import SimpleNamespace
+
+    import pytest
+    from fastapi import HTTPException
+
+    from app.services.model_provider import ModelProviderService
+
+    other = SecretStore(key_file=tmp_path / "other.key")
+    current = SecretStore(key_file=tmp_path / "current.key")
+    item = SimpleNamespace(
+        id=1,
+        user_id=1,
+        name="lost-key",
+        protocol="openai_compatible",
+        base_url="https://example.com",
+        model="demo",
+        api_key_encrypted=other.encrypt("sk-demo"),
+        custom_headers_encrypted=current.encrypt("{}"),
+        timeout_seconds=60,
+        temperature=0.1,
+        max_tokens=1024,
+        enabled=True,
+        is_default=True,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        ModelProviderService(session=None, user_id=1, secrets=current).adapter(item)
+
+    assert exc_info.value.status_code == 409
+    assert "重新保存" in str(exc_info.value.detail)
 
 
 def test_model_http_error_message_includes_provider_detail():

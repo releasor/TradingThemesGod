@@ -5,8 +5,18 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-# 固定落在 backend 目录，避免因启动 cwd 不同生成多把密钥
+# 固定落在 backend/app 目录，避免因启动 cwd 不同生成多把密钥。
+# Docker 可通过 MODEL_SECRET_KEY 或 MODEL_SECRET_KEY_FILE 挂到持久卷。
 _DEFAULT_KEY_FILE = Path(__file__).resolve().parents[1] / ".model-secret.key"
+
+
+def _resolve_key_file(key_file: Path | None) -> Path:
+    if key_file is not None:
+        return key_file
+    configured_path = os.getenv("MODEL_SECRET_KEY_FILE", "").strip()
+    if configured_path:
+        return Path(configured_path)
+    return _DEFAULT_KEY_FILE
 
 
 class SecretStore:
@@ -15,7 +25,7 @@ class SecretStore:
         if configured_key:
             key = configured_key.encode()
         else:
-            path = key_file or _DEFAULT_KEY_FILE
+            path = _resolve_key_file(key_file)
             if path.exists():
                 key = path.read_bytes().strip()
             else:

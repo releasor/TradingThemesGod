@@ -156,12 +156,21 @@ class ModelProviderService:
         return item
 
     def adapter(self, item: ModelProvider):
+        try:
+            api_key = self.secrets.decrypt(item.api_key_encrypted)
+            custom_headers = self._decrypt_headers(item)
+        except ValueError as exc:
+            # 常见于 Docker 重建后丢失 MODEL_SECRET_KEY / .model-secret.key
+            raise HTTPException(
+                409,
+                str(exc) or "模型凭据无法解密，请重新保存配置",
+            ) from exc
         return build_llm_adapter(
             protocol=item.protocol,
             base_url=item.base_url,
-            api_key=self.secrets.decrypt(item.api_key_encrypted),
+            api_key=api_key,
             model=item.model,
-            custom_headers=self._decrypt_headers(item),
+            custom_headers=custom_headers,
             timeout_seconds=item.timeout_seconds,
             temperature=float(item.temperature),
             max_tokens=item.max_tokens,
