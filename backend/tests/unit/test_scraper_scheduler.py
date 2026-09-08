@@ -72,6 +72,7 @@ async def test_scheduler_periodic_collection_runs_immediately(registry):
     """周期采集启动后应立即执行一次"""
     scheduler = ScraperScheduler(registry=registry)
     scheduler.run = AsyncMock(return_value=1)
+    scheduler._should_skip_periodic = AsyncMock(return_value=False)
 
     first_task = scheduler.start_periodic("test", interval_seconds=60)
     second_task = scheduler.start_periodic("test", interval_seconds=60)
@@ -89,6 +90,7 @@ async def test_scheduler_periodic_collection_skips_overlapping_run(registry):
     """上一次采集未结束时不应重复启动同一数据源"""
     scheduler = ScraperScheduler(registry=registry)
     scheduler.run = AsyncMock(return_value=1)
+    scheduler._should_skip_periodic = AsyncMock(return_value=False)
     scheduler.is_running = MagicMock(return_value=True)
 
     scheduler.start_periodic("test", interval_seconds=60)

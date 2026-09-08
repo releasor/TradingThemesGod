@@ -40,6 +40,18 @@ class TestSettings:
         assert settings.PROXY_ENABLED is False
         assert settings.PROXY_URL == ""
 
+
+    def test_scraper_reliability_defaults(self):
+        settings = Settings(_env_file=None)
+        assert settings.SCRAPER_SKIP_IF_FRESH_SECONDS == 21600
+        assert settings.SCRAPER_CONCEPT_LIST_CACHE_TTL_SECONDS == 60
+        assert settings.SCRAPER_EM_CONSTITUENT_CONCURRENCY == 3
+        assert settings.scraper_em_constituent_concurrency == 3
+
+    def test_scraper_em_concurrency_clamped(self):
+        settings = Settings(SCRAPER_EM_CONSTITUENT_CONCURRENCY=99, _env_file=None)
+        assert settings.scraper_em_constituent_concurrency == 4
+
     def test_database_url_property(self):
         """测试 database_url 属性构建"""
         settings = Settings(

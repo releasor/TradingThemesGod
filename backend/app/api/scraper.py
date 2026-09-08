@@ -24,6 +24,7 @@ from app.schemas.scraper import (
     ThemeQuotesRefreshResponse,
 )
 from app.scrapers.eastmoney import EastMoneyScraper
+from app.scrapers.middleware_factory import build_anti_scraping_middleware
 from app.scrapers.full_race import cancel_race, get_race, start_full_race
 from app.scrapers.scheduler import scraper_scheduler
 from app.services.quotes_refresh_race import race_theme_quotes
@@ -152,7 +153,12 @@ async def refresh_theme_quotes(request: Request):
         raise HTTPException(status_code=409, detail="行情刷新进行中，请稍后再试")
 
     async with scraper_scheduler.quotes_refresh_lock:
-        scraper = EastMoneyScraper()
+        middleware = build_anti_scraping_middleware(
+            min_interval=0.2,
+            max_interval=0.6,
+            max_retries=1,
+        )
+        scraper = EastMoneyScraper(middleware=middleware)
         try:
             from app.scrapers.theme_upsert import (
                 apply_theme_quotes,

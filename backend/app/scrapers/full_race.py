@@ -22,9 +22,9 @@ from app.core.database import AsyncSessionLocal
 from app.core.logging import get_logger
 from app.domain.scraper_sources import list_registered_scraper_sources
 from app.repositories.scraper_run import ScraperRunRepository
-from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.scrapers.base import BaseScraper
 from app.scrapers.draft_types import FullScrapeDraft
+from app.scrapers.middleware_factory import create_scraper_from_settings
 from app.scrapers.registry import scraper_registry
 
 logger = get_logger(__name__)
@@ -180,10 +180,7 @@ class FullRaceManager:
 
     @staticmethod
     def _default_create_scraper(source: str) -> BaseScraper:
-        scraper_cls = scraper_registry.get(source)
-        if scraper_cls is None:
-            raise ValueError(f"未注册的数据源: {source}")
-        return scraper_cls(middleware=AntiScrapingMiddleware())
+        return create_scraper_from_settings(source)
 
     async def start(self, sources: list[str] | None = None) -> str:
         """启动竞速，返回 race_id。"""

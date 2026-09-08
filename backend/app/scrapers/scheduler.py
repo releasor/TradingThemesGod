@@ -5,15 +5,33 @@
 
 import asyncio
 from contextlib import suppress
+from datetime import datetime, timezone
 
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.logging import get_logger
 from app.repositories.scraper_run import ScraperRunRepository
-from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.middleware_factory import create_scraper_from_settings
 from app.scrapers.registry import ScraperRegistry, scraper_registry
 
 logger = get_logger(__name__)
+
+
+def should_skip_periodic_run(
+    last_finished: datetime | None,
+    now: datetime,
+    threshold_seconds: int,
+) -> bool:
+    """最近成功采集仍在新鲜窗口内则跳过本轮周期任务。"""
+    if last_finished is None or threshold_seconds <= 0:
+        return False
+    if last_finished.tzinfo is None:
+        last_finished = last_finished.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return (now - last_finished).total_seconds() < threshold_seconds
+
+
 
 
 class ScraperScheduler:
@@ -77,14 +95,39 @@ class ScraperScheduler:
         with suppress(asyncio.CancelledError):
             await task
 
+    async def _should_skip_periodic(self, source: str) -> bool:
+        """查询最近成功 run，判断是否仍在新鲜窗口内。"""
+        settings = get_settings()
+        threshold = int(getattr(settings, "SCRAPER_SKIP_IF_FRESH_SECONDS", 21600) or 0)
+        if threshold <= 0:
+            return False
+        try:
+            async with AsyncSessionLocal() as session:
+                repo = ScraperRunRepository(session)
+                run = await repo.get_latest_completed(source)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"检查 {source} 新鲜度失败，继续采集: {exc}")
+            return False
+        finished = None
+        if run is not None:
+            finished = run.finished_at or run.started_at
+        return should_skip_periodic_run(
+            finished,
+            datetime.now(timezone.utc),
+            threshold,
+        )
+
     async def _periodic_loop(self, source: str, interval_seconds: int) -> None:
-        """立即执行采集，并按固定间隔持续触发"""
+        """立即执行采集（若数据仍新鲜则跳过），并按固定间隔持续触发。"""
         while True:
             if self.is_running(source):
                 logger.warning(f"爬虫 {source} 仍在运行，跳过本次周期采集")
             else:
                 try:
-                    await self.run(source)
+                    if await self._should_skip_periodic(source):
+                        logger.info(f"爬虫 {source} 数据仍新鲜，跳过本次周期采集")
+                    else:
+                        await self.run(source)
                 except Exception as exc:
                     logger.error(f"启动爬虫 {source} 周期采集失败: {exc}")
 
@@ -169,20 +212,12 @@ class ScraperScheduler:
             run_id: 运行记录 ID
             params: 爬虫参数
         """
-        settings = get_settings()
-        proxy_url = getattr(settings, "PROXY_URL", None)
-        proxy_enabled = getattr(settings, "PROXY_ENABLED", False)
-
-        middleware = AntiScrapingMiddleware(
-            proxy_url=proxy_url if proxy_enabled else None,
-        )
-
         scraper_cls = self.registry.get(source)
         if scraper_cls is None:
             logger.error(f"数据源 {source} 未注册")
             return
 
-        scraper = scraper_cls(middleware=middleware)
+        scraper = create_scraper_from_settings(source)
         items_scraped = 0
         error_message = None
 

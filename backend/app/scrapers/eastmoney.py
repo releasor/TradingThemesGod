@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.logging import get_logger
 from app.models.stock import Stock
@@ -19,6 +20,10 @@ from app.models.theme import Theme
 from app.models.theme_stock import ThemeStock
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.scrapers.base import BaseScraper
+from app.scrapers.concept_list_cache import (
+    EM_THEME_LIST_KEY,
+    get_or_fetch as concept_cache_get_or_fetch,
+)
 from app.scrapers.draft_types import FullScrapeDraft
 from app.services.theme_market import ThemeMarketService
 
@@ -44,6 +49,7 @@ DEFAULT_PARAMS = {
 
 # 题材板块前缀
 THEME_BOARD_PREFIX = "BK"
+EM_CONCEPT_LIST_FS = "m:90+t:3+f:!50"
 
 # 全量采集页级硬超时：单页请求最坏重试链约 2 域名 × 4 次 × 30s，
 # 不加 wait_for 时一个题材可卡住数分钟、整轮拖到数十分钟
@@ -617,16 +623,25 @@ class EastMoneyScraper(BaseScraper):
         theme_params = {
             **DEFAULT_PARAMS,
             "fid": "f12",
-            "fs": "m:90+t:3+f:!50",
+            "fs": EM_CONCEPT_LIST_FS,
         }
         if params:
             theme_params.update(params)
 
+        async def _fetch_theme_list():
+            return await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
+
         try:
-            theme_data = await asyncio.wait_for(
-                self.fetch_all_pages(EASTMONEY_API_BASE, theme_params),
-                timeout=THEME_LIST_FETCH_TIMEOUT,
-            )
+            if theme_params.get("fs") == EM_CONCEPT_LIST_FS:
+                theme_data = await asyncio.wait_for(
+                    concept_cache_get_or_fetch(EM_THEME_LIST_KEY, _fetch_theme_list),
+                    timeout=THEME_LIST_FETCH_TIMEOUT,
+                )
+            else:
+                theme_data = await asyncio.wait_for(
+                    _fetch_theme_list(),
+                    timeout=THEME_LIST_FETCH_TIMEOUT,
+                )
         except asyncio.TimeoutError:
             logger.error(
                 f"[{self.source_name}] 获取题材列表超时（>{THEME_LIST_FETCH_TIMEOUT}s）"
@@ -652,39 +667,57 @@ class EastMoneyScraper(BaseScraper):
         stocks_by_code: dict[str, list[dict[str, Any]]] = {}
         latest_trade_date: date | None = None
         total = len(themes)
-        for index, theme in enumerate(themes):
-            if cancel is not None and cancel.is_set():
-                raise asyncio.CancelledError()
-            try:
-                stock_params = {
-                    **DEFAULT_PARAMS,
-                    "fid": "f12",
-                    "fs": f"b:{theme['code']}",
-                }
-                stock_data = await asyncio.wait_for(
-                    self.fetch_all_pages(EASTMONEY_API_BASE, stock_params),
-                    timeout=THEME_STOCKS_FETCH_TIMEOUT,
-                )
-                stock_trade_date = self._extract_trade_date(stock_data)
-                if stock_trade_date is not None and (
-                    latest_trade_date is None or stock_trade_date > latest_trade_date
-                ):
-                    latest_trade_date = stock_trade_date
+        concurrency = get_settings().scraper_em_constituent_concurrency
+        sem = asyncio.Semaphore(concurrency)
+        progress_lock = asyncio.Lock()
+        trade_date_lock = asyncio.Lock()
+        completed = 0
 
-                stocks = self.parse_theme_stocks(stock_data, theme["code"])
-                if stocks:
-                    stocks_by_code[theme["code"]] = stocks
-            except asyncio.CancelledError:
-                raise
-            except asyncio.TimeoutError:
-                logger.error(
-                    f"[{self.source_name}] 题材 {theme['code']} 成分股采集超时"
-                    f"（>{THEME_STOCKS_FETCH_TIMEOUT}s），跳过"
-                )
-            except Exception as e:
-                logger.error(f"[{self.source_name}] 处理题材 {theme['code']} 失败: {e}")
-            # 题材列表 8%，成分股采集占 8→99
-            report(8.0 + 91.0 * (index + 1) / total)
+        async def fetch_one(theme: dict[str, Any]) -> None:
+            nonlocal completed, latest_trade_date
+            async with sem:
+                if cancel is not None and cancel.is_set():
+                    raise asyncio.CancelledError()
+                try:
+                    stock_params = {
+                        **DEFAULT_PARAMS,
+                        "fid": "f12",
+                        "fs": f"b:{theme['code']}",
+                    }
+                    stock_data = await asyncio.wait_for(
+                        self.fetch_all_pages(EASTMONEY_API_BASE, stock_params),
+                        timeout=THEME_STOCKS_FETCH_TIMEOUT,
+                    )
+                    stock_trade_date = self._extract_trade_date(stock_data)
+                    if stock_trade_date is not None:
+                        async with trade_date_lock:
+                            if (
+                                latest_trade_date is None
+                                or stock_trade_date > latest_trade_date
+                            ):
+                                latest_trade_date = stock_trade_date
+
+                    stocks = self.parse_theme_stocks(stock_data, theme["code"])
+                    if stocks:
+                        stocks_by_code[theme["code"]] = stocks
+                except asyncio.CancelledError:
+                    raise
+                except asyncio.TimeoutError:
+                    logger.error(
+                        f"[{self.source_name}] 题材 {theme['code']} 成分股采集超时"
+                        f"（>{THEME_STOCKS_FETCH_TIMEOUT}s），跳过"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[{self.source_name}] 处理题材 {theme['code']} 失败: {e}"
+                    )
+                finally:
+                    async with progress_lock:
+                        completed += 1
+                        done = completed
+                    report(8.0 + 91.0 * done / total)
+
+        await asyncio.gather(*(fetch_one(theme) for theme in themes))
 
         logger.info(
             f"[{self.source_name}] 全量采集完成: "
@@ -761,9 +794,16 @@ class EastMoneyScraper(BaseScraper):
             theme_params = {
                 **DEFAULT_PARAMS,
                 "fid": "f12",
-                "fs": "m:90+t:3+f:!50",
+                "fs": EM_CONCEPT_LIST_FS,
             }
-            theme_data = await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
+
+            async def _fetch_quote_list():
+                return await self.fetch_all_pages(EASTMONEY_API_BASE, theme_params)
+
+            theme_data = await concept_cache_get_or_fetch(
+                EM_THEME_LIST_KEY,
+                _fetch_quote_list,
+            )
             themes = self.parse_theme_list(theme_data)
             trade_date = self._extract_trade_date(theme_data) or date.today()
         if not themes:

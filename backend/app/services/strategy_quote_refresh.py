@@ -11,10 +11,13 @@ from typing import Any
 
 import akshare as ak
 
-from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.scrapers.anti_scraping import AntiScrapingMiddleware
+from app.scrapers.concept_list_cache import (
+    AKSHARE_CONCEPT_NAME_EM_KEY,
+    get_or_fetch as concept_cache_get_or_fetch,
+)
 from app.scrapers.eastmoney import EastMoneyScraper
+from app.scrapers.middleware_factory import build_anti_scraping_middleware
 from app.services.quotes_refresh_race import race_theme_quotes
 
 logger = get_logger(__name__)
@@ -105,9 +108,15 @@ async def collect_akshare_theme_quotes(
     ``only_codes`` 为 None 时解析接口返回的全部板块（全量题材竞速）；
     传入集合时仅保留策略卡等子集。
     """
-    frame = await asyncio.wait_for(
-        asyncio.to_thread(ak.stock_board_concept_name_em),
-        timeout=timeout_seconds,
+    async def _fetch_frame():
+        return await asyncio.wait_for(
+            asyncio.to_thread(ak.stock_board_concept_name_em),
+            timeout=timeout_seconds,
+        )
+
+    frame = await concept_cache_get_or_fetch(
+        AKSHARE_CONCEPT_NAME_EM_KEY,
+        _fetch_frame,
     )
     themes = _parse_akshare_themes(frame, only_codes)
     if not themes:
@@ -209,9 +218,7 @@ async def backfill_signal_board_quotes_from_hist(
 async def _collect_via_eastmoney(
     codes: set[str],
 ) -> tuple[date | None, list[dict[str, Any]]]:
-    settings = get_settings()
-    middleware = AntiScrapingMiddleware(
-        proxy_url=settings.PROXY_URL if settings.PROXY_ENABLED else None,
+    middleware = build_anti_scraping_middleware(
         min_interval=0.2,
         max_interval=0.6,
         max_retries=1,
@@ -252,9 +259,7 @@ async def _refresh_strategy_quotes_inner(
     normalized_codes = {_normalize_board_code(code) for code in codes}
     attempts = ("eastmoney", "akshare")
 
-    settings = get_settings()
-    middleware = AntiScrapingMiddleware(
-        proxy_url=settings.PROXY_URL if settings.PROXY_ENABLED else None,
+    middleware = build_anti_scraping_middleware(
         min_interval=0.2,
         max_interval=0.6,
         max_retries=1,

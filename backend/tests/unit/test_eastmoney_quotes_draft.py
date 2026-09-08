@@ -11,6 +11,8 @@ from app.scrapers.eastmoney import EastMoneyScraper
 
 @pytest.mark.asyncio
 async def test_collect_theme_quotes_returns_data_without_saving():
+    from app.scrapers import concept_list_cache
+    concept_list_cache.clear()
     scraper = EastMoneyScraper()
     quote_time = 1721203200  # 任意有效时间戳，具体日期由 _extract_trade_date 解析
     theme_payload = {

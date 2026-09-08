@@ -23,6 +23,10 @@ from app.models.stock import Stock
 from app.models.theme import Theme
 from app.scrapers.anti_scraping import AntiScrapingMiddleware
 from app.scrapers.base import BaseScraper
+from app.scrapers.concept_list_cache import (
+    AKSHARE_CONCEPT_NAME_EM_KEY,
+    get_or_fetch as concept_cache_get_or_fetch,
+)
 from app.scrapers.draft_types import FullScrapeDraft
 
 logger = get_logger(__name__)
@@ -427,7 +431,13 @@ class AKShareScraper(BaseScraper):
             if cancel is not None and cancel.is_set():
                 raise asyncio.CancelledError()
             try:
-                frame = await asyncio.to_thread(ak.stock_board_concept_name_em)
+                async def _fetch_frame():
+                    return await asyncio.to_thread(ak.stock_board_concept_name_em)
+
+                frame = await concept_cache_get_or_fetch(
+                    AKSHARE_CONCEPT_NAME_EM_KEY,
+                    _fetch_frame,
+                )
                 last_error = None
                 break
             except Exception as e:

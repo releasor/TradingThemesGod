@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # 自动采集配置
     SCRAPER_AUTO_ENABLED: bool = True
     SCRAPER_INTERVAL_SECONDS: int = 21600
+    # 最近一次成功采集未超过该秒数则跳过本轮周期任务（避免重启狂刷）
+    SCRAPER_SKIP_IF_FRESH_SECONDS: int = 21600
+    # 概念列表短缓存 TTL（秒）；重叠 refresh/竞速共享
+    SCRAPER_CONCEPT_LIST_CACHE_TTL_SECONDS: int = 60
+    # 东财全量成分股并发上限（1–4；仍受中间件 interval lock 约束）
+    SCRAPER_EM_CONSTITUENT_CONCURRENCY: int = 3
     THEME_INSIGHT_AUTO_ENABLED: bool = True
     THEME_INSIGHT_INTERVAL_SECONDS: int = 3600
     THEME_INSIGHT_BATCH_SIZE: int = 10
@@ -73,6 +79,15 @@ class Settings(BaseSettings):
     def tushare_ready(self) -> bool:
         """是否启用且已配置 token。"""
         return bool(self.TUSHARE_ENABLED) and bool((self.TUSHARE_TOKEN or "").strip())
+
+    @property
+    def scraper_em_constituent_concurrency(self) -> int:
+        """东财成分股并发，钳制在 1–4。"""
+        try:
+            value = int(self.SCRAPER_EM_CONSTITUENT_CONCURRENCY)
+        except (TypeError, ValueError):
+            value = 3
+        return max(1, min(4, value))
 
     @property
     def database_url(self) -> str:

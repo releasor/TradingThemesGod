@@ -55,6 +55,20 @@ class ScraperRunRepository(BaseRepository):
         await self.session.flush()
         return run
 
+    async def get_latest_completed(self, source: str) -> ScraperRun | None:
+        """最近一次成功完成的运行记录。"""
+        stmt = (
+            select(ScraperRun)
+            .where(
+                ScraperRun.source == source,
+                ScraperRun.status == "completed",
+            )
+            .order_by(desc(ScraperRun.finished_at), desc(ScraperRun.started_at))
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def list_by_source(
         self,
         source: str | None = None,
