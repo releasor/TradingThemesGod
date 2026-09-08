@@ -5,6 +5,7 @@ import { login } from '@/api/auth'
 import { fetchCurrentUser } from '@/api/auth'
 import { GlowCard } from '@/components/GlowCard'
 import { useAuthStore } from '@/stores/auth'
+import { resolvePostAuthPath } from '@/features/home/navHub'
 
 function errorMessage(error: unknown): string {
   const value = error as {
@@ -25,10 +26,10 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const fromQuery = searchParams.get('from')
-  const from =
+  const from = resolvePostAuthPath(
     (location.state as { from?: string } | null)?.from ||
-    (fromQuery?.startsWith('/') ? fromQuery : null) ||
-    '/settings/models'
+      (fromQuery?.startsWith('/') ? fromQuery : null)
+  )
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()

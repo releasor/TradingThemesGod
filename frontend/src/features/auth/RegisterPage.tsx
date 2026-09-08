@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { fetchCurrentUser, register } from '@/api/auth'
 import { GlowCard } from '@/components/GlowCard'
 import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_POST_AUTH_PATH } from '@/features/home/navHub'
 
 function errorMessage(error: unknown): string {
   const value = error as {
@@ -30,7 +31,7 @@ export function RegisterPage() {
       useAuthStore.setState({ token: tokenResponse.access_token })
       const user = await fetchCurrentUser()
       setAuth(tokenResponse.access_token, user)
-      navigate('/settings/models', { replace: true })
+      navigate(DEFAULT_POST_AUTH_PATH, { replace: true })
     } catch (err) {
       setError(errorMessage(err))
     } finally {

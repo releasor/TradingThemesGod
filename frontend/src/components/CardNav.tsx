@@ -59,7 +59,7 @@ function BrandLogoMark({ title }: { title: string }) {
     <svg
       className="card-nav-logo-mark"
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 180 36"
+      viewBox="0 0 230 36"
       fill="none"
       role="img"
       aria-label={title}
@@ -80,7 +80,7 @@ function BrandLogoMark({ title }: { title: string }) {
         fontSize="16"
         fontWeight="700"
       >
-        TradingThemes
+        TradingThemesGod
       </text>
     </svg>
   )

@@ -8,6 +8,7 @@ import { ToastContainer, useToast, type Toast, type ToastType } from '@/componen
 import { onApiError } from '@/api/client'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GlobalSideRaysBackground } from '@/components/GlobalSideRaysBackground'
+import { GlobalGlowCursorBackground } from '@/components/GlobalGlowCursorBackground'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { GlobalKeyboardShortcuts } from '@/components/GlobalKeyboardShortcuts'
 
@@ -68,6 +69,9 @@ const MainlineGraphPage = lazy(() =>
   import('@/features/mainline-graph/MainlineGraphPage').then((m) => ({
     default: m.MainlineGraphPage,
   }))
+)
+const NavigationHub = lazy(() =>
+  import('@/features/home/NavigationHub').then((m) => ({ default: m.NavigationHub }))
 )
 const LoginPage = lazy(() =>
   import('@/features/auth/LoginPage').then((m) => ({ default: m.LoginPage }))
@@ -145,9 +149,20 @@ function App() {
           <ScrollToTop />
           <GlobalKeyboardShortcuts />
           <GlobalSideRaysBackground />
+          <GlobalGlowCursorBackground />
           <div className="relative z-10 min-h-screen">
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
+                <Route
+                  path="/home"
+                  element={
+                    <ErrorBoundary>
+                      <ProtectedRoute>
+                        <NavigationHub />
+                      </ProtectedRoute>
+                    </ErrorBoundary>
+                  }
+                />
                 <Route
                   path="/"
                   element={

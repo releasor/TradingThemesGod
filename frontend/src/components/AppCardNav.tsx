@@ -65,7 +65,7 @@ export function AppCardNav({ className = '' }: { className?: string }) {
       <div className="absolute left-3 top-3 z-50 max-w-[min(22rem,calc(50%-3.5rem))] sm:left-4 sm:top-4">
         <MarketStatusNav />
       </div>
-      <CardNav logoAlt="TradingThemesGod" items={APP_CARD_NAV_ITEMS} logoHref="/" />
+      <CardNav logoAlt="TradingThemesGod" items={APP_CARD_NAV_ITEMS} logoHref="/home" />
       <div className="absolute right-3 top-3 z-50 flex h-9 items-center gap-2 sm:right-4 sm:top-4">
         <KeyboardShortcutsButton />
         <AuthNav />
