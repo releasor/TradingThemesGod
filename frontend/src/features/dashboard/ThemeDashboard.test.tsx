@@ -503,7 +503,7 @@ describe('ThemeDashboard', () => {
   it('点击市场表现可进入详情', async () => {
     renderDashboard()
     await userEvent.click(await screen.findByRole('button', { name: /昨日涨停/ }))
-    expect(mockNavigate).toHaveBeenCalledWith('/themes/81', { state: { from: '/' } })
+    expect(mockNavigate).toHaveBeenCalledWith('/themes/81', { state: { from: '/dashboard' } })
   })
 
   it('市场表现失败时不影响普通题材', async () => {

@@ -11,7 +11,7 @@ export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
     links: [
       {
         label: '打开看板',
-        href: '/',
+        href: '/dashboard',
         ariaLabel: '进入题材看板',
       },
       {
@@ -21,12 +21,12 @@ export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
       },
       {
         label: '短线雷达',
-        href: '/#short-term-radar',
+        href: '/dashboard#short-term-radar',
         ariaLabel: '跳转到短线机会雷达',
       },
       {
         label: '策略与情绪',
-        href: '/#strategy',
+        href: '/dashboard#strategy',
         ariaLabel: '查看策略与情绪卡',
       },
     ],

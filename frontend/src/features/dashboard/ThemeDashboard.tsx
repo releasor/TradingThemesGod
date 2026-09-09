@@ -205,7 +205,7 @@ export function ThemeDashboard() {
   )
 
   const handleThemeClick = useCallback(
-    (themeId: number) => navigate(`/themes/${themeId}`, { state: { from: '/' } }),
+    (themeId: number) => navigate(`/themes/${themeId}`, { state: { from: '/dashboard' } }),
     [navigate]
   )
 

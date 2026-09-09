@@ -25,21 +25,15 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 describe('resolvePostAuthPath', () => {
-  it('defaults to home', () => {
+  it('defaults to project launch page', () => {
     expect(resolvePostAuthPath(null)).toBe(DEFAULT_POST_AUTH_PATH)
-    expect(resolvePostAuthPath(undefined)).toBe('/home')
-    expect(resolvePostAuthPath('/login')).toBe('/home')
-    expect(resolvePostAuthPath('/register')).toBe('/home')
-  })
-
-  it('keeps deep links', () => {
-    expect(resolvePostAuthPath('/themes')).toBe('/themes')
-    expect(resolvePostAuthPath('/settings/models')).toBe('/settings/models')
+    expect(resolvePostAuthPath(undefined)).toBe('/')
+    expect(resolvePostAuthPath('/login')).toBe('/')
   })
 })
 
 describe('NavigationHub', () => {
-  it('renders brand hero with ripple background and non-settings entries', () => {
+  it('renders TradingThemesGod module hub', () => {
     render(
       <MemoryRouter>
         <NavigationHub />
@@ -47,14 +41,15 @@ describe('NavigationHub', () => {
     )
 
     expect(screen.getByTestId('navigation-hub')).toBeInTheDocument()
-    expect(screen.getByTestId('ripple-distortion')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'TradingThemesGod' })).toBeInTheDocument()
-    expect(screen.getByText(/releasor/)).toBeInTheDocument()
+    expect(screen.getByText(/欢迎回来，releasor/)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '题材看板' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '复盘研究' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: '设置' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '进入题材库' })).toHaveAttribute('href', '/themes')
-    expect(screen.getByRole('link', { name: '进入复盘台' })).toHaveAttribute('href', '/review')
-    expect(screen.queryByRole('link', { name: '打开模型设置' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '进入题材看板' })).toHaveAttribute(
+      'href',
+      '/dashboard'
+    )
+    expect(screen.getByRole('link', { name: /返回项目入口/ })).toHaveAttribute('href', '/')
+    expect(screen.queryByRole('link', { name: '进入 Studio Footer' })).not.toBeInTheDocument()
   })
 })

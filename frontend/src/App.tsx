@@ -1,5 +1,5 @@
 import { lazy, Suspense, createContext, useContext, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ScrollToTop } from '@/components/ScrollToTop'
 import { NotFound } from '@/components/NotFound'
@@ -73,6 +73,14 @@ const MainlineGraphPage = lazy(() =>
 const NavigationHub = lazy(() =>
   import('@/features/home/NavigationHub').then((m) => ({ default: m.NavigationHub }))
 )
+const ProjectLaunchPage = lazy(() =>
+  import('@/features/launch/ProjectLaunchPage').then((m) => ({
+    default: m.ProjectLaunchPage,
+  }))
+)
+const StudioFooterPage = lazy(() =>
+  import('@/studio-footer/StudioFooterPage').then((m) => ({ default: m.default }))
+)
 const LoginPage = lazy(() =>
   import('@/features/auth/LoginPage').then((m) => ({ default: m.LoginPage }))
 )
@@ -120,6 +128,189 @@ function PageSkeleton() {
   )
 }
 
+function AppShell() {
+  const location = useLocation()
+  const toast = useToastContext()
+  const isStudioFooter = location.pathname === '/studio-footer'
+
+  if (isStudioFooter) {
+    return (
+      <Suspense fallback={null}>
+        <Routes>
+          <Route
+            path="/studio-footer"
+            element={
+              <ErrorBoundary>
+                <StudioFooterPage />
+              </ErrorBoundary>
+            }
+          />
+        </Routes>
+      </Suspense>
+    )
+  }
+
+  return (
+    <>
+      <ScrollToTop />
+      <GlobalKeyboardShortcuts />
+      <GlobalSideRaysBackground />
+      <GlobalGlowCursorBackground />
+      <div className="relative z-10 min-h-screen">
+        <Suspense fallback={<PageSkeleton />}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <ErrorBoundary>
+                  <ProjectLaunchPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/home"
+              element={
+                <ErrorBoundary>
+                  <NavigationHub />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ErrorBoundary>
+                  <ThemeDashboard />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/themes"
+              element={
+                <ErrorBoundary>
+                  <ThemeLibrary />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/themes/:id"
+              element={
+                <ErrorBoundary>
+                  <ThemeDetail />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/ai-analysis"
+              element={
+                <ErrorBoundary>
+                  <AiStockAnalysis />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/review"
+              element={
+                <ErrorBoundary>
+                  <ReviewDesk />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/catalysts"
+              element={
+                <ErrorBoundary>
+                  <CatalystRadar />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/mining"
+              element={
+                <ErrorBoundary>
+                  <ThemeMiningBoard />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/mainline-graph"
+              element={
+                <ErrorBoundary>
+                  <MainlineGraphPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/login"
+              element={
+                <ErrorBoundary>
+                  <LoginPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <ErrorBoundary>
+                  <RegisterPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/settings/models"
+              element={
+                <ErrorBoundary>
+                  <ProtectedRoute>
+                    <ModelSettings />
+                  </ProtectedRoute>
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/settings/shortcuts"
+              element={
+                <ErrorBoundary>
+                  <ShortcutsSettings />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/settings/account"
+              element={
+                <ErrorBoundary>
+                  <AccountSettings />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/settings/calendar"
+              element={
+                <ErrorBoundary>
+                  <ProtectedRoute>
+                    <TradingCalendarSettings />
+                  </ProtectedRoute>
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/settings/integrations"
+              element={
+                <ErrorBoundary>
+                  <ProtectedRoute>
+                    <IntegrationsSettings />
+                  </ProtectedRoute>
+                </ErrorBoundary>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </div>
+      <ToastContainer toasts={toast.toasts} onClose={toast.removeToast} />
+      <DevPerformancePanel />
+    </>
+  )
+}
+
 function App() {
   const toast = useToast()
 
@@ -146,156 +337,8 @@ function App() {
     <ErrorBoundary>
       <ToastContext.Provider value={toast}>
         <Router>
-          <ScrollToTop />
-          <GlobalKeyboardShortcuts />
-          <GlobalSideRaysBackground />
-          <GlobalGlowCursorBackground />
-          <div className="relative z-10 min-h-screen">
-            <Suspense fallback={<PageSkeleton />}>
-              <Routes>
-                <Route
-                  path="/home"
-                  element={
-                    <ErrorBoundary>
-                      <ProtectedRoute>
-                        <NavigationHub />
-                      </ProtectedRoute>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeDashboard />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/themes"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeLibrary />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/themes/:id"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeDetail />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/ai-analysis"
-                  element={
-                    <ErrorBoundary>
-                      <AiStockAnalysis />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/review"
-                  element={
-                    <ErrorBoundary>
-                      <ReviewDesk />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/catalysts"
-                  element={
-                    <ErrorBoundary>
-                      <CatalystRadar />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/mining"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeMiningBoard />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/mainline-graph"
-                  element={
-                    <ErrorBoundary>
-                      <MainlineGraphPage />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/login"
-                  element={
-                    <ErrorBoundary>
-                      <LoginPage />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/register"
-                  element={
-                    <ErrorBoundary>
-                      <RegisterPage />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings/models"
-                  element={
-                    <ErrorBoundary>
-                      <ProtectedRoute>
-                        <ModelSettings />
-                      </ProtectedRoute>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings/shortcuts"
-                  element={
-                    <ErrorBoundary>
-                      <ShortcutsSettings />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings/account"
-                  element={
-                    <ErrorBoundary>
-                      <AccountSettings />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings/calendar"
-                  element={
-                    <ErrorBoundary>
-                      <ProtectedRoute>
-                        <TradingCalendarSettings />
-                      </ProtectedRoute>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings/integrations"
-                  element={
-                    <ErrorBoundary>
-                      <ProtectedRoute>
-                        <IntegrationsSettings />
-                      </ProtectedRoute>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </div>
+          <AppShell />
         </Router>
-        <ToastContainer toasts={toast.toasts} onClose={toast.removeToast} />
-        <DevPerformancePanel />
       </ToastContext.Provider>
     </ErrorBoundary>
   )

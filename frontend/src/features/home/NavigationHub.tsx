@@ -1,4 +1,4 @@
-/** 登录后导航页 — 各业务入口总览 */
+/** 登录后 TradingThemesGod 功能导航页 */
 
 import { Link } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
@@ -71,13 +71,20 @@ export function NavigationHub() {
 
         <div className="relative z-10 flex min-h-[28rem] items-center justify-center px-5 py-12 text-center sm:min-h-[32rem] sm:px-8 sm:py-16 lg:min-h-[36rem] lg:px-10">
           <div className="mx-auto max-w-2xl">
-            <p className="text-sm font-medium tracking-wide text-muted-foreground">工作台</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground drop-shadow-sm sm:text-5xl lg:text-6xl">
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground drop-shadow-sm sm:text-5xl lg:text-6xl">
               TradingThemesGod
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground sm:text-lg">
-              {username ? `${username}，` : ''}
-              选择要进入的页面。题材看板与复盘研究都在这里。
+              {username ? `欢迎回来，${username}` : '欢迎回来'}
+              。从下方入口进入题材看板或复盘研究。
+            </p>
+            <p className="mt-3">
+              <Link
+                to="/"
+                className="text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              >
+                ← 返回项目入口
+              </Link>
             </p>
           </div>
         </div>
@@ -106,7 +113,7 @@ export function NavigationHub() {
                     NAV_HUB_DESCRIPTIONS[link.href] || '打开该功能页面'
                   return (
                     <li key={`${section.label}-${link.href}`}>
-                      <GlowCard className="h-full transition-transform duration-200 hover:-translate-y-0.5">
+                      <GlowCard className="h-full transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0">
                         <Link
                           to={link.href}
                           aria-label={link.ariaLabel}
@@ -120,7 +127,7 @@ export function NavigationHub() {
                               {link.label}
                             </span>
                             <ArrowUpRight
-                              className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground"
+                              className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground group-active:scale-95"
                               aria-hidden
                             />
                           </div>

@@ -391,7 +391,7 @@ describe('ThemeDetail', () => {
   describe('导航', () => {
     it('从主页进入时点击返回按钮导航到主页', async () => {
       const user = userEvent.setup()
-      mockLocationState = { from: '/' }
+      mockLocationState = { from: '/dashboard' }
       vi.mocked(fetchThemeDetail).mockResolvedValue(mockThemeDetail)
       renderThemeDetail()
       await screen.findAllByText('人工智能')

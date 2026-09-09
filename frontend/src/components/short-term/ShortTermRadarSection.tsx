@@ -174,7 +174,7 @@ export function ShortTermRadarSection({
       onSelectTheme(themeId)
       return
     }
-    navigate(`/themes/${themeId}`, { state: { from: '/' } })
+    navigate(`/themes/${themeId}`, { state: { from: '/dashboard' } })
   }
 
   const items = data?.items ?? []
