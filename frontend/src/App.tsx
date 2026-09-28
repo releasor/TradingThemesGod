@@ -1,5 +1,5 @@
 import { lazy, Suspense, createContext, useContext, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ScrollToTop } from '@/components/ScrollToTop'
 import { NotFound } from '@/components/NotFound'
@@ -75,6 +75,36 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import('@/features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage }))
 )
+const ProjectLaunchPage = lazy(() =>
+  import('@/features/launch/ProjectLaunchPage').then((m) => ({
+    default: m.ProjectLaunchPage,
+  }))
+)
+const PromptWorkbenchShell = lazy(() =>
+  import('@/features/prompt-workbench/PromptWorkbenchShell').then((m) => ({
+    default: m.PromptWorkbenchShell,
+  }))
+)
+const PromptDesignPage = lazy(() =>
+  import('@/features/prompt-workbench/pages/DesignPage').then((m) => ({
+    default: m.DesignPage,
+  }))
+)
+const PromptOptimizePage = lazy(() =>
+  import('@/features/prompt-workbench/pages/OptimizePage').then((m) => ({
+    default: m.OptimizePage,
+  }))
+)
+const PromptLibraryPage = lazy(() =>
+  import('@/features/prompt-workbench/pages/LibraryPage').then((m) => ({
+    default: m.LibraryPage,
+  }))
+)
+const PromptChatPage = lazy(() =>
+  import('@/features/prompt-workbench/pages/ChatPage').then((m) => ({
+    default: m.ChatPage,
+  }))
+)
 
 // Toast 上下文
 interface ToastContextValue {
@@ -101,7 +131,7 @@ export function useToastContext() {
 function PageSkeleton() {
   return (
     <div className="relative z-10 min-h-screen">
-      <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border/60 bg-background/80 shadow-lg shadow-black/5 backdrop-blur-md sm:mx-4 sm:mt-4">
+      <header className="sticky top-3 z-20 mx-3 mt-3 rounded-xl border border-border bg-card/90 shadow-card backdrop-blur-md sm:mx-4 sm:mt-4">
         <div className="mx-auto flex w-full max-w-none items-center gap-4 px-3 py-4 sm:px-4 lg:px-5 xl:px-6">
           <Skeleton className="h-8 w-48" />
         </div>
@@ -150,6 +180,14 @@ function App() {
               <Routes>
                 <Route
                   path="/"
+                  element={
+                    <ErrorBoundary>
+                      <ProjectLaunchPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/dashboard"
                   element={
                     <ErrorBoundary>
                       <ThemeDashboard />
@@ -274,6 +312,50 @@ function App() {
                     </ErrorBoundary>
                   }
                 />
+                <Route
+                  path="/prompt"
+                  element={
+                    <ErrorBoundary>
+                      <ProtectedRoute>
+                        <PromptWorkbenchShell />
+                      </ProtectedRoute>
+                    </ErrorBoundary>
+                  }
+                >
+                  <Route index element={<Navigate to="optimize" replace />} />
+                  <Route
+                    path="design"
+                    element={
+                      <ErrorBoundary>
+                        <PromptDesignPage />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="optimize"
+                    element={
+                      <ErrorBoundary>
+                        <PromptOptimizePage />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="library"
+                    element={
+                      <ErrorBoundary>
+                        <PromptLibraryPage />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="chat"
+                    element={
+                      <ErrorBoundary>
+                        <PromptChatPage />
+                      </ErrorBoundary>
+                    }
+                  />
+                </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

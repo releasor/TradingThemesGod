@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 import { CardNav, type CardNavItem } from '@/components/CardNav'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AuthNav } from '@/components/AuthNav'
@@ -11,7 +13,7 @@ export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
     links: [
       {
         label: '打开看板',
-        href: '/',
+        href: '/dashboard',
         ariaLabel: '进入题材看板',
       },
       {
@@ -21,12 +23,12 @@ export const APP_CARD_NAV_ITEMS: CardNavItem[] = [
       },
       {
         label: '短线雷达',
-        href: '/#short-term-radar',
+        href: '/dashboard#short-term-radar',
         ariaLabel: '跳转到短线机会雷达',
       },
       {
         label: '策略与情绪',
-        href: '/#strategy',
+        href: '/dashboard#strategy',
         ariaLabel: '查看策略与情绪卡',
       },
     ],
@@ -65,8 +67,14 @@ export function AppCardNav({ className = '' }: { className?: string }) {
       <div className="absolute left-3 top-3 z-50 max-w-[min(22rem,calc(50%-3.5rem))] sm:left-4 sm:top-4">
         <MarketStatusNav />
       </div>
-      <CardNav logoAlt="TradingThemesGod" items={APP_CARD_NAV_ITEMS} logoHref="/" />
-      <div className="absolute right-3 top-3 z-50 flex h-9 items-center gap-2 sm:right-4 sm:top-4">
+      <CardNav logoAlt="TradingThemesGod" items={APP_CARD_NAV_ITEMS} logoHref="/dashboard" />
+      <div className="absolute right-3 top-3 z-50 flex items-center gap-2 sm:right-4 sm:top-4">
+        <Link
+          to="/"
+          className="inline-flex h-9 items-center rounded-xl border border-border/70 bg-background/70 px-2.5 text-xs text-muted-foreground backdrop-blur-sm hover:bg-accent hover:text-foreground sm:text-sm"
+        >
+          返回入口
+        </Link>
         <KeyboardShortcutsButton />
         <AuthNav />
         <ThemeToggle />

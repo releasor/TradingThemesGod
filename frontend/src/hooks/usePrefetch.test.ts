@@ -3,16 +3,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { usePrefetchTheme, usePrefetchStock } from './usePrefetch'
+import { usePrefetchTheme } from './usePrefetch'
 import React from 'react'
 
 // Mock API
 vi.mock('@/api/theme', () => ({
   fetchThemeDetail: vi.fn().mockResolvedValue({ id: 1, name: 'test' }),
-}))
-
-vi.mock('@/api/stock', () => ({
-  fetchStockDetail: vi.fn().mockResolvedValue({ code: '000001', name: 'test' }),
 }))
 
 function createWrapper() {
@@ -43,24 +39,5 @@ describe('usePrefetchTheme', () => {
     const { result } = renderHook(() => usePrefetchTheme(), { wrapper })
     // Call the prefetch function - it should not throw
     expect(() => result.current(42)).not.toThrow()
-  })
-})
-
-describe('usePrefetchStock', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('returns a function', () => {
-    const { result } = renderHook(() => usePrefetchStock(), {
-      wrapper: createWrapper(),
-    })
-    expect(typeof result.current).toBe('function')
-  })
-
-  it('calls prefetchQuery with stock code', () => {
-    const wrapper = createWrapper()
-    const { result } = renderHook(() => usePrefetchStock(), { wrapper })
-    expect(() => result.current('000001')).not.toThrow()
   })
 })

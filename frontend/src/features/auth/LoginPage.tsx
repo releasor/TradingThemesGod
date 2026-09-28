@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { login } from '@/api/auth'
 import { fetchCurrentUser } from '@/api/auth'
 import { GlowCard } from '@/components/GlowCard'
+import { resolvePostAuthPath } from '@/features/launch/projectEntries'
 import { useAuthStore } from '@/stores/auth'
 
 function errorMessage(error: unknown): string {
@@ -25,10 +26,10 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const fromQuery = searchParams.get('from')
-  const from =
+  const from = resolvePostAuthPath(
     (location.state as { from?: string } | null)?.from ||
-    (fromQuery?.startsWith('/') ? fromQuery : null) ||
-    '/settings/models'
+      (fromQuery?.startsWith('/') ? fromQuery : null)
+  )
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()

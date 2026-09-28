@@ -6,7 +6,6 @@
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { fetchThemeDetail } from '@/api/theme'
-import { fetchStockDetail } from '@/api/stock'
 
 /**
  * 题材详情预取 Hook
@@ -31,36 +30,6 @@ export function usePrefetchTheme() {
       queryClient.prefetchQuery({
         queryKey: ['theme-detail', themeId],
         queryFn: () => fetchThemeDetail(themeId),
-        staleTime: 5 * 60 * 1000, // 5 分钟
-      })
-    },
-    [queryClient]
-  )
-}
-
-/**
- * 股票详情预取 Hook
- *
- * @example
- * ```tsx
- * const prefetchStock = usePrefetchStock()
- *
- * <button
- *   onMouseEnter={() => prefetchStock(stock.code)}
- *   onClick={() => showStockDetail(stock.code)}
- * >
- *   {stock.name}
- * </button>
- * ```
- */
-export function usePrefetchStock() {
-  const queryClient = useQueryClient()
-
-  return useCallback(
-    (stockCode: string) => {
-      queryClient.prefetchQuery({
-        queryKey: ['stock-detail', stockCode],
-        queryFn: () => fetchStockDetail(stockCode),
         staleTime: 5 * 60 * 1000, // 5 分钟
       })
     },

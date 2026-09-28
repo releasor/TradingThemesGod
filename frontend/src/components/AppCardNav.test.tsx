@@ -17,7 +17,7 @@ vi.mock('@/components/MarketStatusNav', () => ({
 }))
 
 describe('AppCardNav', () => {
-  it('renders card menu entries without top AI CTA', async () => {
+  it('renders card menu entries and return-to-launch control', async () => {
     render(
       <MemoryRouter>
         <AppCardNav />
@@ -29,6 +29,7 @@ describe('AppCardNav', () => {
     expect(screen.getByTestId('auth-nav')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '切换主题' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'TradingThemesGod' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '返回入口' })).toHaveAttribute('href', '/')
     expect(screen.queryByRole('link', { name: 'AI 个股分析' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '打开菜单' }))
