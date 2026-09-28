@@ -44,7 +44,7 @@ export const DashboardRefreshStatus = memo(function DashboardRefreshStatus({
   return (
     <div
       className={cn(
-        'mt-3 rounded-xl border border-border bg-card/80 px-4 py-3 shadow-sm',
+        'mt-3 rounded-xl border border-border bg-card/90 px-4 py-3 shadow-card-sm',
         className
       )}
       data-testid="dashboard-refresh-status"

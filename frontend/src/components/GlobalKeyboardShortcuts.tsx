@@ -26,11 +26,11 @@ export function GlobalKeyboardShortcuts() {
     {
       key: 'r',
       action: () => {
-        if (location.pathname === '/') {
+        if (location.pathname === '/dashboard') {
           window.dispatchEvent(new CustomEvent(DASHBOARD_REFRESH_EVENT))
           return
         }
-        navigate('/')
+        navigate('/dashboard')
       },
       description: '刷新看板',
     },

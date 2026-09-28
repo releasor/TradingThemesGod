@@ -64,7 +64,7 @@ describe('GlobalKeyboardShortcuts', () => {
   it('dispatches dashboard refresh on r when already on home', () => {
     const onRefresh = vi.fn()
     window.addEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
-    renderAt('/')
+    renderAt('/dashboard')
     press('r')
     expect(onRefresh).toHaveBeenCalledOnce()
     window.removeEventListener(DASHBOARD_REFRESH_EVENT, onRefresh)
@@ -89,6 +89,6 @@ describe('GlobalKeyboardShortcuts', () => {
       </MemoryRouter>
     )
     press('r')
-    expect(path).toBe('/')
+    expect(path).toBe('/dashboard')
   })
 })

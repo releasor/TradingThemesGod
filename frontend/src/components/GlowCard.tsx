@@ -29,7 +29,7 @@ export function GlowCard({
   contentClassName,
   animated = false,
   backgroundColor,
-  edgeSensitivity = 28,
+  edgeSensitivity = 24,
   glowRadius = 24,
   glowIntensity,
   fillOpacity,
@@ -40,17 +40,15 @@ export function GlowCard({
     <BorderGlow
       className={cn(className)}
       edgeSensitivity={edgeSensitivity}
-      glowColor={isDark ? '200 90 70' : '220 70 45'}
-      backgroundColor={
-        backgroundColor ?? (isDark ? 'hsl(222.2 84% 4.9%)' : 'hsl(0 0% 100%)')
-      }
-      borderRadius={12}
+      glowColor={isDark ? '199 95 78' : '220 72 48'}
+      backgroundColor={backgroundColor ?? 'hsl(var(--card))'}
+      borderRadius={14}
       glowRadius={glowRadius}
-      glowIntensity={glowIntensity ?? (isDark ? 1 : 0.75)}
-      coneSpread={18}
+      glowIntensity={glowIntensity ?? (isDark ? 1.35 : 0.85)}
+      coneSpread={20}
       animated={animated}
       colors={isDark ? DARK_COLORS : LIGHT_COLORS}
-      fillOpacity={fillOpacity ?? (isDark ? 0.4 : 0.28)}
+      fillOpacity={fillOpacity ?? (isDark ? 0.5 : 0.3)}
     >
       <div className={cn('h-full w-full', contentClassName)}>{children}</div>
     </BorderGlow>

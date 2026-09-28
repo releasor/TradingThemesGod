@@ -18,7 +18,8 @@ describe('ThemeCardSkeleton', () => {
     expect(wrapper).toHaveClass('border')
     expect(wrapper).toHaveClass('border-border')
     expect(wrapper).toHaveClass('bg-card')
-    expect(wrapper).toHaveClass('p-3')
+    expect(wrapper).toHaveClass('p-4')
+    expect(wrapper).toHaveClass('shadow-card-sm')
     expect(wrapper).toHaveClass('animate-pulse')
   })
 

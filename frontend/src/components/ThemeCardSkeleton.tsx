@@ -8,7 +8,7 @@ import { memo } from 'react'
 
 export const ThemeCardSkeleton = memo(function ThemeCardSkeleton() {
   return (
-    <div className="w-full rounded-xl border border-border bg-card p-4 animate-pulse">
+    <div className="w-full rounded-xl border border-border bg-card p-4 shadow-card-sm animate-pulse">
       {/* 标题骨架 */}
       <div className="h-4 w-3/4 rounded-xl bg-muted" />
 

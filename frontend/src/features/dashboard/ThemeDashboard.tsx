@@ -205,7 +205,7 @@ export function ThemeDashboard() {
   )
 
   const handleThemeClick = useCallback(
-    (themeId: number) => navigate(`/themes/${themeId}`, { state: { from: '/' } }),
+    (themeId: number) => navigate(`/themes/${themeId}`, { state: { from: '/dashboard' } }),
     [navigate]
   )
 
@@ -1372,7 +1372,7 @@ export function ThemeDashboard() {
                   </span>
                 </div>
                 {isLoading && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {Array.from({ length: limit }).map((_, i) => (
                       <ThemeCardSkeleton key={i} />
                     ))}
@@ -1389,7 +1389,7 @@ export function ThemeDashboard() {
                 {!isLoading && !isError && themes.length === 0 && <EmptyState type="no-data" />}
 
                 {!isLoading && !isError && themes.length > 0 && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {themes.map((theme) => (
                       <ThemeCard
                         key={theme.id}

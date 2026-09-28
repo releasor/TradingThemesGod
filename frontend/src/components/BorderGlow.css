@@ -15,49 +15,72 @@
   isolation: isolate;
   transform: translate3d(0, 0, 0.01px);
   display: grid;
-  border: 1px solid rgb(255 255 255 / 15%);
+  border: 1px solid rgb(255 255 255 / 14%);
   background: var(--card-bg, #120f17);
   overflow: visible;
-  box-shadow:
-    rgba(0, 0, 0, 0.1) 0px 1px 2px,
-    rgba(0, 0, 0, 0.1) 0px 2px 4px,
-    rgba(0, 0, 0, 0.1) 0px 4px 8px,
-    rgba(0, 0, 0, 0.1) 0px 8px 16px,
-    rgba(0, 0, 0, 0.1) 0px 16px 32px,
-    rgba(0, 0, 0, 0.1) 0px 32px 64px;
+  box-shadow: var(--app-shadow-card);
 }
 
-/* Spotlight that tracks the pointer — border ring only */
+/* Spotlight that tracks the pointer — flush on the card border (all sides) */
 .border-glow-card > .edge-light {
   content: '';
   position: absolute;
+  /*
+   * Expand to the border-box (padding edge is 1px inside the border).
+   * Paint the glow in a 1px transparent border so the stroke shares the
+   * card's outer radius — avoids bottom-edge inset gaps from padding masks.
+   */
   inset: -1px;
-  border-radius: inherit;
+  border-radius: var(--border-radius);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
   pointer-events: none;
   z-index: 2;
   opacity: var(--glow-opacity);
-  transition: opacity 0.15s ease-out;
-  /* Tight radius so only the local border segment lights up on large cards */
+  transition: opacity 0.22s ease-out;
   background: radial-gradient(
-    160px circle at var(--mouse-x) var(--mouse-y),
-    var(--glow-color, hsl(200deg 90% 70% / 95%)),
-    var(--glow-color-40, hsl(200deg 90% 70% / 40%)) 35%,
-    transparent 70%
-  );
-  /* Show only a thin ring (not the interior fill) */
-  padding: 1.5px;
+      200px circle at var(--mouse-x) var(--mouse-y),
+      var(--glow-color, hsl(200deg 90% 70% / 95%)),
+      var(--glow-color-60, hsl(200deg 90% 70% / 60%)) 28%,
+      var(--glow-color-30, hsl(200deg 90% 70% / 30%)) 52%,
+      transparent 72%
+    )
+    border-box;
   -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0) padding-box,
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask:
-    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0) padding-box,
     linear-gradient(#fff 0 0);
   mask-composite: exclude;
+  filter: none;
+  mix-blend-mode: normal;
+  will-change: opacity, background;
 }
 
 .border-glow-card > .edge-light::before {
   content: none;
+}
+
+/* Dark: brighter stroke, same border-aligned geometry */
+.dark .border-glow-card > .edge-light {
+  mix-blend-mode: plus-lighter;
+  background: radial-gradient(
+      220px circle at var(--mouse-x) var(--mouse-y),
+      var(--glow-color, hsl(200deg 95% 78% / 100%)),
+      var(--glow-color-60, hsl(200deg 90% 70% / 70%)) 26%,
+      var(--glow-color-40, hsl(200deg 85% 65% / 40%)) 48%,
+      transparent 70%
+    )
+    border-box;
+}
+
+/* Light: slightly stronger so the stroke reads on white cards */
+:root:not(.dark) .border-glow-card > .edge-light {
+  mix-blend-mode: normal;
 }
 
 /* Optional animated sweep (CardNav / animated GlowCard) — narrow cone on border */
@@ -123,13 +146,13 @@
 }
 
 :root:not(.dark) .border-glow-card {
-  border-color: rgb(0 0 0 / 8%);
-  box-shadow:
-    rgba(0, 0, 0, 0.04) 0px 1px 2px,
-    rgba(0, 0, 0, 0.04) 0px 2px 4px,
-    rgba(0, 0, 0, 0.04) 0px 4px 8px;
+  border-color: rgb(15 23 42 / 16%);
+  box-shadow: var(--app-shadow-card);
 }
 
 .dark .border-glow-card {
-  border-color: rgb(255 255 255 / 6%);
+  /* Explicit light rim — dark-mode primary edge cue */
+  border-width: 1px;
+  border-color: rgb(226 232 240 / 38%);
+  box-shadow: var(--app-shadow-card);
 }

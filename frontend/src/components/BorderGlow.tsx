@@ -138,10 +138,11 @@ export default function BorderGlow({
       card.style.setProperty('--mouse-x', `${((x / w) * 100).toFixed(3)}%`)
       card.style.setProperty('--mouse-y', `${((y / h) * 100).toFixed(3)}%`)
 
-      // 贴边强度：只在靠近卡片边缘时点亮
+      // 贴边强度：靠近边缘时点亮；曲线偏缓，中近边缘也够亮
       const distToEdge = Math.min(x, y, w - x, h - y)
-      const band = Math.max(56, Math.min(w, h) * 0.1)
-      const edge = Math.min(Math.max(1 - distToEdge / band, 0), 1)
+      const band = Math.max(72, Math.min(w, h) * 0.14)
+      const linear = Math.min(Math.max(1 - distToEdge / band, 0), 1)
+      const edge = Math.sqrt(linear)
       card.style.setProperty('--glow-opacity', edge.toFixed(3))
       card.style.setProperty('--edge-proximity', `${(edge * 100).toFixed(3)}`)
 

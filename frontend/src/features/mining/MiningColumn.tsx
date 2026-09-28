@@ -19,7 +19,7 @@ export function MiningColumn({
   return (
     <section
       data-testid={testId}
-      className="flex min-h-[12rem] flex-col rounded-xl border border-border/60 bg-background/40"
+      className="flex min-h-[12rem] flex-col rounded-xl border border-border bg-card/70 shadow-card-sm"
       aria-labelledby={`${testId}-heading`}
     >
       <header className="flex items-center justify-between gap-2 border-b border-border/50 px-4 py-3">

@@ -77,7 +77,7 @@ export function MiningCard({ card, showNoteButton = false }: MiningCardProps) {
   return (
     <article
       data-testid={`mining-card-${card.id}`}
-      className="rounded-xl border border-border/60 bg-background/60 p-3 sm:p-4"
+      className="rounded-xl border border-border bg-card p-3 shadow-card-sm sm:p-4"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">

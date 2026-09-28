@@ -6,7 +6,7 @@
 import { useState, useCallback, memo } from 'react'
 import { Download, FileSpreadsheet, FileJson } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { type ExportFormat, type ExportThemes, exportThemes } from '@/lib/export'
+import { type ExportFormat, exportThemes } from '@/lib/export'
 
 /** 导出按钮属性 */
 interface ExportButtonProps {

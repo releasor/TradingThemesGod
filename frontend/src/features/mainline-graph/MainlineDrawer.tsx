@@ -39,7 +39,7 @@ export function MainlineDrawer({
   return (
     <aside
       data-testid="mainline-drawer"
-      className="flex h-full min-h-[420px] flex-col rounded-xl border border-border bg-card/80 p-4 shadow-sm"
+      className="flex h-full min-h-[420px] flex-col rounded-xl border border-border bg-card/90 p-4 shadow-card-sm"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
