@@ -17,10 +17,10 @@ from slowapi.util import get_remote_address
 from app.api.auth import router as auth_router
 from app.api.catalysts import router as catalysts_router
 from app.api.errors import router as errors_router
-from app.api.health import router as health_router
 from app.api.mainline_graph import router as mainline_graph_router
 from app.api.market_calendar import router as market_calendar_router
 from app.api.integrations import router as integrations_router
+from app.api.prompt_workbench import router as prompt_workbench_router
 from app.api.mining import router as mining_router
 from app.api.model_provider import router as model_provider_router
 from app.api.news import router as news_router
@@ -146,30 +146,9 @@ def create_app() -> FastAPI:
 - **爬虫**: httpx + BeautifulSoup
 """,
         version="0.1.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_tags=[
-            {
-                "name": "themes",
-                "description": "题材相关接口 - 获取、搜索、筛选题材数据",
-            },
-            {
-                "name": "stocks",
-                "description": "股票相关接口 - 获取股票详情和事件",
-            },
-            {
-                "name": "scraper",
-                "description": "爬虫管理接口 - 触发和管理数据采集任务",
-            },
-            {
-                "name": "health",
-                "description": "健康检查接口 - 服务状态和数据库连接检查",
-            },
-            {
-                "name": "errors",
-                "description": "错误上报接口 - 接收前端错误日志",
-            },
-        ],
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
         lifespan=lifespan,
     )
 
@@ -186,40 +165,21 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 跳过日志记录的路径（健康检查和文档）
-    skip_log_paths = frozenset(
-        {
-            "/api/v1/health",
-            "/docs",
-            "/redoc",
-            "/openapi.json",
-        }
-    )
-
     # 请求日志中间件
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         """记录每个请求的方法、路径、状态码和耗时"""
-        # 跳过健康检查和文档路径
-        if request.url.path in skip_log_paths:
-            return await call_next(request)
-
-        # 生成请求 ID
         request_id = str(uuid4())
         request.state.request_id = request_id
 
         start_time = time.monotonic()
 
-        # 处理请求
         response = await call_next(request)
 
-        # 将请求 ID 添加到响应头
         response.headers["X-Request-ID"] = request_id
 
-        # 计算耗时
         duration_ms = (time.monotonic() - start_time) * 1000
 
-        # 记录请求日志
         logger.info(
             "request_completed",
             method=request.method,
@@ -232,8 +192,6 @@ def create_app() -> FastAPI:
 
         return response
 
-    # 注册路由
-    app.include_router(health_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(scraper_router, prefix="/api/v1")
     app.include_router(theme_router, prefix="/api/v1")
@@ -249,6 +207,7 @@ def create_app() -> FastAPI:
     app.include_router(mainline_graph_router, prefix="/api/v1")
     app.include_router(market_calendar_router, prefix="/api/v1")
     app.include_router(integrations_router, prefix="/api/v1")
+    app.include_router(prompt_workbench_router, prefix="/api/v1")
 
     # 全局异常处理器
     @app.exception_handler(Exception)
