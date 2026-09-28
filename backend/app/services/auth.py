@@ -1,4 +1,4 @@
-"""用户注册与登录服务。"""
+"""用户注册、登录与账号管理。"""
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import create_access_token, hash_password, verify_password
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
 
 
 class AuthService:
@@ -49,3 +55,13 @@ class AuthService:
 
     async def me(self, user: User) -> UserResponse:
         return self._response(user)
+
+    async def change_password(
+        self, user: User, payload: ChangePasswordRequest
+    ) -> None:
+        if not verify_password(payload.current_password, user.password_hash):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "当前密码不正确")
+        if payload.current_password == payload.new_password:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "新密码不能与当前密码相同")
+        user.password_hash = hash_password(payload.new_password)
+        await self.session.commit()

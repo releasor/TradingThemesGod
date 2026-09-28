@@ -21,6 +21,11 @@ export interface LoginInput {
   password: string
 }
 
+export interface ChangePasswordInput {
+  current_password: string
+  new_password: string
+}
+
 export async function register(input: RegisterInput): Promise<TokenResponse> {
   const { data } = await apiClient.post<TokenResponse>('/auth/register', input)
   return data
@@ -34,4 +39,8 @@ export async function login(input: LoginInput): Promise<TokenResponse> {
 export async function fetchCurrentUser(): Promise<AuthUser> {
   const { data } = await apiClient.get<AuthUser>('/auth/me')
   return data
+}
+
+export async function changePassword(input: ChangePasswordInput): Promise<void> {
+  await apiClient.post('/auth/change-password', input)
 }
