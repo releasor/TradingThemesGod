@@ -287,7 +287,7 @@ export function OptimizePage() {
         {!hasModel ? (
           <p className="text-sm text-amber-600 dark:text-amber-400">
             尚未配置模型，请先前往{' '}
-            <Link to="/settings/models" className="underline underline-offset-2">
+            <Link to="/settings/models?from=prompt" className="underline underline-offset-2">
               模型设置
             </Link>
           </p>

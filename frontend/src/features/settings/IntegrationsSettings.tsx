@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Database, Loader2, PlugZap } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { AppCardNav } from '@/components/AppCardNav'
 import { SettingsSubnav } from '@/components/SettingsSubnav'
 import { GlowCard } from '@/components/GlowCard'
 import {
@@ -61,7 +60,6 @@ export function IntegrationsSettings() {
 
   return (
     <div className="min-h-screen">
-      <AppCardNav />
       <main className="mx-auto w-full max-w-none space-y-5 px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
         <div className="space-y-3">
           <div className="flex items-center gap-3">

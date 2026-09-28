@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Settings } from 'lucide-react'
 
 import { fetchModelProviders } from '@/api/model-provider'
+import { AuthNav } from '@/components/AuthNav'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
 import { usePromptModelSelection } from '@/features/prompt-workbench/stores/modelSelection'
@@ -32,6 +33,14 @@ export function PromptWorkbenchShell() {
     if (preferred) setProviderId(preferred.id)
   }, [enabled, providerId, setProviderId])
 
+  useEffect(() => {
+    const previous = document.title
+    document.title = 'Prompt 工作台'
+    return () => {
+      document.title = previous
+    }
+  }, [])
+
   return (
     <div
       className="flex h-dvh w-full flex-col overflow-hidden bg-background"
@@ -40,12 +49,6 @@ export function PromptWorkbenchShell() {
       <header className="shrink-0 border-b border-border bg-card">
         <div className="flex h-14 w-full items-center gap-3 px-4 lg:gap-4 lg:px-6">
           <div className="min-w-0 shrink-0">
-            <Link
-              to="/"
-              className="block text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
-            >
-              返回入口
-            </Link>
             <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
               Prompt 工作台
             </h1>
@@ -93,7 +96,7 @@ export function PromptWorkbenchShell() {
               )}
             </select>
             <Link
-              to="/settings/models"
+              to="/settings/models?from=prompt"
               aria-label="模型设置"
               className="inline-flex h-9 items-center gap-1 rounded-md border border-input px-2.5 text-sm hover:bg-accent"
             >
@@ -101,6 +104,7 @@ export function PromptWorkbenchShell() {
               <span className="hidden sm:inline">模型设置</span>
             </Link>
             <ThemeToggle />
+            <AuthNav accountTo="/settings/account?from=prompt" />
           </div>
         </div>
       </header>

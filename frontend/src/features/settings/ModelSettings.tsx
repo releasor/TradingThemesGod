@@ -16,7 +16,6 @@ import {
   Wifi,
   Zap,
 } from 'lucide-react'
-import { AppCardNav } from '@/components/AppCardNav'
 import { SettingsSubnav } from '@/components/SettingsSubnav'
 import { GlowCard } from '@/components/GlowCard'
 import { cn } from '@/lib/utils'
@@ -275,7 +274,6 @@ export function ModelSettings() {
 
   return (
     <div className="min-h-screen">
-      <AppCardNav />
 
       <div className="mx-auto w-full max-w-none space-y-5 px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
         <div className="space-y-3">
@@ -285,7 +283,7 @@ export function ModelSettings() {
             </div>
             <div>
               <h1 className="text-xl font-semibold tracking-tight">模型设置</h1>
-              <p className="text-sm text-muted-foreground">配置图谱分析使用的模型服务</p>
+              <p className="text-sm text-muted-foreground">配置各模块共用的模型服务</p>
             </div>
           </div>
           <SettingsSubnav />
@@ -296,7 +294,7 @@ export function ModelSettings() {
           transition={{ ...pageMotion.transition, delay: 0.06 }}
           className="grid w-full gap-6 lg:grid-cols-[280px_1fr]"
         >
-        <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <GlowCard animated className="overflow-hidden">
             <div className="p-4">
               <motion.button

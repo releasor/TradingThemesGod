@@ -5,7 +5,13 @@ import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
 /** 顶栏右侧：当前账号 / 登录注册 / 退出 */
-export function AuthNav({ className = '' }: { className?: string }) {
+export function AuthNav({
+  className = '',
+  accountTo = '/settings/account',
+}: {
+  className?: string
+  accountTo?: string
+}) {
   const navigate = useNavigate()
   const token = useAuthStore((state) => state.token)
   const user = useAuthStore((state) => state.user)
@@ -34,7 +40,7 @@ export function AuthNav({ className = '' }: { className?: string }) {
   return (
     <div className={cn('flex items-center gap-1.5', className)} data-testid="auth-nav">
       <Link
-        to="/settings/account"
+        to={accountTo}
         className="inline-flex h-9 max-w-[9rem] items-center gap-1.5 truncate rounded-xl border border-border/70 bg-background/70 px-2.5 text-xs text-muted-foreground backdrop-blur-sm hover:bg-accent sm:text-sm"
         title={user?.username ? `${user.username} · 账号设置` : '账号设置'}
         aria-label="打开账号设置"

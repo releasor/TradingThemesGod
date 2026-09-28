@@ -51,5 +51,25 @@ describe('PromptWorkbenchShell', () => {
     expect(screen.getByRole('link', { name: '设计' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '我的 Prompt' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '自由聊天' })).toBeInTheDocument()
+    expect(document.title).toBe('Prompt 工作台')
+  })
+
+  it('links model settings with from=prompt', () => {
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/prompt/optimize']}>
+          <Routes>
+            <Route path="/prompt" element={<PromptWorkbenchShell />}>
+              <Route path="optimize" element={<div>opt</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    expect(screen.getByRole('link', { name: '模型设置' })).toHaveAttribute(
+      'href',
+      '/settings/models?from=prompt'
+    )
   })
 })
