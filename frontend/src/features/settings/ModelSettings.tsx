@@ -30,6 +30,13 @@ import {
   type ModelProvider,
   type ModelProviderInput,
 } from '@/api/model-provider'
+import {
+  PROVIDER_PRESETS,
+  getPreset,
+  matchPresetId,
+  requiresFixedTemperature,
+  type ProviderPresetId,
+} from '@/features/settings/providerPresets'
 
 const emptyForm: ModelProviderInput = {
   name: '',
@@ -51,7 +58,7 @@ const PROTOCOL_META: Record<
 > = {
   openai_compatible: {
     label: 'OpenAI 兼容',
-    hint: '中转端 / DeepSeek / 通义等',
+    hint: '通用兼容端点 / 中转',
     accent: 'from-emerald-500/20 to-teal-500/10 text-emerald-700 dark:text-emerald-300',
     icon: Zap,
   },
@@ -158,13 +165,16 @@ function inputClassName(extra?: string) {
 
 export function ModelSettings() {
   const queryClient = useQueryClient()
-  const [editingId, setEditingId] = useState<number | undefined>()
+  // undefined = 尚未初始化（自动选中第一条）；null = 新建；number = 编辑已有
+  const [editingId, setEditingId] = useState<number | null | undefined>(undefined)
   const [form, setForm] = useState<ModelProviderInput>(emptyForm)
   const [headerText, setHeaderText] = useState('')
   const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(
     null
   )
   const [copiedKey, setCopiedKey] = useState(false)
+  const [presetId, setPresetId] = useState<ProviderPresetId>('openai_compatible')
+  const isEditingExisting = typeof editingId === 'number'
 
   const { data: providers = [], isLoading } = useQuery({
     queryKey: ['model-providers'],
@@ -172,6 +182,7 @@ export function ModelSettings() {
   })
 
   useEffect(() => {
+    // 仅在首次加载且未进入新建态时，自动选中第一条
     if (editingId !== undefined || providers.length === 0) return
     selectProvider(providers[0])
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,7 +190,10 @@ export function ModelSettings() {
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      saveModelProvider({ ...form, custom_headers: textToHeaders(headerText) }, editingId),
+      saveModelProvider(
+        { ...form, custom_headers: textToHeaders(headerText) },
+        editingId ?? undefined
+      ),
     onSuccess: async (provider) => {
       applyProvider(provider)
       setNotice({ type: 'success', message: '配置已加密保存' })
@@ -208,6 +222,7 @@ export function ModelSettings() {
     setEditingId(provider.id)
     setForm(providerToForm(provider))
     setHeaderText(headersToText(provider.custom_headers))
+    setPresetId(matchPresetId(provider.protocol, provider.base_url))
     setNotice(null)
   }
 
@@ -216,15 +231,37 @@ export function ModelSettings() {
   }
 
   function startNewProvider() {
-    setEditingId(undefined)
+    setEditingId(null)
     setForm(emptyForm)
     setHeaderText('')
+    setPresetId('openai_compatible')
     setNotice(null)
+  }
+
+  function applyPreset(nextId: ProviderPresetId) {
+    const preset = getPreset(nextId)
+    setPresetId(nextId)
+    setForm((current) => {
+      const previous = getPreset(presetId)
+      const nameWasPreset =
+        !current.name.trim() ||
+        PROVIDER_PRESETS.some((p) => p.defaultName && p.defaultName === current.name.trim())
+      return {
+        ...current,
+        protocol: preset.protocol,
+        base_url: preset.base_url || (nextId === 'openai_compatible' ? '' : current.base_url),
+        model:
+          preset.model ||
+          (previous.model && current.model === previous.model ? '' : current.model),
+        name: nameWasPreset ? preset.defaultName || '' : current.name,
+      }
+    })
   }
 
   const set = <K extends keyof ModelProviderInput>(key: K, value: ModelProviderInput[K]) =>
     setForm((current) => ({ ...current, [key]: value }))
 
+  const activePreset = getPreset(presetId)
   const protocolMeta = PROTOCOL_META[form.protocol]
   const ProtocolIcon = protocolMeta.icon
   const isBusy = saveMutation.isPending || testMutation.isPending || modelsMutation.isPending
@@ -281,13 +318,57 @@ export function ModelSettings() {
                     />
                   ))}
 
-                {!isLoading && providers.length === 0 && (
+                {!isLoading && providers.length === 0 && editingId !== null && (
                   <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
                     暂无配置，点击上方按钮创建
                   </p>
                 )}
 
                 <AnimatePresence initial={false}>
+                  {editingId === null && (
+                    <motion.button
+                      key="draft-new"
+                      type="button"
+                      layout
+                      {...listItemMotion}
+                      transition={{ duration: 0.28 }}
+                      onClick={startNewProvider}
+                      className={cn(
+                        'group relative w-full overflow-hidden rounded-xl border px-3 py-3 text-left transition-all duration-300',
+                        'border-primary/60 bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]'
+                      )}
+                      aria-current="true"
+                    >
+                      <span className="absolute inset-y-0 left-0 w-1 rounded-r-full bg-sky-500 opacity-100" />
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2 text-sm font-medium">
+                            <span
+                              className={cn(
+                                'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br',
+                                protocolMeta.accent
+                              )}
+                            >
+                              <ProtocolIcon className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="truncate">
+                              {form.name.trim() || '未命名配置'}
+                            </span>
+                          </span>
+                          <span className="mt-1.5 block truncate pl-9 text-xs text-muted-foreground">
+                            {form.model.trim() || '填写右侧表单后保存'}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 flex-col items-end gap-1">
+                          <span className="rounded-full border border-dashed border-primary/40 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            新建中
+                          </span>
+                          <span className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                        </span>
+                      </span>
+                    </motion.button>
+                  )}
+
                   {providers.map((provider, index) => {
                     const meta = PROTOCOL_META[provider.protocol]
                     const Icon = meta.icon
@@ -296,6 +377,7 @@ export function ModelSettings() {
                     return (
                       <motion.button
                         key={provider.id}
+                        type="button"
                         layout
                         {...listItemMotion}
                         transition={{ delay: index * 0.04, duration: 0.28 }}
@@ -355,7 +437,7 @@ export function ModelSettings() {
 
         <AnimatePresence mode="wait">
           <motion.form
-            key={editingId ?? 'new'}
+            key={isEditingExisting ? String(editingId) : 'new'}
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
@@ -375,7 +457,7 @@ export function ModelSettings() {
                       Provider
                     </p>
                     <h2 className="mt-1 text-lg font-semibold">
-                      {editingId ? '编辑模型配置' : '新建模型配置'}
+                      {isEditingExisting ? '编辑模型配置' : '新建模型配置'}
                     </h2>
                   </div>
                   <span
@@ -403,16 +485,26 @@ export function ModelSettings() {
                     />
                   </label>
                   <label className="space-y-2 text-sm">
-                    <FieldLabel hint={protocolMeta.hint}>协议</FieldLabel>
+                    <FieldLabel hint={activePreset.hint}>协议 / 厂商</FieldLabel>
                     <select
-                      value={form.protocol}
-                      onChange={(e) => set('protocol', e.target.value as ModelProtocol)}
+                      value={presetId}
+                      onChange={(e) => applyPreset(e.target.value as ProviderPresetId)}
                       className={inputClassName()}
                     >
-                      <option value="openai_compatible">OpenAI 兼容 / 中转端</option>
-                      <option value="anthropic">Anthropic</option>
-                      <option value="gemini">Gemini</option>
-                      <option value="ollama">Ollama</option>
+                      <optgroup label="国产厂商（OpenAI 兼容）">
+                        {PROVIDER_PRESETS.filter((p) => p.group === 'domestic').map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="通用协议">
+                        {PROVIDER_PRESETS.filter((p) => p.group === 'general').map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     </select>
                   </label>
                 </section>
@@ -439,7 +531,16 @@ export function ModelSettings() {
                       <input
                         required
                         value={form.model}
-                        onChange={(e) => set('model', e.target.value)}
+                        onChange={(e) => {
+                          const model = e.target.value
+                          setForm((current) => ({
+                            ...current,
+                            model,
+                            temperature: requiresFixedTemperature(model)
+                              ? 1
+                              : current.temperature,
+                          }))
+                        }}
                         className={inputClassName('font-mono text-xs sm:text-sm')}
                         placeholder="deepseek-chat"
                       />
@@ -497,13 +598,22 @@ export function ModelSettings() {
                     />
                   </label>
                   <label className="space-y-2 text-sm">
-                    <FieldLabel>温度</FieldLabel>
+                    <FieldLabel
+                      hint={
+                        requiresFixedTemperature(form.model)
+                          ? '当前模型仅允许温度为 1'
+                          : undefined
+                      }
+                    >
+                      温度
+                    </FieldLabel>
                     <input
                       type="number"
                       min={0}
                       max={2}
                       step={0.1}
                       value={form.temperature}
+                      disabled={requiresFixedTemperature(form.model)}
                       onChange={(e) => set('temperature', Number(e.target.value))}
                       className={inputClassName()}
                     />
