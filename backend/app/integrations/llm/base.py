@@ -83,6 +83,26 @@ class BaseLLMAdapter:
         )
         return result.content
 
+    async def stream_complete(
+        self,
+        system: str,
+        user: str,
+        *,
+        json_mode: bool = True,
+        reasoning: bool = True,
+        timeout_seconds: int | None = None,
+    ):
+        """Yield text deltas. Default: one-shot complete as a single chunk."""
+        text = await self.complete(
+            system,
+            user,
+            json_mode=json_mode,
+            reasoning=reasoning,
+            timeout_seconds=timeout_seconds,
+        )
+        if text:
+            yield text
+
     async def complete_detailed(
         self,
         system: str,
@@ -123,10 +143,49 @@ class BaseLLMAdapter:
             return self.parse_models(response.json())
 
     async def test_connection(self) -> str:
-        return await self.complete(
-            "只返回 OK，不要输出其他内容。",
-            "测试模型服务连接。",
-            json_mode=False,
-            reasoning=False,
-            timeout_seconds=min(self.timeout_seconds, 30),
+        """Verify credentials without short/magic-token probes.
+
+        Many Chinese OpenAI-compatible gateways reject "reply OK" style
+        heartbeats as illegal short-input distillation. Prefer listing
+        models; fall back to a normal workbench-style completion.
+        """
+        try:
+            models = await self.list_models()
+            if models:
+                preview = "、".join(models[:3])
+                more = f" 等 {len(models)} 个" if len(models) > 3 else f"（共 {len(models)} 个）"
+                return f"连通成功，可用模型：{preview}{more}"
+        except Exception:
+            # Models endpoint may be disabled; fall through to chat.
+            pass
+
+        system = (
+            "你是 TradingThemesGod 题材研究工作台的助手，"
+            "擅长用简洁中文说明 A 股题材逻辑、催化与风险。"
+            "回答务实，不要输出 Markdown 代码围栏，不要编造未给出的数据。"
         )
+        user = (
+            "请用三到五句话完成一次日常能力确认："
+            "1）说明你能如何帮助用户梳理题材主线；"
+            "2）提醒分析时要区分事实与推断；"
+            "3）给出一条通用的风险提示。"
+            "背景：用户正在题材看板里核对研究助手是否可用。"
+        )
+        original_max = self.max_tokens
+        try:
+            # Avoid tiny max_tokens configs that also look like probes.
+            self.max_tokens = max(int(self.max_tokens or 0), 256)
+            text_out = await self.complete(
+                system,
+                user,
+                json_mode=False,
+                reasoning=False,
+                timeout_seconds=min(self.timeout_seconds, 60),
+            )
+        finally:
+            self.max_tokens = original_max
+        cleaned = (text_out or "").strip()
+        if not cleaned:
+            raise ValueError("模型返回了空内容")
+        return cleaned[:240]
+

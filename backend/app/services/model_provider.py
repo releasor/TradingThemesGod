@@ -34,8 +34,27 @@ def model_http_error_message(exc: httpx.HTTPError) -> str:
     except (ValueError, TypeError):
         detail = response.text.strip()
 
+    lower = detail.lower()
+    if "short-input distillation" in lower or "heartbeat probing" in lower:
+        detail = (
+            "上游拒绝了短探测请求（被识别为心跳/蒸馏探测）。"
+            "请重新点「测试连接」；若仍失败，确认网关是否允许 chat completions。"
+        )
+
     message = f"模型服务返回 {response.status_code}"
     return f"{message}：{detail[:240]}" if detail else message
+
+
+def _value_error_detail(message: str) -> str:
+    lower = message.lower()
+    if "short-input distillation" in lower or "heartbeat probing" in lower:
+        return (
+            "上游把连通性请求识别成了短探测/心跳。"
+            "请保存后重试「测试连接」；当前会优先用模型列表校验，避免被拦截。"
+        )
+    return message[:300]
+
+
 
 
 class ModelProviderService:
@@ -185,7 +204,7 @@ class ModelProviderService:
             detail = (
                 model_http_error_message(exc)
                 if isinstance(exc, httpx.HTTPError)
-                else str(exc)[:300]
+                else _value_error_detail(str(exc))
             )
             raise HTTPException(502, f"模型连接失败：{detail}") from exc
         return text, int((time.monotonic() - started) * 1000)
