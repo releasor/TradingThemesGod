@@ -2,41 +2,41 @@ export const OPTIMIZE_FRAMEWORKS = [
   {
     id: 'CRISPE',
     label: 'CRISPE',
-    hint: '角色、背景、任务、格式与示例',
+    hint: '角色、背景、任务、个性与示例',
     description:
-      '适合需要明确角色、背景、任务目标、输出格式与示例的完整型 Prompt，结构最齐全。',
+      '按 Capacity/Role、Insight、Statement、Personality、Experiment 组织，适合需要明确角色与约束的完整 Prompt。',
   },
   {
     id: 'CO-STAR',
     label: 'CO-STAR',
-    hint: '精确控制风格与受众',
+    hint: '情境、目标、风格、语气、受众、格式',
     description:
-      '适合对外沟通、文案与内容生成：强调上下文、目标、风格、语气、受众与响应格式。',
+      '按 Context、Objective、Style、Tone、Audience、Response 组织，适合对外沟通与文案类生成。',
   },
   {
     id: 'APE',
     label: 'APE',
-    hint: '短任务、直接',
-    description: '适合短平快任务：动作（Action）、目的（Purpose）、期望（Expectation）三件套。',
+    hint: '行动、目的、期望',
+    description: '按 Action、Purpose、Expectation 组织，适合短平快任务，结构直给。',
   },
   {
     id: 'BROKE',
     label: 'BROKE',
-    hint: '复杂任务与可衡量结果',
+    hint: '背景、角色、目标、结果、演化',
     description:
-      '适合复杂、多步骤工作流：背景、角色、目标、关键结果与可执行步骤写清楚。',
+      '按 Background、Role、Objectives、Key results、Evolve 组织，适合复杂、多步骤工作流。',
   },
   {
     id: 'TRACE',
     label: 'TRACE',
-    hint: '用示例带动结构',
-    description: '适合需要示例驱动的任务：任务、角色、动作、上下文与示例一起约束输出。',
+    hint: '任务、请求、动作、上下文、示例',
+    description: '按 Task、Request、Action、Context、Example 组织，适合需要示例驱动的结构化任务。',
   },
   {
     id: 'RTF',
     label: 'RTF',
-    hint: '简短角色、任务、格式',
-    description: '适合极简约束：角色（Role）、任务（Task）、格式（Format）三行说清即可。',
+    hint: '角色、任务、格式',
+    description: '按 Role、Task、Format 组织，适合极简约束、说明即用的场景。',
   },
 ] as const
 
@@ -47,11 +47,19 @@ export function getFrameworkMeta(id: string) {
 }
 
 export const EXTRA_GOAL_CHIPS = [
-  { id: 'shorter', label: '更短', value: '更短、更精炼，去掉冗余' },
+  { id: 'shorter', label: '更短', value: '更短、更精炼，去掉废话' },
   { id: 'formal', label: '更正式', value: '语气更正式、专业' },
-  { id: 'vars', label: '可含变量', value: '保留并规范 {{变量}} 占位，便于复用' },
-  { id: 'json', label: '输出 JSON', value: '明确要求结构化 JSON 输出，并给出字段说明' },
+  { id: 'vars', label: '可含变量', value: '保留或补充规范 {{变量}} 占位符便于复用' },
+  { id: 'json', label: '输出 JSON', value: '明确要求结构化 JSON 输出并给出字段说明' },
   { id: 'steps', label: '分步骤', value: '要求分步骤执行，步骤清晰可检查' },
+] as const
+
+export const ITERATE_CHIPS = [
+  { id: 'shorter', label: '更短', value: '在保留要点的前提下明显缩短' },
+  { id: 'formal', label: '更正式', value: '语气更正式、专业' },
+  { id: 'vars', label: '补变量', value: '为可变部分补充 {{变量}} 占位符' },
+  { id: 'json', label: '改 JSON', value: '改为明确的结构化 JSON 输出要求' },
+  { id: 'steps', label: '更分步', value: '拆成更清晰的分步执行说明' },
 ] as const
 
 export const OPTIMIZE_SAMPLES = [
@@ -61,6 +69,6 @@ export const OPTIMIZE_SAMPLES = [
   },
   {
     title: '题材催化提炼',
-    body: '根据输入的新闻或公告，提炼可能影响 A 股题材的催化信息。输出格式：题材名称、催化类型、时间敏感度、一句话逻辑。不要编造数据。',
+    body: '根据新闻标题或公告，提炼可能影响 A 股题材的催化信息。输出格式：题材名称、催化类型、时效判断、一句话逻辑、需要核实的点。',
   },
 ] as const

@@ -39,3 +39,11 @@ def test_no_third_party_brand():
         ]
     ).lower()
     assert "prizm" not in blob
+
+
+def test_framework_extra_goal_appended():
+    text = build_optimize_system(
+        mode="framework", framework="CRISPE", extra_goal="输出 JSON"
+    )
+    assert "输出 JSON" in text
+    assert "Capacity/Role" in text or "CRISPE" in text.upper()
