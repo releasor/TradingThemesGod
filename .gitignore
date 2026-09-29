@@ -68,6 +68,9 @@ frontend/.playwright-cli/
 frontend/news-*.yaml
 frontend/news-heat-final.yaml
 
+# Local cleanup quarantine (safe rollback before permanent delete)
+_trash/
+
 # OS
 .DS_Store
 Thumbs.db
