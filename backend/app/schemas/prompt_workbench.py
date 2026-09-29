@@ -97,6 +97,18 @@ class OptimizeRunResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class OptimizeRunSummary(BaseModel):
+    id: int
+    source: str
+    result: str
+    mode: str
+    framework: str | None
+    extra_goal: str | None
+    version_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
 class ChatSessionCreate(BaseModel):
     title: str = Field(default="新对话", max_length=200)
     provider_id: int | None = None

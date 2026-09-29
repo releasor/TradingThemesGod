@@ -16,8 +16,10 @@ from app.schemas.prompt_workbench import (
     IterateRequest,
     OptimizeRequest,
     OptimizeRunResponse,
+    OptimizeRunSummary,
     TextResult,
 )
+from sqlalchemy import select
 from app.services.prompt_llm import PromptLLMService
 from app.services.prompt_templates import (
     FRAMEWORKS,
@@ -55,6 +57,27 @@ class PromptOptimizeService:
         )
         return TextResult(result=result.strip(), run_id=None)
 
+    async def design_stream(
+        self, payload: DesignRequest
+    ) -> AsyncIterator[dict[str, Any]]:
+        yield {"type": "start"}
+        parts: list[str] = []
+        status_sent = False
+        async for delta in self.llm.stream_completion(
+            build_design_system(),
+            build_design_user(payload.goal, payload.notes),
+            provider_id=payload.provider_id,
+        ):
+            if not delta:
+                if not status_sent:
+                    status_sent = True
+                    yield {"type": "status", "message": "模型思考中，正文即将开始…"}
+                continue
+            parts.append(delta)
+            yield {"type": "delta", "text": delta}
+        result = "".join(parts).strip()
+        yield {"type": "done", "result": result, "run_id": None}
+
     async def optimize(self, payload: OptimizeRequest) -> TextResult:
         framework = self._normalize_framework(payload)
         result = await self.llm.run_completion(
@@ -77,6 +100,7 @@ class PromptOptimizeService:
         # 立刻通知前端已接通，避免首 token 前右侧长时间空白
         yield {"type": "start"}
         parts: list[str] = []
+        status_sent = False
         async for delta in self.llm.stream_completion(
             build_optimize_system(
                 mode=payload.mode,
@@ -87,13 +111,17 @@ class PromptOptimizeService:
             provider_id=payload.provider_id,
         ):
             if not delta:
-                yield {"type": "status", "message": "模型思考中，正文即将开始…"}
+                if not status_sent:
+                    status_sent = True
+                    yield {"type": "status", "message": "模型思考中，正文即将开始…"}
                 continue
             parts.append(delta)
             yield {"type": "delta", "text": delta}
         result = "".join(parts).strip()
+        yield {"type": "done", "result": result, "run_id": None}
         run_id = await self._persist_optimize(payload, framework, result)
-        yield {"type": "done", "result": result, "run_id": run_id}
+        if run_id is not None:
+            yield {"type": "persisted", "run_id": run_id}
 
     async def _persist_optimize(
         self, payload: OptimizeRequest, framework: str | None, result: str
@@ -129,19 +157,24 @@ class PromptOptimizeService:
     ) -> AsyncIterator[dict[str, Any]]:
         yield {"type": "start"}
         parts: list[str] = []
+        status_sent = False
         async for delta in self.llm.stream_completion(
             build_iterate_system(),
             build_iterate_user(payload.current, payload.instruction),
             provider_id=payload.provider_id,
         ):
             if not delta:
-                yield {"type": "status", "message": "模型思考中，正文即将开始…"}
+                if not status_sent:
+                    status_sent = True
+                    yield {"type": "status", "message": "模型思考中，正文即将开始…"}
                 continue
             parts.append(delta)
             yield {"type": "delta", "text": delta}
         result = "".join(parts).strip()
+        yield {"type": "done", "result": result, "run_id": payload.run_id}
         run_id = await self._persist_iterate(payload, result)
-        yield {"type": "done", "result": result, "run_id": run_id}
+        if run_id is not None:
+            yield {"type": "persisted", "run_id": run_id}
 
     async def _persist_iterate(self, payload: IterateRequest, result: str) -> int | None:
         run_id = payload.run_id
@@ -178,3 +211,31 @@ class PromptOptimizeService:
         if run is None or run.user_id != self.user_id:
             raise HTTPException(404, "优化记录不存在")
         return OptimizeRunResponse.model_validate(run)
+
+    async def list_runs(self, *, limit: int = 20) -> list[OptimizeRunSummary]:
+        limit = max(1, min(limit, 50))
+        rows = (
+            await self.session.scalars(
+                select(PromptOptimizeRun)
+                .where(PromptOptimizeRun.user_id == self.user_id)
+                .order_by(PromptOptimizeRun.updated_at.desc())
+                .limit(limit)
+            )
+        ).all()
+        out: list[OptimizeRunSummary] = []
+        for run in rows:
+            versions = list(run.versions or [])
+            out.append(
+                OptimizeRunSummary(
+                    id=run.id,
+                    source=run.source,
+                    result=run.result,
+                    mode=run.mode,
+                    framework=run.framework,
+                    extra_goal=run.extra_goal,
+                    version_count=max(len(versions), 1),
+                    created_at=run.created_at,
+                    updated_at=run.updated_at,
+                )
+            )
+        return out

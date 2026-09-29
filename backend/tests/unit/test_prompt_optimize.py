@@ -125,3 +125,52 @@ async def test_iterate_stream_yields_done():
     assert events[0] == {"type": "start"}
     assert events[1] == {"type": "delta", "text": "改好了"}
     assert events[2] == {"type": "done", "result": "改好了", "run_id": None}
+
+@pytest.mark.asyncio
+async def test_design_stream_yields_deltas_then_done():
+    session = AsyncMock()
+
+    async def fake_stream(*_a, **_k):
+        yield "设"
+        yield "计稿"
+
+    svc = PromptOptimizeService(session, user_id=1)
+    with patch.object(svc.llm, "stream_completion", new=fake_stream):
+        events = [
+            e
+            async for e in svc.design_stream(
+                DesignRequest(goal="写周报", notes="简洁")
+            )
+        ]
+    assert events[0] == {"type": "start"}
+    assert events[1] == {"type": "delta", "text": "设"}
+    assert events[2] == {"type": "delta", "text": "计稿"}
+    assert events[3] == {"type": "done", "result": "设计稿", "run_id": None}
+
+
+@pytest.mark.asyncio
+async def test_list_runs_returns_summaries():
+    session = AsyncMock()
+    run = MagicMock()
+    run.id = 7
+    run.source = "src"
+    run.result = "out"
+    run.mode = "smart"
+    run.framework = None
+    run.extra_goal = None
+    run.versions = [{"result": "out"}]
+    run.created_at = "2026-01-01T00:00:00"
+    run.updated_at = "2026-01-02T00:00:00"
+    run.user_id = 1
+
+    scalars = MagicMock()
+    scalars.all.return_value = [run]
+    session.scalars = AsyncMock(return_value=scalars)
+
+    svc = PromptOptimizeService(session, user_id=1)
+    rows = await svc.list_runs(limit=10)
+    assert len(rows) == 1
+    assert rows[0].id == 7
+    assert rows[0].version_count == 1
+    assert rows[0].result == "out"
+

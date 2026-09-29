@@ -25,6 +25,7 @@ from app.schemas.prompt_workbench import (
     IterateRequest,
     OptimizeRequest,
     OptimizeRunResponse,
+    OptimizeRunSummary,
     PromptItemCreate,
     PromptItemResponse,
     PromptItemUpdate,
@@ -109,6 +110,20 @@ async def design_prompt(
     return await _optimize(db, current_user).design(payload)
 
 
+@router.post("/design/stream")
+async def design_prompt_stream(
+    payload: DesignRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _optimize(db, current_user)
+    return StreamingResponse(
+        _sse_event_gen(service.design_stream(payload)),
+        media_type="text/event-stream",
+        headers=_sse_headers(),
+    )
+
+
 @router.post("/optimize", response_model=TextResult)
 async def optimize_prompt(
     payload: OptimizeRequest,
@@ -183,6 +198,15 @@ async def test_prompts(
     current_user: User = Depends(get_current_user),
 ):
     return await _optimize(db, current_user).dual_test(payload)
+
+
+@router.get("/optimize/runs", response_model=list[OptimizeRunSummary])
+async def list_optimize_runs(
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await _optimize(db, current_user).list_runs(limit=limit)
 
 
 @router.get("/optimize/runs/{run_id}", response_model=OptimizeRunResponse)
