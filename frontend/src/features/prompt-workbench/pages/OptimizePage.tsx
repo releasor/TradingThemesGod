@@ -102,7 +102,7 @@ export function OptimizePage() {
 
   function handleStreamEvent(event: StreamEvent) {
     if (event.type === 'start') {
-      setStreamHint('已连接，等待模型输出…')
+      setStreamHint('已连接后端，等待模型首字（推理模型可能需 10–30 秒）…')
       return
     }
     if (event.type === 'status') {
@@ -202,7 +202,7 @@ export function OptimizePage() {
     setCompareMode('off')
     setTestOutputs(null)
     resetStreamUi()
-    setStreamHint('正在连接模型…')
+    setStreamHint('正在连接后端并请求模型…')
     try {
       const res = await optimizePromptStream(
         {
@@ -216,6 +216,12 @@ export function OptimizePage() {
         handleStreamEvent,
         ac.signal
       )
+      if (!res.result.trim()) {
+        const message = '模型未返回任何内容，请检查模型渠道或更换模型后重试'
+        setError(message)
+        toast.error(message)
+        return
+      }
       setResult(res.result)
       if (res.run_id != null) setRunId(res.run_id)
       setVersions([{ text: res.result, label: '初稿' }])
@@ -262,7 +268,7 @@ export function OptimizePage() {
     setResult('')
     setCompareMode('off')
     resetStreamUi()
-    setStreamHint('正在连接模型…')
+    setStreamHint('正在连接后端并请求模型…')
     try {
       const res = await iteratePromptStream(
         {

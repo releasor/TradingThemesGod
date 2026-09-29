@@ -66,7 +66,10 @@ async function readSseStream(
       const data = (await response.json()) as { detail?: string }
       if (data.detail) detail = data.detail
     } catch {
-      /* ignore */
+      if (response.status >= 500 && response.status <= 503) {
+        detail =
+          '后端 API 未响应，请确认已在 127.0.0.1:8000 启动后端服务（backend 目录运行 uvicorn）'
+      }
     }
     throw new Error(detail)
   }
