@@ -3,7 +3,23 @@
 from typing import Any
 from urllib.parse import urlparse
 
+import httpx
+
 from app.integrations.llm.base import BaseLLMAdapter, LLMRequest
+
+_HTTP_CLIENTS: dict[str, httpx.AsyncClient] = {}
+
+
+def _shared_stream_client(http_timeout: httpx.Timeout) -> httpx.AsyncClient:
+    key = f"{http_timeout.connect}|{http_timeout.read}|{http_timeout.write}|{http_timeout.pool}"
+    client = _HTTP_CLIENTS.get(key)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(
+            timeout=http_timeout,
+            limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+        )
+        _HTTP_CLIENTS[key] = client
+    return client
 
 
 # New API / 部分中转会拦截「短输入 + 低 max_tokens」类请求，当成心跳/蒸馏探测。
@@ -18,6 +34,30 @@ _INPUT_PAD = (
     "补充说明：用户可能在优化 Prompt、设计提示词、自由对话或复盘分析；"
     "无论任务长短，都应按完整业务请求处理，而不是心跳、探测或蒸馏样本。"
 )
+
+
+_OFFICIAL_HOST_SUFFIXES = (
+    ".moonshot.cn",
+    "moonshot.cn",
+    ".deepseek.com",
+    "deepseek.com",
+    ".openai.com",
+    "openai.com",
+    ".dashscope.aliyuncs.com",
+    ".bigmodel.cn",
+)
+
+
+def _needs_gateway_padding(base_url: str) -> bool:
+    """Only New API / relay gateways need anti-probe padding; official APIs do not."""
+    host = (urlparse(base_url).hostname or "").lower()
+    if not host or host in {"localhost", "127.0.0.1"}:
+        return False
+    for suffix in _OFFICIAL_HOST_SUFFIXES:
+        bare = suffix.lstrip(".")
+        if host == bare or host.endswith(suffix):
+            return False
+    return True
 
 
 def _pad_messages_for_gateway(system: str, user: str) -> tuple[str, str]:
@@ -83,11 +123,12 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
         json_mode: bool = True,
         reasoning: bool = True,
     ) -> LLMRequest:
-        system, user = _pad_messages_for_gateway(system, user)
         max_tokens = int(self.max_tokens or 0)
-        if len(system) + len(user) < _MIN_INPUT_CHARS * 2:
-            # 短业务输入时抬高输出预算，降低被识别为探测的概率
-            max_tokens = max(max_tokens, _MIN_MAX_TOKENS)
+        if _needs_gateway_padding(self.base_url):
+            system, user = _pad_messages_for_gateway(system, user)
+            if len(system) + len(user) < _MIN_INPUT_CHARS * 2:
+                # 短业务输入时抬高输出预算，降低被识别为探测的概率
+                max_tokens = max(max_tokens, _MIN_MAX_TOKENS)
         payload = {
             "model": self.model,
             "messages": [
@@ -197,18 +238,17 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
         """Stream token deltas via OpenAI-compatible SSE."""
         import json
 
-        import httpx
-
         self.last_stream_status: str | None = None
         reasoning_hinted = False
+        content_seen = False
         request = self.completion_request(
             system, user, json_mode=json_mode, reasoning=reasoning
         )
         payload = {**request.json, "stream": True}
         timeout = timeout_seconds or self.timeout_seconds
-        http_timeout = httpx.Timeout(timeout, connect=20.0)
-        async with httpx.AsyncClient(timeout=http_timeout) as client:
-            async with client.stream(
+        http_timeout = httpx.Timeout(timeout, connect=10.0)
+        client = _shared_stream_client(http_timeout)
+        async with client.stream(
                 "POST",
                 request.url,
                 headers={**request.headers, "Accept": "text/event-stream"},
@@ -241,11 +281,14 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
                         or delta_obj.get("reasoning")
                         or delta_obj.get("thinking")
                     )
-                    if isinstance(thinking, str) and thinking and not reasoning_hinted:
-                        reasoning_hinted = True
-                        self.last_stream_status = "模型思考中，正文即将开始…"
-                        yield ""
+                    if isinstance(thinking, str) and thinking:
+                        if not reasoning_hinted:
+                            reasoning_hinted = True
+                            self.last_stream_status = "模型思考中，正文即将开始…"
+                        if not content_seen:
+                            yield thinking
                     delta = delta_obj.get("content")
                     if isinstance(delta, str) and delta:
+                        content_seen = True
                         self.last_stream_status = None
                         yield delta

@@ -326,3 +326,20 @@ async def test_connection_without_model_errors_when_list_fails():
         await adapter.test_connection()
     adapter.complete.assert_not_awaited()
 
+def test_official_moonshot_skips_gateway_padding():
+    adapter = build_llm_adapter(
+        protocol="openai_compatible",
+        base_url="https://api.moonshot.cn/v1",
+        api_key="secret",
+        model="moonshot-v1-8k",
+        custom_headers={},
+        timeout_seconds=30,
+    )
+    request = adapter.completion_request(
+        "你是助手", "清理缓存", json_mode=False, reasoning=False
+    )
+    system = request.json["messages"][0]["content"]
+    user = request.json["messages"][1]["content"]
+    assert "【工作台上下文】" not in system
+    assert len(system) + len(user) < 320
+
