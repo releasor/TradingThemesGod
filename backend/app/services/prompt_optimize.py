@@ -32,6 +32,18 @@ from app.services.prompt_templates import (
 )
 
 
+
+
+_EMPTY_STREAM_RESULT_MSG = "模型返回了空内容，请更换模型或重试"
+
+
+def _require_stream_result(result: str) -> str:
+    cleaned = result.strip()
+    if not cleaned:
+        raise HTTPException(502, _EMPTY_STREAM_RESULT_MSG)
+    return cleaned
+
+
 class PromptOptimizeService:
     def __init__(self, session: AsyncSession, user_id: int):
         self.session = session
@@ -75,7 +87,7 @@ class PromptOptimizeService:
                 continue
             parts.append(delta)
             yield {"type": "delta", "text": delta}
-        result = "".join(parts).strip()
+        result = _require_stream_result("".join(parts))
         yield {"type": "done", "result": result, "run_id": None}
 
     async def optimize(self, payload: OptimizeRequest) -> TextResult:
@@ -117,7 +129,7 @@ class PromptOptimizeService:
                 continue
             parts.append(delta)
             yield {"type": "delta", "text": delta}
-        result = "".join(parts).strip()
+        result = _require_stream_result("".join(parts))
         yield {"type": "done", "result": result, "run_id": None}
         run_id = await self._persist_optimize(payload, framework, result)
         if run_id is not None:
@@ -170,7 +182,7 @@ class PromptOptimizeService:
                 continue
             parts.append(delta)
             yield {"type": "delta", "text": delta}
-        result = "".join(parts).strip()
+        result = _require_stream_result("".join(parts))
         yield {"type": "done", "result": result, "run_id": payload.run_id}
         run_id = await self._persist_iterate(payload, result)
         if run_id is not None:
