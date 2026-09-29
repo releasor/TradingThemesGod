@@ -145,19 +145,41 @@ class BaseLLMAdapter:
     async def test_connection(self) -> str:
         """Verify credentials without short/magic-token probes.
 
-        Many Chinese OpenAI-compatible gateways reject "reply OK" style
-        heartbeats as illegal short-input distillation. Prefer listing
-        models; fall back to a normal workbench-style completion.
+        Prefer listing models (works even when model name is empty).
+        Only fall back to a workbench-style completion when a model is set,
+        because many gateways reject empty-model chat and heartbeat probes.
         """
+        model_name = (self.model or "").strip()
+        list_error: Exception | None = None
         try:
             models = await self.list_models()
+        except Exception as exc:  # noqa: BLE001 — soft-fallback path
+            list_error = exc
+            models = None
+        else:
             if models:
                 preview = "、".join(models[:3])
-                more = f" 等 {len(models)} 个" if len(models) > 3 else f"（共 {len(models)} 个）"
+                more = (
+                    f" 等 {len(models)} 个"
+                    if len(models) > 3
+                    else f"（共 {len(models)} 个）"
+                )
                 return f"连通成功，可用模型：{preview}{more}"
-        except Exception:
-            # Models endpoint may be disabled; fall through to chat.
-            pass
+            # /models reachable — credentials OK even without choosing a model yet
+            if not model_name:
+                return (
+                    "连通成功：模型列表接口可访问（暂无条目）。"
+                    "请填写模型名称后保存。"
+                )
+            # Model configured but list empty: fall through to completion probe.
+
+        if not model_name:
+            detail = str(list_error)[:200] if list_error else "未知错误"
+            raise ValueError(
+                "未配置模型名称，且模型列表不可用，无法完成连接测试。"
+                "请先填写模型，或检查 API 地址/密钥后重试「读取模型列表」。"
+                f"详情：{detail}"
+            )
 
         system = (
             "你是 TradingThemesGod 题材研究工作台的助手，"

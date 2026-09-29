@@ -270,3 +270,59 @@ def test_deepseek_v4_forces_temperature_one():
     request = adapter.completion_request("sys", "user", json_mode=False)
     assert request.json["temperature"] == 1.0
 
+@pytest.mark.asyncio
+async def test_connection_without_model_uses_list_only():
+    adapter = build_llm_adapter(
+        protocol="openai_compatible",
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="",
+        custom_headers={},
+        timeout_seconds=120,
+    )
+    adapter.list_models = AsyncMock(return_value=["alpha", "beta"])
+    adapter.complete = AsyncMock()
+
+    result = await adapter.test_connection()
+
+    assert "连通成功" in result
+    assert "alpha" in result
+    adapter.complete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_connection_without_model_succeeds_on_empty_list():
+    adapter = build_llm_adapter(
+        protocol="openai_compatible",
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="",
+        custom_headers={},
+        timeout_seconds=120,
+    )
+    adapter.list_models = AsyncMock(return_value=[])
+    adapter.complete = AsyncMock()
+
+    result = await adapter.test_connection()
+
+    assert "连通成功" in result
+    adapter.complete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_connection_without_model_errors_when_list_fails():
+    adapter = build_llm_adapter(
+        protocol="openai_compatible",
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="",
+        custom_headers={},
+        timeout_seconds=120,
+    )
+    adapter.list_models = AsyncMock(side_effect=RuntimeError("models down"))
+    adapter.complete = AsyncMock()
+
+    with pytest.raises(ValueError, match="未配置模型名称"):
+        await adapter.test_connection()
+    adapter.complete.assert_not_awaited()
+

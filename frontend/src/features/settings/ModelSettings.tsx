@@ -10,6 +10,7 @@ import {
   Loader2,
   Plus,
   Save,
+  Search,
   Settings,
   Sparkles,
   Trash2,
@@ -36,6 +37,7 @@ import {
   requiresFixedTemperature,
   type ProviderPresetId,
 } from '@/features/settings/providerPresets'
+import { filterModels } from '@/features/settings/modelFuzzy'
 
 const emptyForm: ModelProviderInput = {
   name: '',
@@ -122,6 +124,7 @@ function headersToText(headers: Record<string, string>): string {
     .join('\n')
 }
 
+
 function providerToForm(provider: ModelProvider): ModelProviderInput {
   return {
     name: provider.name,
@@ -172,6 +175,8 @@ export function ModelSettings() {
     null
   )
   const [copiedKey, setCopiedKey] = useState(false)
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelFilter, setModelFilter] = useState('')
   const [presetId, setPresetId] = useState<ProviderPresetId>('openai_compatible')
   const isEditingExisting = typeof editingId === 'number'
 
@@ -209,11 +214,16 @@ export function ModelSettings() {
 
   const modelsMutation = useMutation({
     mutationFn: () => fetchProviderModels(editingId!),
-    onSuccess: (models) =>
+    onSuccess: (models) => {
+      setAvailableModels(models)
+      setModelFilter('')
       setNotice({
         type: 'info',
-        message: models.length ? `可用模型：${models.join('、')}` : '服务未返回模型列表',
-      }),
+        message: models.length
+          ? `已获取 ${models.length} 个模型，可搜索后点击填入`
+          : '服务未返回模型列表',
+      })
+    },
     onError: (error) => setNotice({ type: 'error', message: errorMessage(error) }),
   })
 
@@ -222,6 +232,8 @@ export function ModelSettings() {
     setForm(providerToForm(provider))
     setHeaderText(headersToText(provider.custom_headers))
     setPresetId(matchPresetId(provider.protocol, provider.base_url))
+    setAvailableModels([])
+    setModelFilter('')
     setNotice(null)
   }
 
@@ -234,6 +246,8 @@ export function ModelSettings() {
     setForm(emptyForm)
     setHeaderText('')
     setPresetId('openai_compatible')
+    setAvailableModels([])
+    setModelFilter('')
     setNotice(null)
   }
 
@@ -264,6 +278,18 @@ export function ModelSettings() {
   const protocolMeta = PROTOCOL_META[form.protocol]
   const ProtocolIcon = protocolMeta.icon
   const isBusy = saveMutation.isPending || testMutation.isPending || modelsMutation.isPending
+  const filteredModels =
+    availableModels.length > 0 ? filterModels(availableModels, modelFilter) : []
+
+  function selectModel(name: string) {
+    setForm((current) => ({
+      ...current,
+      model: name,
+      temperature: requiresFixedTemperature(name) ? 1 : current.temperature,
+    }))
+    setModelFilter('')
+  }
+
 
   async function copyApiKey() {
     if (!form.api_key) return
@@ -525,9 +551,8 @@ export function ModelSettings() {
                   </label>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="space-y-2 text-sm">
-                      <FieldLabel>模型</FieldLabel>
+                      <FieldLabel hint="可先留空：保存后点「读取模型列表」，搜索后点选填入">模型</FieldLabel>
                       <input
-                        required
                         value={form.model}
                         onChange={(e) => {
                           const model = e.target.value
@@ -540,7 +565,7 @@ export function ModelSettings() {
                           }))
                         }}
                         className={inputClassName('font-mono text-xs sm:text-sm')}
-                        placeholder="deepseek-chat"
+                        placeholder="deepseek-chat（可先留空）"
                       />
                     </label>
                     <label className="space-y-2 text-sm">
@@ -571,6 +596,65 @@ export function ModelSettings() {
                       </div>
                     </label>
                   </div>
+                  {availableModels.length > 0 ? (
+                    <div className="space-y-2 rounded-xl border border-border/60 bg-muted/15 p-3">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="search"
+                          value={modelFilter}
+                          onChange={(e) => setModelFilter(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && filteredModels[0]) {
+                              e.preventDefault()
+                              selectModel(filteredModels[0])
+                            }
+                          }}
+                          placeholder={`在 ${availableModels.length} 个模型中模糊搜索…`}
+                          className={inputClassName('py-2 pl-8 pr-3 font-mono text-xs')}
+                          aria-label="搜索模型列表"
+                          autoFocus
+                        />
+                      </div>
+                      <div
+                        className="max-h-48 overflow-y-auto rounded-xl border border-border/70 bg-background/70 p-1.5"
+                        role="listbox"
+                        aria-label="可选模型"
+                      >
+                        {filteredModels.length > 0 ? (
+                          filteredModels.map((name) => (
+                            <button
+                              key={name}
+                              type="button"
+                              role="option"
+                              aria-selected={form.model === name}
+                              className={cn(
+                                'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left font-mono text-xs transition-colors',
+                                form.model === name
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                              )}
+                              onClick={() => selectModel(name)}
+                            >
+                              {name}
+                            </button>
+                          ))
+                        ) : (
+                          <p className="px-2.5 py-2 text-xs text-muted-foreground">
+                            无匹配模型，试试更短的关键字
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        显示 {filteredModels.length}
+                        {modelFilter.trim() ? ' 个匹配' : ' 个'}
+                        {availableModels.length > filteredModels.length
+                          ? `（共 ${availableModels.length}）`
+                          : ''}
+                        ，点击即可填入上方「模型」
+                      </p>
+                    </div>
+                  ) : null}
                   <label className="block space-y-2 text-sm">
                     <FieldLabel hint="每行一个，格式 Name: Value">自定义请求头</FieldLabel>
                     <textarea

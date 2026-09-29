@@ -13,7 +13,7 @@ class ModelProviderUpsert(BaseModel):
     protocol: ModelProtocol
     base_url: HttpUrl
     api_key: str = Field(default="", max_length=4000)
-    model: str = Field(min_length=1, max_length=200)
+    model: str = Field(default="", max_length=200)
     custom_headers: dict[str, str] = Field(default_factory=dict)
     timeout_seconds: int = Field(default=60, ge=5, le=300)
     temperature: float = Field(default=0.1, ge=0, le=2)

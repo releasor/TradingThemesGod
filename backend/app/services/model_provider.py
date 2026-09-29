@@ -170,7 +170,7 @@ class ModelProviderService:
                 ModelProvider.is_default.is_(True),
             )
         )
-        if item is None:
+        if item is None or not (item.model or "").strip():
             raise HTTPException(409, "请先在模型设置中配置并启用默认模型")
         return item
 
