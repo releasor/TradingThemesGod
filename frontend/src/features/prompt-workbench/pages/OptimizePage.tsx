@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
 import { fetchModelProviders } from '@/api/model-provider'
 import { useToastContext } from '@/App'
 import {
+  dualTestPrompts,
+  getOptimizeRun,
   iteratePromptStream,
+  listOptimizeRuns,
   optimizePromptStream,
+  StreamAbortError,
+  type OptimizeRunSummary,
   type StreamEvent,
 } from '@/features/prompt-workbench/api/optimize'
 import { createPromptItem } from '@/features/prompt-workbench/api/library'
+import { PromptMarkdownPreview } from '@/features/prompt-workbench/components/PromptMarkdownPreview'
 import {
   EXTRA_GOAL_CHIPS,
+  ITERATE_CHIPS,
   OPTIMIZE_FRAMEWORKS,
   OPTIMIZE_SAMPLES,
   getFrameworkMeta,
@@ -37,13 +44,16 @@ type LastAction =
   | { kind: 'optimize' }
   | { kind: 'iterate'; instruction: string }
 
+type VersionEntry = { text: string; label: string }
+
+type CompareMode = 'off' | 'prev' | 'source'
+
 function countChars(text: string) {
   return [...text].length
 }
 
 export function OptimizePage() {
   const toast = useToastContext()
-  const navigate = useNavigate()
   const location = useLocation()
   const providerId = usePromptModelSelection((s) => s.providerId)
 
@@ -59,7 +69,7 @@ export function OptimizePage() {
   const [extraGoal, setExtraGoal] = useState('')
   const [result, setResult] = useState('')
   const [runId, setRunId] = useState<number | null>(null)
-  const [versions, setVersions] = useState<string[]>([])
+  const [versions, setVersions] = useState<VersionEntry[]>([])
   const [versionIndex, setVersionIndex] = useState(0)
   const [instruction, setInstruction] = useState('')
   const [loading, setLoading] = useState(false)
@@ -67,7 +77,14 @@ export function OptimizePage() {
   const [streamHint, setStreamHint] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastAction, setLastAction] = useState<LastAction | null>(null)
-  const [showCompare, setShowCompare] = useState(false)
+  const [compareMode, setCompareMode] = useState<CompareMode>('off')
+  const [testMessage, setTestMessage] = useState('')
+  const [testLoading, setTestLoading] = useState(false)
+  const [testOutputs, setTestOutputs] = useState<{ a: string; b: string } | null>(null)
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit')
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyRuns, setHistoryRuns] = useState<OptimizeRunSummary[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const streamBufRef = useRef('')
   const streamRafRef = useRef<number | null>(null)
@@ -122,6 +139,11 @@ export function OptimizePage() {
       streamBufRef.current = ''
       setStreamHint(null)
       setResult(event.result || pending)
+      if (event.run_id != null) setRunId(event.run_id)
+      return
+    }
+    if (event.type === 'persisted') {
+      setRunId(event.run_id)
     }
   }
 
@@ -144,7 +166,23 @@ export function OptimizePage() {
     })
   }
 
-  async function runOptimize() {
+  function stopStreaming() {
+    abortRef.current?.abort()
+  }
+
+  function updateResult(text: string) {
+    setResult(text)
+    setVersions((prev) => {
+      if (prev.length === 0) return prev
+      const next = [...prev]
+      const cur = next[versionIndex]
+      if (!cur) return prev
+      next[versionIndex] = { ...cur, text }
+      return next
+    })
+  }
+
+    async function runOptimize() {
     if (!hasModel) {
       toast.warning('请先配置可用模型')
       return
@@ -161,7 +199,8 @@ export function OptimizePage() {
     setError(null)
     setLastAction({ kind: 'optimize' })
     setResult('')
-    setShowCompare(false)
+    setCompareMode('off')
+    setTestOutputs(null)
     resetStreamUi()
     setStreamHint('正在连接模型…')
     try {
@@ -170,7 +209,7 @@ export function OptimizePage() {
           source,
           mode,
           framework: mode === 'framework' ? framework : null,
-          extra_goal: mode === 'smart' ? extraGoal || null : null,
+          extra_goal: extraGoal || null,
           provider_id: providerId,
           persist: true,
         },
@@ -178,11 +217,20 @@ export function OptimizePage() {
         ac.signal
       )
       setResult(res.result)
-      setRunId(res.run_id)
-      setVersions([res.result])
+      if (res.run_id != null) setRunId(res.run_id)
+      setVersions([{ text: res.result, label: '初稿' }])
       setVersionIndex(0)
       toast.success('优化完成')
     } catch (err) {
+      if (err instanceof StreamAbortError) {
+        if (err.reason === 'cancel') {
+          toast.warning('已停止生成')
+          return
+        }
+        setError(err.message)
+        toast.error(err.message)
+        return
+      }
       if ((err as Error).name === 'AbortError') return
       const message = err instanceof Error ? err.message : '优化失败'
       setError(message)
@@ -212,7 +260,7 @@ export function OptimizePage() {
     setLastAction({ kind: 'iterate', instruction: text })
     const base = result
     setResult('')
-    setShowCompare(false)
+    setCompareMode('off')
     resetStreamUi()
     setStreamHint('正在连接模型…')
     try {
@@ -227,15 +275,25 @@ export function OptimizePage() {
         ac.signal
       )
       setResult(res.result)
-      setRunId(res.run_id)
+      if (res.run_id != null) setRunId(res.run_id)
       setVersions((v) => {
-        const next = [...v, res.result]
+        const next = [...v, { text: res.result, label: text.slice(0, 24) }]
         setVersionIndex(next.length - 1)
         return next
       })
       setInstruction('')
       toast.success('已迭代')
     } catch (err) {
+      if (err instanceof StreamAbortError) {
+        setResult(base)
+        if (err.reason === 'cancel') {
+          toast.warning('已停止生成')
+          return
+        }
+        setError(err.message)
+        toast.error(err.message)
+        return
+      }
       if ((err as Error).name === 'AbortError') return
       setResult(base)
       const message = err instanceof Error ? err.message : '迭代失败'
@@ -250,7 +308,7 @@ export function OptimizePage() {
     }
   }
 
-  function retryLast() {
+    function retryLast() {
     if (!lastAction) return
     if (lastAction.kind === 'optimize') void runOptimize()
     else void runIterate(lastAction.instruction)
@@ -264,13 +322,113 @@ export function OptimizePage() {
 
   function selectVersion(index: number) {
     setVersionIndex(index)
-    setResult(versions[index] ?? '')
+    setResult(versions[index]?.text ?? '')
+    setCompareMode('off')
   }
 
   const compareDiff =
-    showCompare && versionIndex > 0
-      ? lineDiff(versions[versionIndex - 1] ?? '', versions[versionIndex] ?? result)
-      : null
+    compareMode === 'prev' && versionIndex > 0
+      ? lineDiff(versions[versionIndex - 1]?.text ?? '', versions[versionIndex]?.text ?? result)
+      : compareMode === 'source'
+        ? lineDiff(source, result)
+        : null
+
+  async function saveToLibrary() {
+    if (!result.trim()) return
+    try {
+      await createPromptItem({
+        title: `优化 ${new Date().toLocaleString()}`,
+        body: result,
+      })
+      toast.success('已存入库（仍可继续优化）')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '存库失败')
+    }
+  }
+
+  async function copyResult() {
+    try {
+      await navigator.clipboard.writeText(result)
+      toast.success('已复制')
+    } catch {
+      toast.error('复制失败')
+    }
+  }
+
+  async function loadHistory() {
+    setHistoryLoading(true)
+    try {
+      const rows = await listOptimizeRuns(20)
+      setHistoryRuns(rows)
+      setShowHistory(true)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '加载历史失败')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  async function applyHistoryRun(id: number) {
+    try {
+      const detail = await getOptimizeRun(id)
+      const versionEntries: VersionEntry[] = (detail.versions ?? []).map((v, i) => {
+        if (typeof v === 'string') {
+          return { text: v, label: i === 0 ? '初始优化' : `版本 ${i + 1}` }
+        }
+        return {
+          text: v.result ?? detail.result,
+          label: v.instruction?.trim() || (i === 0 ? '初始优化' : `版本 ${i + 1}`),
+        }
+      })
+      if (versionEntries.length === 0) {
+        versionEntries.push({ text: detail.result, label: '初始优化' })
+      }
+      setSource(detail.source)
+      setResult(detail.result)
+      setRunId(detail.id)
+      setMode(detail.mode === 'framework' ? 'framework' : 'smart')
+      if (detail.framework) {
+        setFramework(detail.framework as FrameworkId)
+      }
+      setExtraGoal(detail.extra_goal ?? '')
+      setVersions(versionEntries)
+      setVersionIndex(versionEntries.length - 1)
+      setCompareMode('off')
+      setError(null)
+      setTestOutputs(null)
+      setViewMode('edit')
+      toast.success('已载入历史运行')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '载入失败')
+    }
+  }
+
+  async function runDualTest() {
+    if (!hasModel) {
+      toast.warning('请先配置可用模型')
+      return
+    }
+    if (!source.trim() || !result.trim() || !testMessage.trim()) {
+      toast.warning('需要原文、优化结果和测试用户消息')
+      return
+    }
+    setTestLoading(true)
+    setTestOutputs(null)
+    try {
+      const res = await dualTestPrompts({
+        prompt_a: source,
+        prompt_b: result,
+        user_message: testMessage,
+        provider_id: providerId,
+      })
+      setTestOutputs({ a: res.output_a, b: res.output_b })
+      toast.success('双测完成')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '双测失败')
+    } finally {
+      setTestLoading(false)
+    }
+  }
 
   return (
     <div
@@ -358,31 +516,7 @@ export function OptimizePage() {
             </button>
           </div>
 
-          {mode === 'smart' ? (
-            <div className="shrink-0 space-y-2" data-testid="extra-goal-field">
-              <label className="block text-sm">
-                <span className="mb-1.5 block text-muted-foreground">补充目标（可选）</span>
-                <input
-                  className={cn(field, 'h-9')}
-                  value={extraGoal}
-                  onChange={(e) => setExtraGoal(e.target.value)}
-                  placeholder="例如：更短、更正式"
-                />
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {EXTRA_GOAL_CHIPS.map((chip) => (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                    onClick={() => appendChip(chip.value)}
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
+          {mode === 'framework' ? (
             <div className="shrink-0 space-y-2">
               <label className="block text-sm">
                 <span className="mb-1.5 block text-muted-foreground">框架</span>
@@ -404,25 +538,61 @@ export function OptimizePage() {
                 </p>
               ) : null}
             </div>
-          )}
+          ) : null}
 
-          <button
-            type="button"
-            className={cn(btnPrimary, 'w-full')}
-            disabled={loading || !hasModel}
-            onClick={() => void runOptimize()}
-          >
-            {streaming && lastAction?.kind === 'optimize' ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                生成中…
-              </span>
-            ) : loading ? (
-              '处理中…'
-            ) : (
-              '运行优化'
-            )}
-          </button>
+          <div className="shrink-0 space-y-2" data-testid="extra-goal-field">
+            <label className="block text-sm">
+              <span className="mb-1.5 block text-muted-foreground">补充目标（可选）</span>
+              <input
+                className={cn(field, 'h-9')}
+                value={extraGoal}
+                onChange={(e) => setExtraGoal(e.target.value)}
+                placeholder="例如：更短、更正式"
+              />
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {EXTRA_GOAL_CHIPS.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  onClick={() => appendChip(chip.value)}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              className={cn(btnPrimary, 'flex-1')}
+              disabled={loading || !hasModel}
+              onClick={() => void runOptimize()}
+            >
+              {streaming && lastAction?.kind === 'optimize' ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  生成中…
+                </span>
+              ) : loading ? (
+                '处理中…'
+              ) : (
+                '运行优化'
+              )}
+            </button>
+            {streaming ? (
+              <button
+                type="button"
+                className={btnGhost}
+                data-testid="optimize-stop"
+                onClick={stopStreaming}
+              >
+                停止
+              </button>
+            ) : null}
+          </div>
         </section>
 
         {/* 右侧：结果 + 操作 */}
@@ -438,15 +608,55 @@ export function OptimizePage() {
                 {streaming ? (streamHint ? ` · ${streamHint}` : ' · 流式输出中') : ''}
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+              <div className="flex gap-1 rounded-md border border-border p-0.5">
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded px-2 py-1 text-xs',
+                    viewMode === 'edit'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground'
+                  )}
+                  onClick={() => setViewMode('edit')}
+                  data-testid="optimize-view-edit"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded px-2 py-1 text-xs',
+                    viewMode === 'preview'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground'
+                  )}
+                  onClick={() => setViewMode('preview')}
+                  data-testid="optimize-view-preview"
+                >
+                  预览
+                </button>
+              </div>
+              <button
+                type="button"
+                className={btnGhost}
+                disabled={historyLoading || streaming}
+                onClick={() => {
+                  if (showHistory) {
+                    setShowHistory(false)
+                  } else {
+                    void loadHistory()
+                  }
+                }}
+                data-testid="optimize-history-toggle"
+              >
+                {historyLoading ? '加载中…' : showHistory ? '收起历史' : '运行历史'}
+              </button>
               <button
                 type="button"
                 className={btnGhost}
                 disabled={!result || streaming}
-                onClick={async () => {
-                  await navigator.clipboard.writeText(result)
-                  toast.success('已复制')
-                }}
+                onClick={() => void copyResult()}
               >
                 复制
               </button>
@@ -454,14 +664,7 @@ export function OptimizePage() {
                 type="button"
                 className={btnGhost}
                 disabled={!result || streaming}
-                onClick={async () => {
-                  await createPromptItem({
-                    title: `优化 ${new Date().toLocaleString()}`,
-                    body: result,
-                  })
-                  toast.success('已存入库')
-                  navigate('/prompt/library')
-                }}
+                onClick={() => void saveToLibrary()}
               >
                 存库
               </button>
@@ -511,22 +714,91 @@ export function OptimizePage() {
                   <span className="h-1.5 flex-1 animate-pulse rounded-full bg-primary/50 [animation-delay:150ms]" />
                   <span className="h-1.5 flex-1 animate-pulse rounded-full bg-primary/30 [animation-delay:300ms]" />
                 </div>
+                <button type="button" className={btnGhost} onClick={stopStreaming}>
+                  停止
+                </button>
               </div>
             ) : null}
-            <textarea
-              className={cn(field, 'min-h-[8rem] flex-1 resize-none py-2 lg:min-h-0')}
-              value={result}
-              onChange={(e) => setResult(e.target.value)}
-              placeholder={
-                streaming
-                  ? streamHint || '模型输出中…'
-                  : '运行优化后，结果将在此流式显示并可编辑'
-              }
-              aria-label="优化结果"
-            />
+            {viewMode === 'preview' ? (
+              <PromptMarkdownPreview
+                text={result}
+                className="min-h-[8rem] flex-1 lg:min-h-0"
+                empty="优化后可在此预览结构"
+              />
+            ) : (
+              <textarea
+                className={cn(field, 'min-h-[8rem] flex-1 resize-none py-2 lg:min-h-0')}
+                value={result}
+                onChange={(e) => updateResult(e.target.value)}
+                readOnly={streaming}
+                placeholder={
+                  streaming
+                    ? streamHint || '模型输出中…'
+                    : '运行优化后，结果将在此流式显示并可编辑'
+                }
+                aria-label="优化结果"
+              />
+            )}
           </div>
 
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          {showHistory ? (
+            <div
+              className="shrink-0 space-y-2 rounded-md border border-border bg-muted/20 p-3"
+              data-testid="optimize-history-panel"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted-foreground">最近运行</p>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  disabled={historyLoading}
+                  onClick={() => void loadHistory()}
+                >
+                  刷新
+                </button>
+              </div>
+              {historyRuns.length === 0 ? (
+                <p className="text-xs text-muted-foreground">暂无历史记录</p>
+              ) : (
+                <ul className="max-h-40 space-y-1 overflow-y-auto">
+                  {historyRuns.map((run) => (
+                    <li key={run.id}>
+                      <button
+                        type="button"
+                        className="flex w-full flex-col gap-0.5 rounded-md border border-transparent px-2 py-1.5 text-left text-xs hover:border-border hover:bg-accent"
+                        onClick={() => void applyHistoryRun(run.id)}
+                        disabled={streaming}
+                      >
+                        <span className="line-clamp-1 font-medium text-foreground">
+                          {run.result.slice(0, 80) || run.source.slice(0, 80) || `运行 #${run.id}`}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {new Date(run.updated_at).toLocaleString()} · {run.mode}
+                          {run.framework ? `/${run.framework}` : ''} · v{run.version_count}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+
+          <div className="shrink-0 space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {ITERATE_CHIPS.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                  disabled={!result || streaming}
+                  onClick={() => void runIterate(chip.value)}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               className={cn(field, 'h-9 min-w-0 flex-1')}
               placeholder="迭代指令，例如：语气更正式"
@@ -550,21 +822,36 @@ export function OptimizePage() {
               {streaming && lastAction?.kind === 'iterate' ? '迭代中…' : '迭代'}
             </button>
           </div>
+          </div>
 
           {versions.length > 0 ? (
             <div className="min-h-0 shrink-0 space-y-2 border-t border-border pt-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-muted-foreground">版本历史</p>
-                {versions.length > 1 ? (
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                    onClick={() => setShowCompare((v) => !v)}
-                    disabled={versionIndex === 0}
+                    disabled={!result}
+                    onClick={() =>
+                      setCompareMode((m) => (m === 'source' ? 'off' : 'source'))
+                    }
                   >
-                    {showCompare ? '关闭对比' : '与上一版对比'}
+                    {compareMode === 'source' ? '关闭原文对比' : '与原文对比'}
                   </button>
-                ) : null}
+                  {versions.length > 1 ? (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                      onClick={() =>
+                        setCompareMode((m) => (m === 'prev' ? 'off' : 'prev'))
+                      }
+                      disabled={versionIndex === 0}
+                    >
+                      {compareMode === 'prev' ? '关闭版本对比' : '与上一版对比'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <ol className="flex max-h-24 list-none flex-wrap gap-2 overflow-y-auto">
                 {versions.map((v, i) => (
@@ -578,8 +865,9 @@ export function OptimizePage() {
                           : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
                       )}
                       onClick={() => selectVersion(i)}
+                      title={v.label}
                     >
-                      v{i + 1}
+                      v{i + 1} · {v.label}
                       {i === versions.length - 1 ? ' · 当前' : ''}
                     </button>
                   </li>
@@ -607,6 +895,52 @@ export function OptimizePage() {
               ) : null}
             </div>
           ) : null}
+
+          {result.trim() && source.trim() ? (
+            <div
+              className="min-h-0 shrink-0 space-y-2 border-t border-border pt-3"
+              data-testid="dual-test-panel"
+            >
+              <p className="text-xs font-medium text-muted-foreground">
+                双测：同一用户消息对比优化前 / 后
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  className={cn(field, 'h-9 min-w-0 flex-1')}
+                  placeholder="测试用户消息"
+                  aria-label="双测用户消息"
+                  value={testMessage}
+                  onChange={(e) => setTestMessage(e.target.value)}
+                  disabled={testLoading || streaming}
+                />
+                <button
+                  type="button"
+                  className={btnGhost}
+                  disabled={testLoading || streaming || !testMessage.trim() || !hasModel}
+                  onClick={() => void runDualTest()}
+                >
+                  {testLoading ? '双测中…' : '运行双测'}
+                </button>
+              </div>
+              {testOutputs ? (
+                <div className="grid max-h-48 gap-2 overflow-auto sm:grid-cols-2">
+                  <div className="rounded-md border border-border p-2">
+                    <p className="mb-1 text-xs text-muted-foreground">优化前输出</p>
+                    <pre className="whitespace-pre-wrap text-xs leading-relaxed">
+                      {testOutputs.a}
+                    </pre>
+                  </div>
+                  <div className="rounded-md border border-border p-2">
+                    <p className="mb-1 text-xs text-muted-foreground">优化后输出</p>
+                    <pre className="whitespace-pre-wrap text-xs leading-relaxed">
+                      {testOutputs.b}
+                    </pre>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
         </section>
       </div>
     </div>
