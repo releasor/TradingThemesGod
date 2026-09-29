@@ -285,7 +285,11 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
                         if not reasoning_hinted:
                             reasoning_hinted = True
                             self.last_stream_status = "模型思考中，正文即将开始…"
-                        if not content_seen:
+                            # reasoning=False（如 Prompt 工作台）：只发空 delta 触发前端状态提示
+                            if not reasoning:
+                                yield ""
+                        # 仅在显式开启 reasoning 时把思考过程流进正文
+                        if reasoning and not content_seen:
                             yield thinking
                     delta = delta_obj.get("content")
                     if isinstance(delta, str) and delta:
