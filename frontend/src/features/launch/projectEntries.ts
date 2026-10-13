@@ -28,12 +28,12 @@ export const PROJECT_ENTRIES: ProjectEntry[] = [
     badge: '应用',
   },
   {
-    id: 'workspace-c',
-    name: '应用 C',
-    description: '预留入口，后续在此接入新页面。',
-    ariaLabel: '应用 C（即将推出）',
-    badge: '即将推出',
-    comingSoon: true,
+    id: 'personal-ai-os',
+    name: '个人 AI OS',
+    description: '个人记忆、生活日志日报与多模型决策的可调参 AI 操作系统',
+    to: '/os',
+    ariaLabel: '进入个人 AI OS',
+    badge: '应用',
   },
 ]
 
