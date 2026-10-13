@@ -32,6 +32,18 @@ from app.models.mainline_graph import (
 )
 from app.models.trading_calendar import TradingCalendarDay, TradingCalendarMeta
 from app.models.tushare_settings import TushareSettings
+from app.models.personal_os import (
+    OsChatMessage,
+    OsChatSession,
+    OsDailyReport,
+    OsDashboardPin,
+    OsDecisionOption,
+    OsDecisionRun,
+    OsDecisionThread,
+    OsJournalEntry,
+    OsNote,
+    OsProfile,
+)
 from app.models.prompt_workbench import (
     PromptChatMessage,
     PromptChatSession,
@@ -77,4 +89,14 @@ __all__ = [
     "PromptChatSession",
     "PromptChatMessage",
     "PromptOptimizeRun",
+    "OsProfile",
+    "OsNote",
+    "OsChatSession",
+    "OsChatMessage",
+    "OsJournalEntry",
+    "OsDailyReport",
+    "OsDecisionThread",
+    "OsDecisionRun",
+    "OsDecisionOption",
+    "OsDashboardPin",
 ]
