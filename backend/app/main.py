@@ -21,6 +21,7 @@ from app.api.mainline_graph import router as mainline_graph_router
 from app.api.market_calendar import router as market_calendar_router
 from app.api.integrations import router as integrations_router
 from app.api.prompt_workbench import router as prompt_workbench_router
+from app.api.personal_os import router as personal_os_router
 from app.api.mining import router as mining_router
 from app.api.model_provider import router as model_provider_router
 from app.api.news import router as news_router
@@ -208,6 +209,7 @@ def create_app() -> FastAPI:
     app.include_router(market_calendar_router, prefix="/api/v1")
     app.include_router(integrations_router, prefix="/api/v1")
     app.include_router(prompt_workbench_router, prefix="/api/v1")
+    app.include_router(personal_os_router, prefix="/api/v1")
 
     # 全局异常处理器
     @app.exception_handler(Exception)
