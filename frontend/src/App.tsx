@@ -11,22 +11,6 @@ import { GlobalSideRaysBackground } from '@/components/GlobalSideRaysBackground'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { GlobalKeyboardShortcuts } from '@/components/GlobalKeyboardShortcuts'
 
-// 路由级懒加载 - 实现代码分割
-const ThemeDashboard = lazy(() =>
-  import('@/features/dashboard/ThemeDashboard').then((m) => ({
-    default: m.ThemeDashboard,
-  }))
-)
-const ThemeLibrary = lazy(() =>
-  import('@/features/themes/ThemeLibrary').then((m) => ({
-    default: m.ThemeLibrary,
-  }))
-)
-const ThemeDetail = lazy(() =>
-  import('@/features/themes/ThemeDetail').then((m) => ({
-    default: m.ThemeDetail,
-  }))
-)
 const ModelSettings = lazy(() =>
   import('@/features/settings/ModelSettings').then((m) => ({ default: m.ModelSettings }))
 )
@@ -38,35 +22,6 @@ const ShortcutsSettings = lazy(() =>
 const AccountSettings = lazy(() =>
   import('@/features/settings/AccountSettings').then((m) => ({
     default: m.AccountSettings,
-  }))
-)
-const TradingCalendarSettings = lazy(() =>
-  import('@/features/settings/TradingCalendarSettings').then((m) => ({
-    default: m.TradingCalendarSettings,
-  }))
-)
-const IntegrationsSettings = lazy(() =>
-  import('@/features/settings/IntegrationsSettings').then((m) => ({
-    default: m.IntegrationsSettings,
-  }))
-)
-const AiStockAnalysis = lazy(() =>
-  import('@/features/analysis/AiStockAnalysis').then((m) => ({
-    default: m.AiStockAnalysis,
-  }))
-)
-const ReviewDesk = lazy(() =>
-  import('@/features/review/ReviewDesk').then((m) => ({ default: m.ReviewDesk }))
-)
-const CatalystRadar = lazy(() =>
-  import('@/features/catalysts/CatalystRadar').then((m) => ({ default: m.CatalystRadar }))
-)
-const ThemeMiningBoard = lazy(() =>
-  import('@/features/mining/ThemeMiningBoard').then((m) => ({ default: m.ThemeMiningBoard }))
-)
-const MainlineGraphPage = lazy(() =>
-  import('@/features/mainline-graph/MainlineGraphPage').then((m) => ({
-    default: m.MainlineGraphPage,
   }))
 )
 const LoginPage = lazy(() =>
@@ -105,7 +60,6 @@ const PromptChatPage = lazy(() =>
     default: m.ChatPage,
   }))
 )
-
 
 const PersonalOsShell = lazy(() =>
   import('@/features/personal-os/PersonalOsShell').then((m) => ({
@@ -147,6 +101,12 @@ const OsDecisionsPage = lazy(() =>
     default: m.OsDecisionsPage,
   }))
 )
+
+/** TradingThemesGod / 股票题材相关路由统一回项目入口 */
+function TradingAppClosed() {
+  return <Navigate to="/" replace />
+}
+
 // Toast 上下文
 interface ToastContextValue {
   toasts: Toast[]
@@ -227,70 +187,16 @@ function App() {
                     </ErrorBoundary>
                   }
                 />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeDashboard />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/themes"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeLibrary />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/themes/:id"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeDetail />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/ai-analysis"
-                  element={
-                    <ErrorBoundary>
-                      <AiStockAnalysis />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/review"
-                  element={
-                    <ErrorBoundary>
-                      <ReviewDesk />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/catalysts"
-                  element={
-                    <ErrorBoundary>
-                      <CatalystRadar />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/mining"
-                  element={
-                    <ErrorBoundary>
-                      <ThemeMiningBoard />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/mainline-graph"
-                  element={
-                    <ErrorBoundary>
-                      <MainlineGraphPage />
-                    </ErrorBoundary>
-                  }
-                />
+                <Route path="/dashboard" element={<TradingAppClosed />} />
+                <Route path="/themes" element={<TradingAppClosed />} />
+                <Route path="/themes/:id" element={<TradingAppClosed />} />
+                <Route path="/ai-analysis" element={<TradingAppClosed />} />
+                <Route path="/review" element={<TradingAppClosed />} />
+                <Route path="/catalysts" element={<TradingAppClosed />} />
+                <Route path="/mining" element={<TradingAppClosed />} />
+                <Route path="/mainline-graph" element={<TradingAppClosed />} />
+                <Route path="/settings/calendar" element={<TradingAppClosed />} />
+                <Route path="/settings/integrations" element={<TradingAppClosed />} />
                 <Route
                   path="/login"
                   element={
@@ -330,26 +236,6 @@ function App() {
                   element={
                     <ErrorBoundary>
                       <AccountSettings />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings/calendar"
-                  element={
-                    <ErrorBoundary>
-                      <ProtectedRoute>
-                        <TradingCalendarSettings />
-                      </ProtectedRoute>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings/integrations"
-                  element={
-                    <ErrorBoundary>
-                      <ProtectedRoute>
-                        <IntegrationsSettings />
-                      </ProtectedRoute>
                     </ErrorBoundary>
                   }
                 />

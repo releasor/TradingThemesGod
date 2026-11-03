@@ -5,10 +5,8 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
-const THEME_SETTINGS_LINKS = [
+const WORKSPACE_SETTINGS_LINKS = [
   { to: '/settings/models', label: '模型设置' },
-  { to: '/settings/calendar', label: '交易日历' },
-  { to: '/settings/integrations', label: '数据源' },
   { to: '/settings/shortcuts', label: '快捷键' },
   { to: '/settings/account', label: '账号设置' },
 ] as const
@@ -23,7 +21,7 @@ export function SettingsSubnav({ className = '' }: { className?: string }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const fromPrompt = searchParams.get('from') === 'prompt'
-  const links = fromPrompt ? PROMPT_SETTINGS_LINKS : THEME_SETTINGS_LINKS
+  const links = fromPrompt ? PROMPT_SETTINGS_LINKS : WORKSPACE_SETTINGS_LINKS
   const backTo = fromPrompt ? '/prompt' : '/'
   const token = useAuthStore((state) => state.token)
   const user = useAuthStore((state) => state.user)

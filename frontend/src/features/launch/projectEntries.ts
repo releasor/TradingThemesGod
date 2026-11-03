@@ -1,4 +1,4 @@
-/** 项目级主入口：仅提供各应用入口，不包含 TradingThemesGod 内部模块 */
+/** 项目级主入口：仅提供各应用入口 */
 
 export type ProjectEntry = {
   id: string
@@ -10,19 +10,34 @@ export type ProjectEntry = {
   comingSoon?: boolean
 }
 
+/** TradingThemesGod / 股票题材相关路径已关闭，登录回跳时落到项目入口 */
+const DISABLED_TRADING_PATH_PREFIXES = [
+  '/dashboard',
+  '/themes',
+  '/ai-analysis',
+  '/review',
+  '/catalysts',
+  '/mining',
+  '/mainline-graph',
+  '/settings/calendar',
+  '/settings/integrations',
+] as const
+
+export function isTradingAppPath(path: string): boolean {
+  return DISABLED_TRADING_PATH_PREFIXES.some(
+    (prefix) =>
+      path === prefix ||
+      path.startsWith(`${prefix}/`) ||
+      path.startsWith(`${prefix}?`) ||
+      path.startsWith(`${prefix}#`)
+  )
+}
+
 export const PROJECT_ENTRIES: ProjectEntry[] = [
-  {
-    id: 'trading-themes-god',
-    name: 'TradingThemesGod',
-    description: 'A 股题材研究工作台：看板、题材库、复盘与催化分析',
-    to: '/dashboard',
-    ariaLabel: '进入 TradingThemesGod',
-    badge: '应用',
-  },
   {
     id: 'prompt-workbench',
     name: 'Prompt 工作台',
-    description: '设计、优化并管理 Prompt，自由聊天；模型与题材台共用设置',
+    description: '设计、优化并管理 Prompt，自由聊天；模型与账号设置共用',
     to: '/prompt',
     ariaLabel: '进入 Prompt 工作台',
     badge: '应用',
@@ -45,5 +60,6 @@ export function resolvePostAuthPath(from: string | null | undefined): string {
   if (from.startsWith('/login') || from.startsWith('/register')) {
     return DEFAULT_POST_AUTH_PATH
   }
+  if (isTradingAppPath(from)) return DEFAULT_POST_AUTH_PATH
   return from
 }

@@ -27,11 +27,10 @@ describe('KeyboardShortcutsPanel', () => {
 
   it('displays all shortcut items', () => {
     render(<KeyboardShortcutsPanel {...defaultProps} />)
-    expect(screen.getByText('刷新看板')).toBeInTheDocument()
-    expect(screen.getByText('打开题材库')).toBeInTheDocument()
-    expect(screen.getByText('聚焦搜索')).toBeInTheDocument()
     expect(screen.getByText('显示快捷键帮助')).toBeInTheDocument()
     expect(screen.getByText('关闭弹窗')).toBeInTheDocument()
+    expect(screen.queryByText('刷新看板')).not.toBeInTheDocument()
+    expect(screen.queryByText('打开题材库')).not.toBeInTheDocument()
   })
 
   it('calls onClose when close button is clicked', () => {

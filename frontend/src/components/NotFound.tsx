@@ -5,7 +5,7 @@
 
 import { memo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, ArrowLeft, Search } from 'lucide-react'
+import { Home, ArrowLeft } from 'lucide-react'
 
 /**
  * 404 页面组件
@@ -51,13 +51,6 @@ export const NotFound = memo(function NotFound() {
           >
             <ArrowLeft className="h-4 w-4" />
             返回上页
-          </button>
-          <button
-            onClick={() => navigate('/themes')}
-            className="inline-flex items-center gap-2 rounded-xl border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
-          >
-            <Search className="h-4 w-4" />
-            浏览题材库
           </button>
         </div>
       </div>

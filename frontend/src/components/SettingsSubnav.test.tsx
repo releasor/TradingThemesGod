@@ -22,7 +22,7 @@ describe('SettingsSubnav', () => {
     useAuthStore.setState({ token: null, user: null })
   })
 
-  it('shows all TradingThemesGod settings tabs and returns to home', () => {
+  it('shows workspace settings tabs without trading items and returns to home', () => {
     renderSubnav('/settings/models')
 
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument()
@@ -31,10 +31,10 @@ describe('SettingsSubnav', () => {
       'href',
       '/settings/models'
     )
-    expect(screen.getByRole('link', { name: '交易日历' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '数据源' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '快捷键' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '账号设置' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '交易日历' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '数据源' })).not.toBeInTheDocument()
   })
 
   it('from prompt shows model and account settings only, returns to prompt', () => {

@@ -1,4 +1,4 @@
-/** 项目级导航页 — 独立于 TradingThemesGod 内部导航 */
+/** 项目级导航页 */
 
 import { Link } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
@@ -46,7 +46,7 @@ export function ProjectLaunchPage() {
               项目入口
             </h1>
             <p className="mt-3 text-base text-muted-foreground sm:text-lg">
-              这里只做应用跳转。TradingThemesGod 的功能导航在进入后再展开。
+              这里只做应用跳转。进入应用后再使用各模块导航。
             </p>
           </div>
 
@@ -125,6 +125,18 @@ export function ProjectLaunchPage() {
             ))}
           </ul>
         </main>
+
+        <footer className="mt-auto flex justify-center pb-2 pt-10 text-center">
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="icp-beian-link"
+          >
+            闽ICP备2026020085号-1
+          </a>
+        </footer>
       </div>
     </div>
   )
