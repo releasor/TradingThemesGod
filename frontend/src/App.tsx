@@ -61,48 +61,7 @@ const PromptChatPage = lazy(() =>
   }))
 )
 
-const PersonalOsShell = lazy(() =>
-  import('@/features/personal-os/PersonalOsShell').then((m) => ({
-    default: m.PersonalOsShell,
-  }))
-)
-const OsDashboardPage = lazy(() =>
-  import('@/features/personal-os/pages/DashboardPage').then((m) => ({
-    default: m.OsDashboardPage,
-  }))
-)
-const OsChatPage = lazy(() =>
-  import('@/features/personal-os/pages/ChatPage').then((m) => ({
-    default: m.OsChatPage,
-  }))
-)
-const OsMemoryPage = lazy(() =>
-  import('@/features/personal-os/pages/MemoryPage').then((m) => ({
-    default: m.OsMemoryPage,
-  }))
-)
-const OsSettingsPage = lazy(() =>
-  import('@/features/personal-os/pages/SettingsPage').then((m) => ({
-    default: m.OsSettingsPage,
-  }))
-)
-const OsJournalPage = lazy(() =>
-  import('@/features/personal-os/pages/JournalPage').then((m) => ({
-    default: m.OsJournalPage,
-  }))
-)
-const OsReportsPage = lazy(() =>
-  import('@/features/personal-os/pages/ReportsPage').then((m) => ({
-    default: m.OsReportsPage,
-  }))
-)
-const OsDecisionsPage = lazy(() =>
-  import('@/features/personal-os/pages/DecisionsPage').then((m) => ({
-    default: m.OsDecisionsPage,
-  }))
-)
-
-/** TradingThemesGod / 股票题材相关路由统一回项目入口 */
+/** 已关闭应用路由统一回项目入口 */
 function TradingAppClosed() {
   return <Navigate to="/" replace />
 }
@@ -283,74 +242,8 @@ function App() {
                     }
                   />
                 </Route>
-                <Route
-                  path="/os"
-                  element={
-                    <ErrorBoundary>
-                      <ProtectedRoute>
-                        <PersonalOsShell />
-                      </ProtectedRoute>
-                    </ErrorBoundary>
-                  }
-                >
-                  <Route index element={<Navigate to="dashboard" replace />} />
-                  <Route
-                    path="dashboard"
-                    element={
-                      <ErrorBoundary>
-                        <OsDashboardPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="chat"
-                    element={
-                      <ErrorBoundary>
-                        <OsChatPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="memory"
-                    element={
-                      <ErrorBoundary>
-                        <OsMemoryPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="settings"
-                    element={
-                      <ErrorBoundary>
-                        <OsSettingsPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="journal"
-                    element={
-                      <ErrorBoundary>
-                        <OsJournalPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="reports"
-                    element={
-                      <ErrorBoundary>
-                        <OsReportsPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="decisions"
-                    element={
-                      <ErrorBoundary>
-                        <OsDecisionsPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                </Route>
+                <Route path="/os" element={<TradingAppClosed />} />
+                <Route path="/os/*" element={<TradingAppClosed />} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

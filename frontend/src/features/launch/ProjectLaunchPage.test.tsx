@@ -17,9 +17,10 @@ describe('resolvePostAuthPath', () => {
     expect(resolvePostAuthPath('/register')).toBe('/')
   })
 
-  it('keeps non-trading deep links', () => {
+  it('keeps prompt deep links and closes personal OS', () => {
     expect(resolvePostAuthPath('/prompt')).toBe('/prompt')
-    expect(resolvePostAuthPath('/os/dashboard')).toBe('/os/dashboard')
+    expect(resolvePostAuthPath('/os')).toBe('/')
+    expect(resolvePostAuthPath('/os/dashboard')).toBe('/')
   })
 
   it('redirects closed trading paths to launch page', () => {
@@ -31,9 +32,11 @@ describe('resolvePostAuthPath', () => {
 })
 
 describe('isTradingAppPath', () => {
-  it('matches trading routes but not personal OS dashboard', () => {
+  it('matches closed trading and personal OS routes', () => {
     expect(isTradingAppPath('/dashboard')).toBe(true)
-    expect(isTradingAppPath('/os/dashboard')).toBe(false)
+    expect(isTradingAppPath('/os')).toBe(true)
+    expect(isTradingAppPath('/os/dashboard')).toBe(true)
+    expect(isTradingAppPath('/prompt')).toBe(false)
   })
 })
 
@@ -51,7 +54,7 @@ describe('ProjectLaunchPage', () => {
       'href',
       '/prompt'
     )
-    expect(screen.getByRole('link', { name: '进入个人 AI OS' })).toHaveAttribute('href', '/os')
+    expect(screen.queryByRole('link', { name: '进入个人 AI OS' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '进入 TradingThemesGod' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'TradingThemesGod' })).not.toBeInTheDocument()
     expect(screen.queryByTestId('app-card-nav')).not.toBeInTheDocument()

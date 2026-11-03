@@ -10,8 +10,8 @@ export type ProjectEntry = {
   comingSoon?: boolean
 }
 
-/** TradingThemesGod / 股票题材相关路径已关闭，登录回跳时落到项目入口 */
-const DISABLED_TRADING_PATH_PREFIXES = [
+/** 已关闭应用路径，登录回跳时落到项目入口 */
+const DISABLED_APP_PATH_PREFIXES = [
   '/dashboard',
   '/themes',
   '/ai-analysis',
@@ -21,10 +21,11 @@ const DISABLED_TRADING_PATH_PREFIXES = [
   '/mainline-graph',
   '/settings/calendar',
   '/settings/integrations',
+  '/os',
 ] as const
 
 export function isTradingAppPath(path: string): boolean {
-  return DISABLED_TRADING_PATH_PREFIXES.some(
+  return DISABLED_APP_PATH_PREFIXES.some(
     (prefix) =>
       path === prefix ||
       path.startsWith(`${prefix}/`) ||
@@ -40,14 +41,6 @@ export const PROJECT_ENTRIES: ProjectEntry[] = [
     description: '设计、优化并管理 Prompt，自由聊天；模型与账号设置共用',
     to: '/prompt',
     ariaLabel: '进入 Prompt 工作台',
-    badge: '应用',
-  },
-  {
-    id: 'personal-ai-os',
-    name: '个人 AI OS',
-    description: '个人记忆、生活日志日报与多模型决策的可调参 AI 操作系统',
-    to: '/os',
-    ariaLabel: '进入个人 AI OS',
     badge: '应用',
   },
 ]
