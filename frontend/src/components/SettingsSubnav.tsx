@@ -22,7 +22,7 @@ export function SettingsSubnav({ className = '' }: { className?: string }) {
   const navigate = useNavigate()
   const fromPrompt = searchParams.get('from') === 'prompt'
   const links = fromPrompt ? PROMPT_SETTINGS_LINKS : WORKSPACE_SETTINGS_LINKS
-  const backTo = fromPrompt ? '/prompt' : '/'
+  const backTo = '/prompt'
   const token = useAuthStore((state) => state.token)
   const user = useAuthStore((state) => state.user)
   const clearAuth = useAuthStore((state) => state.clearAuth)

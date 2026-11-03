@@ -30,11 +30,6 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import('@/features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage }))
 )
-const ProjectLaunchPage = lazy(() =>
-  import('@/features/launch/ProjectLaunchPage').then((m) => ({
-    default: m.ProjectLaunchPage,
-  }))
-)
 const PromptWorkbenchShell = lazy(() =>
   import('@/features/prompt-workbench/PromptWorkbenchShell').then((m) => ({
     default: m.PromptWorkbenchShell,
@@ -138,14 +133,7 @@ function App() {
           <div className="relative z-10 min-h-screen">
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
-                <Route
-                  path="/"
-                  element={
-                    <ErrorBoundary>
-                      <ProjectLaunchPage />
-                    </ErrorBoundary>
-                  }
-                />
+                <Route path="/" element={<Navigate to="/prompt" replace />} />
                 <Route path="/dashboard" element={<TradingAppClosed />} />
                 <Route path="/themes" element={<TradingAppClosed />} />
                 <Route path="/themes/:id" element={<TradingAppClosed />} />

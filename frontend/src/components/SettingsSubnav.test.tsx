@@ -26,7 +26,7 @@ describe('SettingsSubnav', () => {
     renderSubnav('/settings/models')
 
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '返回' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: '返回' })).toHaveAttribute('href', '/prompt')
     expect(screen.getByRole('link', { name: '模型设置' })).toHaveAttribute(
       'href',
       '/settings/models'

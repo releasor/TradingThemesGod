@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { fetchCurrentUser, register } from '@/api/auth'
 import { GlowCard } from '@/components/GlowCard'
+import { IcpBeian } from '@/components/IcpBeian'
 import { useAuthStore } from '@/stores/auth'
 
 function errorMessage(error: unknown): string {
@@ -39,7 +40,8 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md items-center px-4">
+    <div className="flex min-h-screen flex-col">
+      <div className="mx-auto flex w-full max-w-md flex-1 items-center px-4">
       <GlowCard className="w-full p-6">
         <h1 className="text-2xl font-semibold">注册</h1>
         <p className="mt-2 text-sm text-muted-foreground">创建账号以保存个人模型配置</p>
@@ -85,6 +87,8 @@ export function RegisterPage() {
           </Link>
         </p>
       </GlowCard>
+      </div>
+      <IcpBeian />
     </div>
   )
 }

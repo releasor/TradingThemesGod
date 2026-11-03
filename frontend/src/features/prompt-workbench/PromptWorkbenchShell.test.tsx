@@ -52,6 +52,10 @@ describe('PromptWorkbenchShell', () => {
     expect(screen.getByRole('link', { name: '我的 Prompt' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '自由聊天' })).toBeInTheDocument()
     expect(document.title).toBe('Prompt 工作台')
+    expect(screen.getByTestId('icp-beian-link')).toHaveAttribute(
+      'href',
+      'https://beian.miit.gov.cn/'
+    )
   })
 
   it('links model settings with from=prompt', () => {

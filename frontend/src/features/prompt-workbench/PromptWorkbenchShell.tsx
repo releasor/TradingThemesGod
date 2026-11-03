@@ -5,6 +5,7 @@ import { Settings } from 'lucide-react'
 
 import { fetchModelProviders } from '@/api/model-provider'
 import { AuthNav } from '@/components/AuthNav'
+import { IcpBeian } from '@/components/IcpBeian'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
 import { usePromptModelSelection } from '@/features/prompt-workbench/stores/modelSelection'
@@ -112,6 +113,7 @@ export function PromptWorkbenchShell() {
       <main className="min-h-0 flex-1 overflow-hidden p-3 sm:p-4 lg:p-5">
         <Outlet />
       </main>
+      <IcpBeian />
     </div>
   )
 }
