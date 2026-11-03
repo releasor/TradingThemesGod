@@ -16,6 +16,7 @@ import { listPromptItems as fetchLibrary } from '@/features/prompt-workbench/api
 import { VariableFillDialog } from '@/features/prompt-workbench/components/VariableFillDialog'
 import { extractVariables } from '@/features/prompt-workbench/domain/variables'
 import { usePromptModelSelection } from '@/features/prompt-workbench/stores/modelSelection'
+import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
 const panel = 'flex min-h-0 flex-col rounded-xl border border-border bg-card'
@@ -27,6 +28,7 @@ const btnGhost = cn(btn, 'border border-input hover:bg-accent')
 
 export function ChatPage() {
   const toast = useToastContext()
+  const token = useAuthStore((s) => s.token)
   const queryClient = useQueryClient()
   const providerId = usePromptModelSelection((s) => s.providerId)
   const [params, setParams] = useSearchParams()
@@ -38,18 +40,19 @@ export function ChatPage() {
   const { data: sessions = [] } = useQuery({
     queryKey: ['prompt-chat-sessions'],
     queryFn: listChatSessions,
+    enabled: Boolean(token),
   })
 
   const { data: messages = [], isFetching: loadingMessages } = useQuery({
     queryKey: ['prompt-chat-messages', sessionId],
     queryFn: () => listChatMessages(sessionId!),
-    enabled: sessionId != null,
+    enabled: sessionId != null && Boolean(token),
   })
 
   const { data: library = [] } = useQuery({
     queryKey: ['prompt-items'],
     queryFn: () => fetchLibrary(),
-    enabled: showLibrary,
+    enabled: showLibrary && Boolean(token),
   })
 
   useEffect(() => {

@@ -13,6 +13,7 @@ import {
 } from '@/features/prompt-workbench/api/library'
 import { VariableFillDialog } from '@/features/prompt-workbench/components/VariableFillDialog'
 import { extractVariables } from '@/features/prompt-workbench/domain/variables'
+import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
 const panel = 'flex min-h-0 flex-col rounded-xl border border-border bg-card'
@@ -26,6 +27,7 @@ const btnIcon =
 
 export function LibraryPage() {
   const toast = useToastContext()
+  const token = useAuthStore((s) => s.token)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [q, setQ] = useState('')
@@ -41,6 +43,7 @@ export function LibraryPage() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['prompt-items', q],
     queryFn: () => listPromptItems(q ? { q } : undefined),
+    enabled: Boolean(token),
   })
 
   const saveMutation = useMutation({

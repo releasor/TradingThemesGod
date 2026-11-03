@@ -190,9 +190,7 @@ function App() {
                   path="/prompt"
                   element={
                     <ErrorBoundary>
-                      <ProtectedRoute>
-                        <PromptWorkbenchShell />
-                      </ProtectedRoute>
+                      <PromptWorkbenchShell />
                     </ErrorBoundary>
                   }
                 >

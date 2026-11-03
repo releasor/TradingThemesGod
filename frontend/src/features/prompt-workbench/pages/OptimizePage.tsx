@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
@@ -28,6 +28,7 @@ import {
 } from '@/features/prompt-workbench/domain/frameworks'
 import { lineDiff } from '@/features/prompt-workbench/domain/lineDiff'
 import { usePromptModelSelection } from '@/features/prompt-workbench/stores/modelSelection'
+import { useAuthStore } from '@/stores/auth'
 import { cn } from '@/lib/utils'
 
 const panel = 'flex min-h-0 flex-col rounded-xl border border-border bg-card'
@@ -54,14 +55,32 @@ function countChars(text: string) {
 
 export function OptimizePage() {
   const toast = useToastContext()
+  const navigate = useNavigate()
   const location = useLocation()
+  const token = useAuthStore((s) => s.token)
   const providerId = usePromptModelSelection((s) => s.providerId)
 
   const { data: providers = [] } = useQuery({
     queryKey: ['model-providers'],
     queryFn: fetchModelProviders,
+    enabled: Boolean(token),
   })
   const hasModel = providers.some((p) => p.enabled)
+
+  function ensureReady(): boolean {
+    if (!token) {
+      toast.warning('请先登录并配置模型后再优化')
+      const from = `${location.pathname}${location.search}`
+      navigate(`/login?from=${encodeURIComponent(from)}`)
+      return false
+    }
+    if (!hasModel) {
+      toast.warning('请先配置可用模型')
+      navigate('/settings/models?from=prompt')
+      return false
+    }
+    return true
+  }
 
   const [source, setSource] = useState('')
   const [mode, setMode] = useState<'smart' | 'framework'>('smart')
@@ -182,11 +201,8 @@ export function OptimizePage() {
     })
   }
 
-    async function runOptimize() {
-    if (!hasModel) {
-      toast.warning('请先配置可用模型')
-      return
-    }
+  async function runOptimize() {
+    if (!ensureReady()) return
     if (!source.trim()) {
       toast.warning('请先填写原始 Prompt')
       return
@@ -252,10 +268,7 @@ export function OptimizePage() {
 
   async function runIterate(forcedInstruction?: string) {
     const text = (forcedInstruction ?? instruction).trim()
-    if (!hasModel) {
-      toast.warning('请先配置可用模型')
-      return
-    }
+    if (!ensureReady()) return
     if (!result.trim() || !text) return
     abortRef.current?.abort()
     const ac = new AbortController()
@@ -340,6 +353,7 @@ export function OptimizePage() {
         : null
 
   async function saveToLibrary() {
+    if (!ensureReady()) return
     if (!result.trim()) return
     try {
       await createPromptItem({
@@ -362,6 +376,7 @@ export function OptimizePage() {
   }
 
   async function loadHistory() {
+    if (!ensureReady()) return
     setHistoryLoading(true)
     try {
       const rows = await listOptimizeRuns(20)
@@ -410,10 +425,7 @@ export function OptimizePage() {
   }
 
   async function runDualTest() {
-    if (!hasModel) {
-      toast.warning('请先配置可用模型')
-      return
-    }
+    if (!ensureReady()) return
     if (!source.trim() || !result.trim() || !testMessage.trim()) {
       toast.warning('需要原文、优化结果和测试用户消息')
       return
@@ -448,7 +460,17 @@ export function OptimizePage() {
             Smart 或命名框架，流式生成结果并支持迭代
           </p>
         </div>
-        {!hasModel ? (
+        {!token ? (
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            优化前提示登录并配置模型。请先{' '}
+            <Link
+              to={`/login?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+              className="underline underline-offset-2"
+            >
+              登录
+            </Link>
+          </p>
+        ) : !hasModel ? (
           <p className="text-sm text-amber-600 dark:text-amber-400">
             尚未配置模型，请先前往{' '}
             <Link to="/settings/models?from=prompt" className="underline underline-offset-2">

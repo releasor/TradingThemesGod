@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { OptimizePage } from './OptimizePage'
+import { useAuthStore } from '@/stores/auth'
 import {
   getOptimizeRun,
   listOptimizeRuns,
@@ -62,6 +63,7 @@ function renderPage() {
 describe('OptimizePage UX', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAuthStore.setState({ token: 'test-token', user: null })
   })
 
   it('shows samples and exposes result actions', async () => {

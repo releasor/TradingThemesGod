@@ -5,6 +5,7 @@ import { Settings } from 'lucide-react'
 
 import { fetchModelProviders } from '@/api/model-provider'
 import { AuthNav } from '@/components/AuthNav'
+import { useAuthStore } from '@/stores/auth'
 import { IcpBeian } from '@/components/IcpBeian'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
@@ -18,12 +19,14 @@ const TABS = [
 ] as const
 
 export function PromptWorkbenchShell() {
+  const token = useAuthStore((s) => s.token)
   const providerId = usePromptModelSelection((s) => s.providerId)
   const setProviderId = usePromptModelSelection((s) => s.setProviderId)
 
   const { data: providers = [] } = useQuery({
     queryKey: ['model-providers'],
     queryFn: fetchModelProviders,
+    enabled: Boolean(token),
   })
 
   const enabled = providers.filter((p) => p.enabled)
